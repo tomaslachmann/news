@@ -12,9 +12,14 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
     "@news-triangulator/shared": "*",
     "@prisma/client": "^5.22.0",
-    "fastify": "^5.3.2"
+    "@types/bcrypt": "^6.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcrypt": "^6.0.0",
+    "fastify": "^5.3.2",
+    "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.31",
