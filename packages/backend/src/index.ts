@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import type { SseEvent, AnalysisDimensions } from '@news-triangulator/shared'
 import { registerAuthRoutes } from './routes/auth.js'
+import { registerAnalysesRoutes } from './routes/analyses.js'
 import { seedAdminUser } from './seed.js'
 
 type _SseEvent = SseEvent
@@ -25,6 +26,7 @@ const start = async () => {
     await server.register(cookie)
 
     await registerAuthRoutes(server)
+    await registerAnalysesRoutes(server)
 
     await seedAdminUser()
 

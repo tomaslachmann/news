@@ -41,6 +41,12 @@ export type SseEvent =
 
 // API response types
 
+export interface CreateAnalysisResponse {
+  id: string
+  seedHeadline: string
+  keywords: string[]
+}
+
 export interface AnalysisListItem {
   id: string
   seedHeadline: string
