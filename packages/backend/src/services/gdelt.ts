@@ -17,10 +17,6 @@ interface GdeltResponse {
   articles?: GdeltArticle[]
 }
 
-function outletFromDomain(domain: string): string {
-  return DOMAIN_TO_OUTLET[domain] ?? domain
-}
-
 function parseGdeltDate(seendate: string): string {
   // Format: "20250812T120000Z"
   const match = seendate.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/)
@@ -54,7 +50,7 @@ export async function queryGdelt(keywords: string[]): Promise<CandidateArticle[]
   }
 
   return (data.articles ?? []).map((a) => ({
-    outlet: outletFromDomain(a.domain),
+    outlet: DOMAIN_TO_OUTLET[a.domain] ?? a.domain,
     title: a.title,
     url: a.url,
     publishedAt: parseGdeltDate(a.seendate),
