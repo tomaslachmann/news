@@ -1,6 +1,6 @@
-import type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody } from '@news-triangulator/shared'
+import type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody, SseEvent } from '@news-triangulator/shared'
 
-export type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody }
+export type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody, SseEvent }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = await res.json().catch(() => ({})) as { error?: string }
@@ -52,4 +52,31 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
   if (!res.ok) return throwApiError(res, 'Failed to load analysis')
 
   return res.json() as Promise<AnalysisDetail>
+}
+
+export function openAnalysisStream(
+  analysisId: string,
+  handlers: {
+    onSourcesConfirmed: (e: Extract<SseEvent, { type: 'sources-confirmed' }>) => void
+    onExtractionComplete: (e: Extract<SseEvent, { type: 'extraction-complete' }>) => void
+    onExtractionError: (e: Extract<SseEvent, { type: 'extraction-error' }>) => void
+    onWarning: (e: Extract<SseEvent, { type: 'warning' }>) => void
+  }
+): EventSource {
+  const es = new EventSource(`/api/analyses/${analysisId}/stream`)
+
+  es.addEventListener('sources-confirmed', (raw) => {
+    handlers.onSourcesConfirmed(JSON.parse(raw.data) as Extract<SseEvent, { type: 'sources-confirmed' }>)
+  })
+  es.addEventListener('extraction-complete', (raw) => {
+    handlers.onExtractionComplete(JSON.parse(raw.data) as Extract<SseEvent, { type: 'extraction-complete' }>)
+  })
+  es.addEventListener('extraction-error', (raw) => {
+    handlers.onExtractionError(JSON.parse(raw.data) as Extract<SseEvent, { type: 'extraction-error' }>)
+  })
+  es.addEventListener('warning', (raw) => {
+    handlers.onWarning(JSON.parse(raw.data) as Extract<SseEvent, { type: 'warning' }>)
+  })
+
+  return es
 }

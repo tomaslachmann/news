@@ -5,12 +5,14 @@ import { prisma } from '../db.js'
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from '../services/articleScraper.js'
 import { extractKeywords } from '../services/keywordExtractor.js'
 import { discoverCoverage } from '../services/discovery.js'
+import { runExtractionPass, ExtractionResultSchema } from '../services/extractionPass.js'
 import type {
   CreateAnalysisResponse,
   CandidateArticle,
   AnalysisDetail,
   CoverageInfo,
   PatchCoveragesBody,
+  SseEvent,
 } from '@news-triangulator/shared'
 
 interface PostAnalysisBody { seedUrl: string }
@@ -205,6 +207,90 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
 
     const response: CoverageInfo[] = updated.map(toCoverageInfo)
     return reply.code(200).send(response)
+  })
+
+  // GET /api/analyses/:id/stream — SSE stream for extraction + synthesis progress
+  fastify.get<{ Params: { id: string } }>('/api/analyses/:id/stream', {
+    preHandler: requireAdmin,
+  }, async (request, reply) => {
+    const { id } = request.params
+
+    const analysis = await prisma.analysis.findUnique({ where: { id } })
+    if (!analysis) return reply.code(404).send({ error: 'Analysis not found' })
+
+    reply.raw.setHeader('Content-Type', 'text/event-stream')
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform')
+    reply.raw.setHeader('Connection', 'keep-alive')
+    reply.raw.setHeader('X-Accel-Buffering', 'no')
+    reply.raw.flushHeaders()
+
+    const send = (event: SseEvent) => {
+      if (reply.raw.writableEnded) return
+      reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+    }
+
+    const coverages = await prisma.coverage.findMany({
+      where: { analysisId: id, excluded: false, status: 'OK' },
+      orderBy: { id: 'asc' },
+    })
+
+    send({ type: 'sources-confirmed', coverages: coverages.map(toCoverageInfo) })
+
+    // Keep stream alive until client disconnects; synthesis appends to it in ticket 07
+    await new Promise<void>((resolve) => {
+      request.raw.on('close', resolve)
+
+      Promise.allSettled(
+        coverages.map(async (coverage) => {
+          // Already extracted in a previous stream session — re-emit the complete event
+          if (coverage.extractionResult) {
+            const result = ExtractionResultSchema.safeParse(coverage.extractionResult)
+            if (result.success) {
+              send({
+                type: 'extraction-complete',
+                coverageId: coverage.id,
+                outlet: coverage.outlet,
+                claimCount: result.data.factualClaims.length,
+                attributedClaimCount: result.data.attributedClaims.length,
+                framingSignalCount: result.data.framingSignals.length,
+              })
+              return
+            }
+          }
+
+          if (!coverage.extractedText) {
+            send({ type: 'extraction-error', coverageId: coverage.id, outlet: coverage.outlet, error: 'No article text to extract from' })
+            return
+          }
+
+          try {
+            const extraction = await runExtractionPass(coverage.extractedText)
+            await prisma.coverage.update({
+              where: { id: coverage.id },
+              data: { extractionResult: extraction },
+            })
+            send({
+              type: 'extraction-complete',
+              coverageId: coverage.id,
+              outlet: coverage.outlet,
+              claimCount: extraction.factualClaims.length,
+              attributedClaimCount: extraction.attributedClaims.length,
+              framingSignalCount: extraction.framingSignals.length,
+            })
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Extraction failed'
+            send({ type: 'extraction-error', coverageId: coverage.id, outlet: coverage.outlet, error: message })
+          }
+        })
+      ).then(() => {
+        // Ticket 07 will trigger synthesis here; for now signal that extraction is settled
+        if (!reply.raw.writableEnded) {
+          send({ type: 'warning', message: 'extraction-settled' })
+        }
+      })
+    })
+
+    if (!reply.raw.writableEnded) reply.raw.end()
   })
 
   // GET /api/analyses/:id — return analysis with its coverages
