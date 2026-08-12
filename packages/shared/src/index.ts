@@ -18,35 +18,6 @@ export interface CandidateArticle {
   publishedAt: string
 }
 
-// Extraction pass output types
-export interface FactualClaim {
-  claim: string
-  czechQuote: string
-}
-
-export interface AttributedClaim {
-  speaker: string
-  statement: string
-  czechQuote: string
-}
-
-export interface InterpretiveStatement {
-  statement: string
-  czechQuote: string
-}
-
-export interface FramingSignal {
-  signal: string
-  czechQuote: string
-}
-
-export interface ExtractionResult {
-  factualClaims: FactualClaim[]
-  attributedClaims: AttributedClaim[]
-  interpretiveStatements: InterpretiveStatement[]
-  framingSignals: FramingSignal[]
-}
-
 // Synthesis pass output types
 export interface Attribution {
   outlet: string

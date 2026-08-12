@@ -1,5 +1,5 @@
 import { discoverCoverage } from '../services/discovery.js'
-import { scrapeArticle } from '../services/articleScraper.js'
+import { scrapeArticle, MIN_TEXT_LENGTH } from '../services/articleScraper.js'
 import { runExtractionPass } from '../services/extractionPass.js'
 import { runSynthesisPass } from '../services/synthesisPass.js'
 
@@ -23,7 +23,7 @@ async function main() {
       continue
     }
 
-    if (scraped.fullText.length < 150) {
+    if (scraped.fullText.length < MIN_TEXT_LENGTH) {
       console.log(`  Skipped (paywall/short content, ${scraped.fullText.length} chars)`)
       continue
     }

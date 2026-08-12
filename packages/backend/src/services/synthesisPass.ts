@@ -1,12 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import OpenAI from 'openai'
 import { z } from 'zod'
+import { callJsonModel } from './llmClient.js'
 import type { ExtractionResult } from './extractionPass.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/synthesis.txt'), 'utf8')
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 const AttributionSchema = z.object({
   outlet: z.string(),
@@ -40,17 +38,7 @@ export interface SourceExtraction {
 }
 
 export async function runSynthesisPass(sources: SourceExtraction[]): Promise<SynthesisResult> {
-  const response = await openai.chat.completions.create({
-    model: process.env.SYNTHESIS_MODEL ?? 'gpt-4o',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: JSON.stringify(sources) },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0,
-  })
-
-  const raw = response.choices[0]?.message?.content ?? '{}'
-  const parsed: unknown = JSON.parse(raw)
+  const model = process.env.SYNTHESIS_MODEL ?? 'gpt-4o'
+  const parsed = await callJsonModel(model, SYSTEM_PROMPT, JSON.stringify(sources))
   return SynthesisResultSchema.parse(parsed)
 }

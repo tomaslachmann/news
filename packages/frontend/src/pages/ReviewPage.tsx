@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
 
-type PageMode = 'select' | 'confirming' | 'results' | 'proceeding'
+type PageMode = 'select' | 'confirming' | 'results'
 
 function formatDate(iso: string): string {
   try {
