@@ -50,7 +50,9 @@ model Coverage {
   analysisId       String
   analysis         Analysis       @relation(fields: [analysisId], references: [id])
   outlet           String
+  title            String?
   articleUrl       String
+  publishedAt      String?
   extractedText    String?
   extractionResult Json?
   status           CoverageStatus @default(PENDING)

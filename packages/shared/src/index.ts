@@ -5,8 +5,17 @@ export type UserRole = 'ADMIN' | 'READONLY'
 export interface CoverageInfo {
   id: string
   outlet: string
+  title?: string
   articleUrl: string
+  publishedAt?: string
   status: 'ok' | 'extraction-failed' | 'pending'
+}
+
+export interface CandidateArticle {
+  outlet: string
+  title: string
+  url: string
+  publishedAt: string
 }
 
 export interface Attribution {
