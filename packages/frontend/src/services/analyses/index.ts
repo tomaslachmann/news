@@ -54,29 +54,29 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
   return res.json() as Promise<AnalysisDetail>
 }
 
+function on<T extends SseEvent['type']>(
+  es: EventSource,
+  type: T,
+  handler: (e: Extract<SseEvent, { type: T }>) => void
+): void {
+  es.addEventListener(type, (raw) => handler(JSON.parse((raw as MessageEvent).data) as Extract<SseEvent, { type: T }>))
+}
+
 export function openAnalysisStream(
   analysisId: string,
   handlers: {
     onSourcesConfirmed: (e: Extract<SseEvent, { type: 'sources-confirmed' }>) => void
     onExtractionComplete: (e: Extract<SseEvent, { type: 'extraction-complete' }>) => void
     onExtractionError: (e: Extract<SseEvent, { type: 'extraction-error' }>) => void
-    onWarning: (e: Extract<SseEvent, { type: 'warning' }>) => void
+    onExtractionSettled: () => void
   }
 ): EventSource {
-  const es = new EventSource(`/api/analyses/${analysisId}/stream`)
+  const es = new EventSource(`/api/analyses/${analysisId}/stream`, { withCredentials: true })
 
-  es.addEventListener('sources-confirmed', (raw) => {
-    handlers.onSourcesConfirmed(JSON.parse(raw.data) as Extract<SseEvent, { type: 'sources-confirmed' }>)
-  })
-  es.addEventListener('extraction-complete', (raw) => {
-    handlers.onExtractionComplete(JSON.parse(raw.data) as Extract<SseEvent, { type: 'extraction-complete' }>)
-  })
-  es.addEventListener('extraction-error', (raw) => {
-    handlers.onExtractionError(JSON.parse(raw.data) as Extract<SseEvent, { type: 'extraction-error' }>)
-  })
-  es.addEventListener('warning', (raw) => {
-    handlers.onWarning(JSON.parse(raw.data) as Extract<SseEvent, { type: 'warning' }>)
-  })
+  on(es, 'sources-confirmed', handlers.onSourcesConfirmed)
+  on(es, 'extraction-complete', handlers.onExtractionComplete)
+  on(es, 'extraction-error', handlers.onExtractionError)
+  on(es, 'extraction-settled', () => handlers.onExtractionSettled())
 
   return es
 }

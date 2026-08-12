@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import type { Coverage } from '@prisma/client'
+import type { Coverage, CoverageStatus } from '@prisma/client'
 import { requireAdmin } from '../plugins/auth.js'
 import { prisma } from '../db.js'
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from '../services/articleScraper.js'
@@ -18,10 +18,14 @@ import type {
 interface PostAnalysisBody { seedUrl: string }
 interface PostDiscoverBody { keywords: string[] }
 
-function coverageStatusToApi(s: string): CoverageInfo['status'] {
-  if (s === 'OK') return 'ok'
-  if (s === 'EXTRACTION_FAILED') return 'extraction-failed'
-  return 'pending'
+const COVERAGE_STATUS_MAP: Record<CoverageStatus, CoverageInfo['status']> = {
+  OK: 'ok',
+  EXTRACTION_FAILED: 'extraction-failed',
+  PENDING: 'pending',
+}
+
+function coverageStatusToApi(s: CoverageStatus): CoverageInfo['status'] {
+  return COVERAGE_STATUS_MAP[s]
 }
 
 function toCoverageInfo(c: Coverage): CoverageInfo {
@@ -230,18 +234,24 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
     }
 
     const coverages = await prisma.coverage.findMany({
-      where: { analysisId: id, excluded: false, status: 'OK' },
+      where: { analysisId: id, excluded: false },
       orderBy: { id: 'asc' },
     })
 
     send({ type: 'sources-confirmed', coverages: coverages.map(toCoverageInfo) })
+
+    const extractable = coverages.filter((c) => c.status === 'OK')
+    const unavailable = coverages.filter((c) => c.status !== 'OK')
+    for (const c of unavailable) {
+      send({ type: 'extraction-error', coverageId: c.id, outlet: c.outlet, error: 'No article text available' })
+    }
 
     // Keep stream alive until client disconnects; synthesis appends to it in ticket 07
     await new Promise<void>((resolve) => {
       request.raw.on('close', resolve)
 
       Promise.allSettled(
-        coverages.map(async (coverage) => {
+        extractable.map(async (coverage) => {
           // Already extracted in a previous stream session — re-emit the complete event
           if (coverage.extractionResult) {
             const result = ExtractionResultSchema.safeParse(coverage.extractionResult)
@@ -258,13 +268,8 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
             }
           }
 
-          if (!coverage.extractedText) {
-            send({ type: 'extraction-error', coverageId: coverage.id, outlet: coverage.outlet, error: 'No article text to extract from' })
-            return
-          }
-
           try {
-            const extraction = await runExtractionPass(coverage.extractedText)
+            const extraction = await runExtractionPass(coverage.extractedText!)
             await prisma.coverage.update({
               where: { id: coverage.id },
               data: { extractionResult: extraction },
@@ -283,10 +288,8 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
           }
         })
       ).then(() => {
-        // Ticket 07 will trigger synthesis here; for now signal that extraction is settled
-        if (!reply.raw.writableEnded) {
-          send({ type: 'warning', message: 'extraction-settled' })
-        }
+        // Ticket 07 will run synthesis here; signal that extraction is done
+        if (!reply.raw.writableEnded) send({ type: 'extraction-settled' })
       })
     })
 

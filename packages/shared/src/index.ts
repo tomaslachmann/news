@@ -46,6 +46,7 @@ export type SseEvent =
   | { type: 'sources-confirmed'; coverages: CoverageInfo[] }
   | { type: 'extraction-complete'; coverageId: string; outlet: string; claimCount: number; attributedClaimCount: number; framingSignalCount: number }
   | { type: 'extraction-error'; coverageId: string; outlet: string; error: string }
+  | { type: 'extraction-settled' }
   | { type: 'synthesis-complete'; dimensions: AnalysisDimensions }
   | { type: 'synthesis-error'; error: string }
   | { type: 'warning'; message: string }

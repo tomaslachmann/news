@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
-import { openAnalysisStream, type CoverageInfo, type SseEvent } from '@/services/analyses'
+import { openAnalysisStream, type CoverageInfo } from '@/services/analyses'
 
 type ExtractionState =
   | { phase: 'pending' }
@@ -90,9 +90,7 @@ export default function AnalysisPage() {
         )
       },
 
-      onWarning: (event) => {
-        if (event.message === 'extraction-settled') setExtractionSettled(true)
-      },
+      onExtractionSettled: () => setExtractionSettled(true),
     })
 
     es.onerror = () => {
