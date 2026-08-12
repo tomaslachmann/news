@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '../db.js'
