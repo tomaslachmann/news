@@ -50,6 +50,12 @@ export type SseEvent =
 
 // API response types
 
+export interface PatchCoveragesBody {
+  confirmedIds: string[]
+  customUrls?: string[]
+  manualTexts?: Array<{ id: string; text: string }>
+}
+
 export interface CreateAnalysisResponse {
   id: string
   seedHeadline: string

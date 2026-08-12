@@ -1,6 +1,6 @@
-import type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail } from '@news-triangulator/shared'
+import type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody } from '@news-triangulator/shared'
 
-export type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail }
+export type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = await res.json().catch(() => ({})) as { error?: string }
@@ -31,6 +31,19 @@ export async function discoverSources(analysisId: string, keywords: string[]): P
   if (!res.ok) return throwApiError(res, 'Failed to start discovery')
 
   return res.json() as Promise<CandidateArticle[]>
+}
+
+export async function patchCoverages(analysisId: string, body: PatchCoveragesBody): Promise<CoverageInfo[]> {
+  const res = await fetch(`/api/analyses/${analysisId}/coverages`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) return throwApiError(res, 'Failed to confirm sources')
+
+  return res.json() as Promise<CoverageInfo[]>
 }
 
 export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail> {

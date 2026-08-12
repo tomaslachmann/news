@@ -3,7 +3,8 @@ import { Readability } from '@mozilla/readability'
 
 export interface ScrapedArticle {
   title: string
-  excerpt: string
+  excerpt: string   // first ~3 paragraphs — used for keyword extraction
+  fullText: string  // complete article body — used for LLM extraction
 }
 
 export class ScrapeError extends Error {
@@ -53,5 +54,7 @@ export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
     .slice(0, 3)
     .join('\n\n')
 
-  return { title, excerpt }
+  const fullText = (article.textContent ?? '').trim()
+
+  return { title, excerpt, fullText }
 }
