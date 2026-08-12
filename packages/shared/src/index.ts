@@ -18,6 +18,7 @@ export interface CandidateArticle {
   publishedAt: string
 }
 
+// Synthesis pass output types
 export interface Attribution {
   outlet: string
   czechQuote: string
@@ -25,12 +26,13 @@ export interface Attribution {
 }
 
 export interface DimensionItem {
-  prose: string // English summary
+  prose: string
   attributions: Attribution[]
 }
 
 export interface ContradictionItem {
-  sides: Attribution[] // exactly two, one per outlet in conflict
+  prose: string
+  sides: Attribution[]
 }
 
 export interface AnalysisDimensions {

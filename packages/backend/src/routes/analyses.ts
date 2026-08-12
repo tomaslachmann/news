@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify'
+import type { Coverage } from '@prisma/client'
 import { requireAdmin } from '../plugins/auth.js'
 import { prisma } from '../db.js'
-import { scrapeArticle, ScrapeError, type ScrapedArticle } from '../services/articleScraper.js'
+import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from '../services/articleScraper.js'
 import { extractKeywords } from '../services/keywordExtractor.js'
 import { discoverCoverage } from '../services/discovery.js'
 import type {
@@ -12,8 +13,6 @@ import type {
   PatchCoveragesBody,
 } from '@news-triangulator/shared'
 
-const MIN_TEXT_LENGTH = 150
-
 interface PostAnalysisBody { seedUrl: string }
 interface PostDiscoverBody { keywords: string[] }
 
@@ -23,10 +22,7 @@ function coverageStatusToApi(s: string): CoverageInfo['status'] {
   return 'pending'
 }
 
-function toCoverageInfo(c: {
-  id: string; outlet: string; title: string | null; articleUrl: string;
-  publishedAt: string | null; status: string
-}): CoverageInfo {
+function toCoverageInfo(c: Coverage): CoverageInfo {
   return {
     id: c.id,
     outlet: c.outlet,
@@ -139,9 +135,15 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
       )
     }
 
-    // Delete coverages that were unchecked
-    await prisma.coverage.deleteMany({
+    // Soft-exclude coverages that were unchecked
+    await prisma.coverage.updateMany({
       where: { analysisId: id, id: { notIn: confirmedIds } },
+      data: { excluded: true },
+    })
+    // Re-include any that are now confirmed (handles re-confirm flows)
+    await prisma.coverage.updateMany({
+      where: { analysisId: id, id: { in: confirmedIds } },
+      data: { excluded: false },
     })
 
     // Create Coverage rows for custom URLs (skip if already present)
@@ -166,9 +168,9 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
       })
     }
 
-    // Fetch + parse all still-PENDING coverages in parallel
+    // Fetch + parse all still-PENDING non-excluded coverages in parallel
     const pending = await prisma.coverage.findMany({
-      where: { analysisId: id, status: 'PENDING' },
+      where: { analysisId: id, status: 'PENDING', excluded: false },
     })
 
     await Promise.allSettled(
@@ -197,7 +199,7 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
     )
 
     const updated = await prisma.coverage.findMany({
-      where: { analysisId: id },
+      where: { analysisId: id, excluded: false },
       orderBy: { id: 'asc' },
     })
 
@@ -212,7 +214,7 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
     const analysis = await prisma.analysis.findUnique({
       where: { id },
       include: {
-        coverages: { orderBy: { id: 'asc' } },
+        coverages: { where: { excluded: false }, orderBy: { id: 'asc' } },
         synthesisResult: true,
       },
     })

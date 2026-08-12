@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
 
-type PageMode = 'select' | 'confirming' | 'results' | 'proceeding'
+type PageMode = 'select' | 'confirming' | 'results'
 
 function formatDate(iso: string): string {
   try {
@@ -40,7 +40,6 @@ export default function ReviewPage() {
 
   const [mode, setMode] = useState<PageMode>('select')
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
-  const [initialized, setInitialized] = useState(false)
   const [customUrlInput, setCustomUrlInput] = useState('')
   const [customUrls, setCustomUrls] = useState<string[]>([])
   const [manualTexts, setManualTexts] = useState<Map<string, string>>(new Map())
@@ -52,11 +51,9 @@ export default function ReviewPage() {
     enabled: !!id,
   })
 
-  // Pre-check all coverages once loaded
-  if (analysis && !initialized) {
-    setCheckedIds(new Set(analysis.coverages.map((c) => c.id)))
-    setInitialized(true)
-  }
+  useEffect(() => {
+    if (analysis) setCheckedIds(new Set(analysis.coverages.map((c) => c.id)))
+  }, [analysis?.id])
 
   const confirmMutation = useMutation({
     mutationFn: (body: Parameters<typeof patchCoverages>[1]) => patchCoverages(id!, body),
@@ -240,7 +237,12 @@ export default function ReviewPage() {
 
           {customUrls.map((url) => (
             <li key={url} className="rounded-lg border bg-card p-4 flex items-start gap-3">
-              <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-primary" checked readOnly />
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                checked
+                onChange={() => setCustomUrls((prev) => prev.filter((u) => u !== url))}
+              />
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Custom URL

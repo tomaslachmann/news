@@ -1,6 +1,8 @@
 import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
 
+export const MIN_TEXT_LENGTH = 150
+
 export interface ScrapedArticle {
   title: string
   excerpt: string   // first ~3 paragraphs — used for keyword extraction
