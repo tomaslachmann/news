@@ -2,6 +2,11 @@ import type { CreateAnalysisResponse } from '@news-triangulator/shared'
 
 export type { CreateAnalysisResponse }
 
+async function throwApiError(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => ({})) as { error?: string }
+  throw new Error(body.error ?? fallback)
+}
+
 export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisResponse> {
   const res = await fetch('/api/analyses', {
     method: 'POST',
@@ -10,10 +15,7 @@ export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisRes
     body: JSON.stringify({ seedUrl }),
   })
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? 'Failed to create analysis')
-  }
+  if (!res.ok) return throwApiError(res, 'Failed to create analysis')
 
   return res.json() as Promise<CreateAnalysisResponse>
 }
@@ -26,8 +28,5 @@ export async function discoverSources(analysisId: string, keywords: string[]): P
     body: JSON.stringify({ keywords }),
   })
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? 'Failed to start discovery')
-  }
+  if (!res.ok) return throwApiError(res, 'Failed to start discovery')
 }

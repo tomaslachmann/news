@@ -50,6 +50,15 @@ function KeywordChip({
   )
 }
 
+interface KeywordEntry {
+  id: string
+  value: string
+}
+
+function makeEntry(value: string): KeywordEntry {
+  return { id: crypto.randomUUID(), value }
+}
+
 function KeywordsStep({
   analysisId,
   initialKeywords,
@@ -58,32 +67,38 @@ function KeywordsStep({
   initialKeywords: string[]
 }) {
   const navigate = useNavigate()
-  const [keywords, setKeywords] = useState<string[]>(initialKeywords)
+  const [entries, setEntries] = useState<KeywordEntry[]>(() =>
+    initialKeywords.map(makeEntry)
+  )
   const [newKeyword, setNewKeyword] = useState('')
   const addInputRef = useRef<HTMLInputElement>(null)
 
   const discoverMutation = useMutation({
-    mutationFn: () => discoverSources(analysisId, keywords.filter((k) => k.trim().length > 0)),
+    mutationFn: () =>
+      discoverSources(
+        analysisId,
+        entries.map((e) => e.value).filter((v) => v.trim().length > 0)
+      ),
     onSuccess: () => navigate(`/review/${analysisId}`),
   })
 
-  const updateKeyword = (index: number, value: string) => {
-    setKeywords((prev) => prev.map((k, i) => (i === index ? value : k)))
+  const updateEntry = (id: string, value: string) => {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, value } : e)))
   }
 
-  const removeKeyword = (index: number) => {
-    setKeywords((prev) => prev.filter((_, i) => i !== index))
+  const removeEntry = (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id))
   }
 
   const addKeyword = () => {
     const trimmed = newKeyword.trim()
     if (!trimmed) return
-    setKeywords((prev) => [...prev, trimmed])
+    setEntries((prev) => [...prev, makeEntry(trimmed)])
     setNewKeyword('')
     addInputRef.current?.focus()
   }
 
-  const activeKeywords = keywords.filter((k) => k.trim().length > 0)
+  const activeKeywords = entries.filter((e) => e.value.trim().length > 0)
 
   return (
     <section className="mt-8 max-w-2xl">
@@ -93,12 +108,12 @@ function KeywordsStep({
       </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
-        {keywords.map((kw, i) => (
+        {entries.map((entry) => (
           <KeywordChip
-            key={i}
-            value={kw}
-            onChange={(v) => updateKeyword(i, v)}
-            onDelete={() => removeKeyword(i)}
+            key={entry.id}
+            value={entry.value}
+            onChange={(v) => updateEntry(entry.id, v)}
+            onDelete={() => removeEntry(entry.id)}
           />
         ))}
       </div>

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAdmin } from '../plugins/auth.js'
 import { prisma } from '../db.js'
-import { scrapeArticle, ScrapeError } from '../services/articleScraper.js'
+import { scrapeArticle, ScrapeError, type ScrapedArticle } from '../services/articleScraper.js'
 import { extractKeywords } from '../services/keywordExtractor.js'
 import type { CreateAnalysisResponse } from '@news-triangulator/shared'
 
@@ -25,7 +25,7 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
       return reply.code(400).send({ error: 'seedUrl must be a valid URL' })
     }
 
-    let scraped: { title: string; excerpt: string }
+    let scraped: ScrapedArticle
     try {
       scraped = await scrapeArticle(seedUrl)
     } catch (err) {
