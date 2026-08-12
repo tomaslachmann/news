@@ -60,7 +60,7 @@ function AppRoutes() {
       <NavBar />
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/review" element={<ReviewPage />} />
+        <Route path="/review/:id" element={<ReviewPage />} />
         <Route path="/analysis/:id" element={<AnalysisPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/login" element={<LoginPage />} />

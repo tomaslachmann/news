@@ -5,8 +5,17 @@ export type UserRole = 'ADMIN' | 'READONLY'
 export interface CoverageInfo {
   id: string
   outlet: string
+  title?: string
   articleUrl: string
+  publishedAt?: string
   status: 'ok' | 'extraction-failed' | 'pending'
+}
+
+export interface CandidateArticle {
+  outlet: string
+  title: string
+  url: string
+  publishedAt: string
 }
 
 export interface Attribution {
@@ -40,6 +49,12 @@ export type SseEvent =
   | { type: 'warning'; message: string }
 
 // API response types
+
+export interface PatchCoveragesBody {
+  confirmedIds: string[]
+  customUrls?: string[]
+  manualTexts?: Array<{ id: string; text: string }>
+}
 
 export interface CreateAnalysisResponse {
   id: string

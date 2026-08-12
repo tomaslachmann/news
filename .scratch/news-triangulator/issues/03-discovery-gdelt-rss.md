@@ -4,16 +4,16 @@
 
 **Blocked by:** 02 — Seed Input & Keyword Extraction. (Auth guard inherited via 02's dependency on 10.)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `POST /api/analyses/:id/discover` is guarded by the `requireAdmin` middleware
-- [ ] Confirming keywords calls `POST /api/analyses/:id/discover` with the final keyword array
-- [ ] The backend queries the GDELT DOC API (`https://api.gdeltproject.org/api/v2/doc/doc`) with `sourcelang:Czech`, `sourcecountry:CZ`, `mode=artlist`, `format=json`, and the keyword string
-- [ ] If GDELT returns fewer than 5 unique-domain results, the backend fetches RSS feeds for all 8 configured Czech outlets in parallel and merges results
-- [ ] Results across both layers are deduplicated to one article per domain (first match wins); maximum 10 candidates total
-- [ ] Each candidate is stored as a `Coverage` row on the Analysis with `status: "pending"`
-- [ ] The endpoint returns candidates as `{ outlet, title, url, publishedAt }[]` matching the type in `packages/shared`
-- [ ] The frontend navigates to `/review` and renders the candidate list with outlet name, article title, and publication date
-- [ ] If GDELT is unreachable (timeout or non-200), the backend falls back to RSS-only, logs a warning, and does not return an error to the frontend
-- [ ] If both GDELT and RSS return zero results, the endpoint returns an empty array and the frontend shows an empty state with a message
-- [ ] The 8 RSS feed URLs are configurable (not hardcoded inline) so they can be updated without logic changes
+- [x] `POST /api/analyses/:id/discover` is guarded by the `requireAdmin` middleware
+- [x] Confirming keywords calls `POST /api/analyses/:id/discover` with the final keyword array
+- [x] The backend queries the GDELT DOC API (`https://api.gdeltproject.org/api/v2/doc/doc`) with `sourcelang:Czech`, `sourcecountry:CZ`, `mode=artlist`, `format=json`, and the keyword string
+- [x] If GDELT returns fewer than 5 unique-domain results, the backend fetches RSS feeds for all 8 configured Czech outlets in parallel and merges results
+- [x] Results across both layers are deduplicated to one article per domain (first match wins); maximum 10 candidates total
+- [x] Each candidate is stored as a `Coverage` row on the Analysis with `status: "pending"`
+- [x] The endpoint returns candidates as `{ outlet, title, url, publishedAt }[]` matching the type in `packages/shared`
+- [x] The frontend navigates to `/review` and renders the candidate list with outlet name, article title, and publication date
+- [x] If GDELT is unreachable (timeout or non-200), the backend falls back to RSS-only, logs a warning, and does not return an error to the frontend
+- [x] If both GDELT and RSS return zero results, the endpoint returns an empty array and the frontend shows an empty state with a message
+- [x] The 8 RSS feed URLs are configurable (not hardcoded inline) so they can be updated without logic changes
