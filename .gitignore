@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.npm
+
+# Build output
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Prisma generated client
+packages/backend/node_modules/.prisma
+packages/backend/src/generated/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS noise
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V8
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker
+.dockerignore
+
+# Misc
+.cache/
+tmp/

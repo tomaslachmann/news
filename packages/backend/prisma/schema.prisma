@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AnalysisStatus {
+  PENDING
+  COMPLETE
+  FAILED
+}
+
+enum CoverageStatus {
+  PENDING
+  OK
+  EXTRACTION_FAILED
+}
+
+model Analysis {
+  id              String           @id @default(cuid())
+  seedUrl         String
+  seedHeadline    String
+  status          AnalysisStatus   @default(PENDING)
+  createdAt       DateTime         @default(now())
+  coverages       Coverage[]
+  synthesisResult SynthesisResult?
+}
+
+model Coverage {
+  id               String         @id @default(cuid())
+  analysisId       String
+  analysis         Analysis       @relation(fields: [analysisId], references: [id])
+  outlet           String
+  articleUrl       String
+  extractedText    String?
+  extractionResult Json?
+  status           CoverageStatus @default(PENDING)
+}
+
+model SynthesisResult {
+  id         String   @id @default(cuid())
+  analysisId String   @unique
+  analysis   Analysis @relation(fields: [analysisId], references: [id])
+  dimensions Json
+}

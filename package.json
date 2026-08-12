@@ -1,0 +1,19 @@
+{
+  "name": "news-triangulator",
+  "version": "0.0.1",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently --kill-others --names \"backend,frontend\" --prefix-colors \"cyan,magenta\" \"npm run dev --workspace=packages/backend\" \"npm run dev --workspace=packages/frontend\"",
+    "db": "docker compose up db",
+    "build": "npm run build --workspace=packages/frontend",
+    "typecheck": "npm run typecheck --workspace=packages/backend && npm run typecheck --workspace=packages/frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
