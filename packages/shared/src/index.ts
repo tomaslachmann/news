@@ -1,3 +1,5 @@
+export type UserRole = 'ADMIN' | 'READONLY'
+
 // SSE Event types
 
 export interface CoverageInfo {

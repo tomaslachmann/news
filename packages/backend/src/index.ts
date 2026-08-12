@@ -1,22 +1,33 @@
 import Fastify from 'fastify'
+import cookie from '@fastify/cookie'
 import type { SseEvent, AnalysisDimensions } from '@news-triangulator/shared'
+import { registerAuthRoutes } from './routes/auth.js'
+import { seedAdminUser } from './seed.js'
 
-// Type alias to ensure shared types resolve correctly
 type _SseEvent = SseEvent
 type _AnalysisDimensions = AnalysisDimensions
+
+if (!process.env.JWT_SECRET) {
+  console.error('Error: JWT_SECRET environment variable is required but not set.')
+  process.exit(1)
+}
 
 const server = Fastify({
   logger: true,
 })
 
-// Health check route
 server.get('/api/health', async (_request, _reply) => {
   return { ok: true }
 })
 
-// Start server
 const start = async () => {
   try {
+    await server.register(cookie)
+
+    await registerAuthRoutes(server)
+
+    await seedAdminUser()
+
     const port = parseInt(process.env.PORT ?? '3001', 10)
     const host = process.env.HOST ?? '0.0.0.0'
 

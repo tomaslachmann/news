@@ -1,0 +1,72 @@
+import { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { login, type LoginBody } from '@/services/auth'
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: (body: LoginBody) => login(body),
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ['me'] })
+      const redirect = searchParams.get('redirect') ?? '/'
+      navigate(decodeURIComponent(redirect), { replace: true })
+    },
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    mutation.mutate({ email, password })
+  }
+
+  return (
+    <main className="container mx-auto py-10 max-w-sm">
+      <h1 className="text-2xl font-bold mb-6">Sign in</h1>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="email" className="text-sm font-medium">
+            Email
+          </label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            placeholder="admin@example.com"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="password" className="text-sm font-medium">
+            Password
+          </label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            placeholder="••••••••"
+          />
+        </div>
+        {mutation.isError && (
+          <p className="text-sm text-destructive">
+            Invalid email or password. Please try again.
+          </p>
+        )}
+        <Button type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? 'Signing in…' : 'Sign in'}
+        </Button>
+      </form>
+    </main>
+  )
+}
