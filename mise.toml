@@ -1,3 +1,69 @@
 [tools]
 node = "22"
 npm = "latest"
+
+# ── Development ──────────────────────────────────────────────────────────────
+
+[tasks.dev]
+description = "Start backend (tsx watch :3001) + frontend (Vite :5173) with hot-reload"
+run = "npm run dev"
+
+[tasks.db]
+description = "Start only the Postgres container in the background"
+run = "docker compose up -d db"
+
+[tasks.db-stop]
+description = "Stop the Postgres container"
+run = "docker compose stop db"
+
+# ── Type checking & building ──────────────────────────────────────────────────
+
+[tasks.typecheck]
+description = "Run tsc --noEmit across backend and frontend"
+run = "npm run typecheck"
+
+[tasks.build]
+description = "Build the frontend Vite bundle into packages/frontend/dist/"
+run = "npm run build"
+
+# ── Database ──────────────────────────────────────────────────────────────────
+
+[tasks.migrate]
+description = "Run prisma migrate dev (creates and applies a new migration)"
+run = "npm run db:migrate --workspace=packages/backend"
+
+[tasks.migrate-deploy]
+description = "Run prisma migrate deploy (apply pending migrations without prompts)"
+run = "npm run db:migrate:deploy --workspace=packages/backend"
+
+[tasks.studio]
+description = "Open Prisma Studio in the browser (database GUI)"
+run = "npx --prefix packages/backend prisma studio"
+
+# ── Testing & linting ─────────────────────────────────────────────────────────
+
+[tasks.test]
+description = "Run the test suite"
+run = "npm test"
+
+[tasks.lint]
+description = "Run the linter across all packages"
+run = "npm run lint --workspaces --if-present"
+
+# ── Docker Compose ────────────────────────────────────────────────────────────
+
+[tasks.up]
+description = "Build and start all three Docker services (frontend, backend, db)"
+run = "docker compose up --build"
+
+[tasks.up-detached]
+description = "Build and start all Docker services in the background"
+run = "docker compose up --build -d"
+
+[tasks.down]
+description = "Stop and remove all Docker containers"
+run = "docker compose down"
+
+[tasks.logs]
+description = "Tail logs from all Docker services"
+run = "docker compose logs -f"
