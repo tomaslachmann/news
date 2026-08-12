@@ -1,12 +1,13 @@
 import jwt from 'jsonwebtoken'
+import type { UserRole } from '@news-triangulator/shared'
 import type { FastifyRequest, FastifyReply } from 'fastify'
 
 export interface JwtPayload {
   userId: string
-  role: 'ADMIN' | 'READONLY'
+  role: UserRole
 }
 
-const COOKIE_NAME = 'auth_token'
+export const COOKIE_NAME = 'auth_token'
 
 export function verifyAuthCookie(request: FastifyRequest): JwtPayload | null {
   const token = request.cookies?.[COOKIE_NAME]

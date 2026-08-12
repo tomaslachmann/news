@@ -1,11 +1,8 @@
 import { createContext, useContext } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { fetchMe, type AuthUser } from '@/services/auth'
 
-export interface AuthUser {
-  id: string
-  email: string
-  role: 'ADMIN' | 'READONLY'
-}
+export type { AuthUser }
 
 export interface AuthContextValue {
   user: AuthUser | null
@@ -16,13 +13,6 @@ export const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
 })
-
-async function fetchMe(): Promise<AuthUser | null> {
-  const res = await fetch('/api/me', { credentials: 'include' })
-  if (res.status === 401) return null
-  if (!res.ok) throw new Error('Failed to fetch /api/me')
-  return res.json() as Promise<AuthUser>
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: user = null, isLoading } = useQuery<AuthUser | null>({

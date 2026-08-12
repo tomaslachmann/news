@@ -2,18 +2,14 @@ import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-do
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { SseEvent } from '@news-triangulator/shared'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
+import { logout } from '@/services/auth'
 import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 
-// Verify shared types are importable
 type _SseEvent = SseEvent
-
-async function logoutRequest(): Promise<void> {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-}
 
 function NavBar() {
   const { user } = useAuth()
@@ -21,9 +17,9 @@ function NavBar() {
   const navigate = useNavigate()
 
   const logoutMutation = useMutation({
-    mutationFn: logoutRequest,
+    mutationFn: logout,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['me'] })
+      await queryClient.refetchQueries({ queryKey: ['me'] })
       navigate('/login', { replace: true })
     },
   })

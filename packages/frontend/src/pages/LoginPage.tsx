@@ -3,30 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-
-interface LoginBody {
-  email: string
-  password: string
-}
-
-interface LoginResponse {
-  id: string
-  email: string
-  role: 'ADMIN' | 'READONLY'
-}
-
-async function loginRequest(body: LoginBody): Promise<LoginResponse> {
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    throw new Error('Invalid credentials')
-  }
-  return res.json() as Promise<LoginResponse>
-}
+import { login, type LoginBody } from '@/services/auth'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -36,9 +13,9 @@ export default function LoginPage() {
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
-    mutationFn: loginRequest,
+    mutationFn: (body: LoginBody) => login(body),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['me'] })
+      await queryClient.refetchQueries({ queryKey: ['me'] })
       const redirect = searchParams.get('redirect') ?? '/'
       navigate(decodeURIComponent(redirect), { replace: true })
     },

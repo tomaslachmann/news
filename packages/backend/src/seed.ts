@@ -1,7 +1,5 @@
 import bcrypt from 'bcrypt'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from './db.js'
 
 export async function seedAdminUser(): Promise<void> {
   const adminEmail = process.env.ADMIN_EMAIL
