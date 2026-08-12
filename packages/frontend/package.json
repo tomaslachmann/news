@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@news-triangulator/shared": "*",
+    "@tanstack/react-query": "^5.80.7",
     "@radix-ui/react-slot": "^1.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -21,6 +22,7 @@
     "tailwind-merge": "^3.3.0"
   },
   "devDependencies": {
+    "@tanstack/react-query-devtools": "^5.80.7",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.5.2",
