@@ -1,25 +1,31 @@
 import type { FastifyInstance } from 'fastify'
-import type { Coverage } from '@prisma/client'
+import type { Coverage, CoverageStatus } from '@prisma/client'
 import { requireAdmin } from '../plugins/auth.js'
 import { prisma } from '../db.js'
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from '../services/articleScraper.js'
 import { extractKeywords } from '../services/keywordExtractor.js'
 import { discoverCoverage } from '../services/discovery.js'
+import { runExtractionPass, ExtractionResultSchema } from '../services/extractionPass.js'
 import type {
   CreateAnalysisResponse,
   CandidateArticle,
   AnalysisDetail,
   CoverageInfo,
   PatchCoveragesBody,
+  SseEvent,
 } from '@news-triangulator/shared'
 
 interface PostAnalysisBody { seedUrl: string }
 interface PostDiscoverBody { keywords: string[] }
 
-function coverageStatusToApi(s: string): CoverageInfo['status'] {
-  if (s === 'OK') return 'ok'
-  if (s === 'EXTRACTION_FAILED') return 'extraction-failed'
-  return 'pending'
+const COVERAGE_STATUS_MAP: Record<CoverageStatus, CoverageInfo['status']> = {
+  OK: 'ok',
+  EXTRACTION_FAILED: 'extraction-failed',
+  PENDING: 'pending',
+}
+
+function coverageStatusToApi(s: CoverageStatus): CoverageInfo['status'] {
+  return COVERAGE_STATUS_MAP[s]
 }
 
 function toCoverageInfo(c: Coverage): CoverageInfo {
@@ -205,6 +211,89 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
 
     const response: CoverageInfo[] = updated.map(toCoverageInfo)
     return reply.code(200).send(response)
+  })
+
+  // GET /api/analyses/:id/stream — SSE stream for extraction + synthesis progress
+  fastify.get<{ Params: { id: string } }>('/api/analyses/:id/stream', {
+    preHandler: requireAdmin,
+  }, async (request, reply) => {
+    const { id } = request.params
+
+    const analysis = await prisma.analysis.findUnique({ where: { id } })
+    if (!analysis) return reply.code(404).send({ error: 'Analysis not found' })
+
+    reply.raw.setHeader('Content-Type', 'text/event-stream')
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform')
+    reply.raw.setHeader('Connection', 'keep-alive')
+    reply.raw.setHeader('X-Accel-Buffering', 'no')
+    reply.raw.flushHeaders()
+
+    const send = (event: SseEvent) => {
+      if (reply.raw.writableEnded) return
+      reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+    }
+
+    const coverages = await prisma.coverage.findMany({
+      where: { analysisId: id, excluded: false },
+      orderBy: { id: 'asc' },
+    })
+
+    send({ type: 'sources-confirmed', coverages: coverages.map(toCoverageInfo) })
+
+    const extractable = coverages.filter((c) => c.status === 'OK')
+    const unavailable = coverages.filter((c) => c.status !== 'OK')
+    for (const c of unavailable) {
+      send({ type: 'extraction-error', coverageId: c.id, outlet: c.outlet, error: 'No article text available' })
+    }
+
+    // Keep stream alive until client disconnects; synthesis appends to it in ticket 07
+    await new Promise<void>((resolve) => {
+      request.raw.on('close', resolve)
+
+      Promise.allSettled(
+        extractable.map(async (coverage) => {
+          // Already extracted in a previous stream session — re-emit the complete event
+          if (coverage.extractionResult) {
+            const result = ExtractionResultSchema.safeParse(coverage.extractionResult)
+            if (result.success) {
+              send({
+                type: 'extraction-complete',
+                coverageId: coverage.id,
+                outlet: coverage.outlet,
+                claimCount: result.data.factualClaims.length,
+                attributedClaimCount: result.data.attributedClaims.length,
+                framingSignalCount: result.data.framingSignals.length,
+              })
+              return
+            }
+          }
+
+          try {
+            const extraction = await runExtractionPass(coverage.extractedText!)
+            await prisma.coverage.update({
+              where: { id: coverage.id },
+              data: { extractionResult: extraction },
+            })
+            send({
+              type: 'extraction-complete',
+              coverageId: coverage.id,
+              outlet: coverage.outlet,
+              claimCount: extraction.factualClaims.length,
+              attributedClaimCount: extraction.attributedClaims.length,
+              framingSignalCount: extraction.framingSignals.length,
+            })
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Extraction failed'
+            send({ type: 'extraction-error', coverageId: coverage.id, outlet: coverage.outlet, error: message })
+          }
+        })
+      ).then(() => {
+        // Ticket 07 will run synthesis here; signal that extraction is done
+        if (!reply.raw.writableEnded) send({ type: 'extraction-settled' })
+      })
+    })
+
+    if (!reply.raw.writableEnded) reply.raw.end()
   })
 
   // GET /api/analyses/:id — return analysis with its coverages

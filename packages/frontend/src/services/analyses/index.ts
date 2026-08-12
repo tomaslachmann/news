@@ -1,6 +1,6 @@
-import type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody } from '@news-triangulator/shared'
+import type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody, SseEvent } from '@news-triangulator/shared'
 
-export type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody }
+export type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody, SseEvent }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = await res.json().catch(() => ({})) as { error?: string }
@@ -52,4 +52,31 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
   if (!res.ok) return throwApiError(res, 'Failed to load analysis')
 
   return res.json() as Promise<AnalysisDetail>
+}
+
+function on<T extends SseEvent['type']>(
+  es: EventSource,
+  type: T,
+  handler: (e: Extract<SseEvent, { type: T }>) => void
+): void {
+  es.addEventListener(type, (raw) => handler(JSON.parse((raw as MessageEvent).data) as Extract<SseEvent, { type: T }>))
+}
+
+export function openAnalysisStream(
+  analysisId: string,
+  handlers: {
+    onSourcesConfirmed: (e: Extract<SseEvent, { type: 'sources-confirmed' }>) => void
+    onExtractionComplete: (e: Extract<SseEvent, { type: 'extraction-complete' }>) => void
+    onExtractionError: (e: Extract<SseEvent, { type: 'extraction-error' }>) => void
+    onExtractionSettled: () => void
+  }
+): EventSource {
+  const es = new EventSource(`/api/analyses/${analysisId}/stream`, { withCredentials: true })
+
+  on(es, 'sources-confirmed', handlers.onSourcesConfirmed)
+  on(es, 'extraction-complete', handlers.onExtractionComplete)
+  on(es, 'extraction-error', handlers.onExtractionError)
+  on(es, 'extraction-settled', () => handlers.onExtractionSettled())
+
+  return es
 }
