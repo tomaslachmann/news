@@ -4,7 +4,7 @@
 
 **Blocked by:** 12 — Testing & Quality Infrastructure.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `repositories/analysis.ts`, `repositories/coverage.ts`, `repositories/synthesisResult.ts`, and `repositories/user.ts` each wrap that model's `prisma.*` calls; no other file calls `prisma.*` or `db.ts` directly
 - [x] An ESLint rule bans importing `db.ts` or `@prisma/client` from anywhere outside `repositories/`
