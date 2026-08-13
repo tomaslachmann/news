@@ -73,6 +73,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
             reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
           }
         },
+        onClientClose: (handler) => request.raw.on('close', handler),
         log: request.log,
       })
 

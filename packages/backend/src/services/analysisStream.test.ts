@@ -52,7 +52,9 @@ describe('runAnalysisStream', () => {
     const onReady = vi.fn()
     const send = vi.fn()
 
-    await expect(runAnalysisStream('missing', { onReady, send })).rejects.toThrow(NotFoundError)
+    await expect(runAnalysisStream('missing', { onReady, send, onClientClose: () => {} })).rejects.toThrow(
+      NotFoundError
+    )
     expect(onReady).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
   })
@@ -79,7 +81,7 @@ describe('runAnalysisStream', () => {
     const events: SseEvent['type'][] = []
     const send = vi.fn((event: SseEvent) => events.push(event.type))
 
-    await runAnalysisStream('a1', { onReady, send })
+    await runAnalysisStream('a1', { onReady, send, onClientClose: () => {} })
 
     expect(onReady).toHaveBeenCalledOnce()
     expect(events).toEqual([
@@ -104,10 +106,34 @@ describe('runAnalysisStream', () => {
     const events: SseEvent['type'][] = []
     const send = vi.fn((event: SseEvent) => events.push(event.type))
 
-    await runAnalysisStream('a1', { onReady: vi.fn(), send })
+    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {} })
 
     expect(events).toEqual(['sources-confirmed', 'extraction-settled', 'synthesis-error'])
     expect(analysisRepo.updateAnalysisStatus).toHaveBeenCalledWith('a1', 'FAILED')
     expect(synthesisPassModule.runSynthesisPass).not.toHaveBeenCalled()
+  })
+
+  it('resolves as soon as the client disconnects, without waiting for the pipeline', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([
+      { ...BASE_COVERAGE, extractionResult: null },
+    ])
+    vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
+    // Never resolves — if runAnalysisStream waited on this, the test itself would hang/time out
+    vi.mocked(extractionPassModule.runExtractionPass).mockReturnValue(new Promise(() => {}))
+
+    let closeHandler: (() => void) | undefined
+    const onClientClose = (handler: () => void) => {
+      closeHandler = handler
+    }
+    const send = vi.fn()
+
+    const promise = runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose })
+    await vi.waitFor(() => {
+      if (!closeHandler) throw new Error('onClientClose handler not registered yet')
+    })
+    closeHandler!()
+
+    await expect(promise).resolves.toBeUndefined()
   })
 })

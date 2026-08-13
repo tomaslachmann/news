@@ -1,4 +1,4 @@
-import type { Analysis, AnalysisStatus, Coverage, SynthesisResult } from '@prisma/client'
+import type { Analysis, AnalysisStatus, Coverage, SynthesisResult, Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 
 export type { Analysis, AnalysisStatus }
@@ -37,7 +37,10 @@ export async function disconnect(): Promise<void> {
   await prisma.$disconnect()
 }
 
-export async function completeAnalysisWithSynthesis(analysisId: string, dimensions: object): Promise<void> {
+export async function completeAnalysisWithSynthesis(
+  analysisId: string,
+  dimensions: Prisma.InputJsonValue
+): Promise<void> {
   await prisma.$transaction([
     prisma.synthesisResult.upsert({
       where: { analysisId },

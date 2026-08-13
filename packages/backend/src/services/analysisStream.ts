@@ -7,17 +7,20 @@ import * as synthesisRepo from '../repositories/synthesisResult.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { runExtractionPass, ExtractionResultSchema } from './extractionPass.js'
 import { runSynthesisPass, type SourceExtraction } from './synthesisPass.js'
+import type { Coverage } from '../repositories/coverage.js'
 
 export interface RunAnalysisStreamOptions {
   /** Called once the Analysis is confirmed to exist, right before the first `send`. */
   onReady: () => void
   send: (event: SseEvent) => void
+  /** Registers a handler to invoke if the client disconnects before the pipeline finishes. */
+  onClientClose: (handler: () => void) => void
   log?: FastifyBaseLogger
 }
 
 export async function runAnalysisStream(
   analysisId: string,
-  { onReady, send, log }: RunAnalysisStreamOptions
+  { onReady, send, onClientClose, log }: RunAnalysisStreamOptions
 ): Promise<void> {
   const analysis = await analysisRepo.findAnalysisById(analysisId)
   if (!analysis) throw new NotFoundError('Analysis not found')
@@ -38,6 +41,21 @@ export async function runAnalysisStream(
     })
   }
 
+  // Resolve early if the client disconnects; the pipeline keeps running in the background
+  // regardless, since `send` safely no-ops once the connection is closed.
+  await new Promise<void>((resolve) => {
+    onClientClose(resolve)
+    void runExtractionAndSynthesis(analysisId, coverages, extractable, send, log).then(resolve)
+  })
+}
+
+async function runExtractionAndSynthesis(
+  analysisId: string,
+  allCoverages: Coverage[],
+  extractable: Coverage[],
+  send: (event: SseEvent) => void,
+  log?: FastifyBaseLogger
+): Promise<void> {
   await Promise.allSettled(
     extractable.map(async (coverage) => {
       // Already extracted in a previous stream session — re-emit the complete event
@@ -101,7 +119,7 @@ export async function runAnalysisStream(
     }
   }
 
-  const excludedCount = coverages.filter((c) => c.status !== 'OK').length + droppedCount
+  const excludedCount = allCoverages.filter((c) => c.status !== 'OK').length + droppedCount
 
   if (sources.length === 0) {
     send({ type: 'synthesis-error', error: 'No successful extractions to synthesise' })
