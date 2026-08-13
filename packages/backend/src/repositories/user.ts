@@ -22,3 +22,18 @@ export async function createUser(data: {
 }): Promise<User> {
   return prisma.user.create({ data })
 }
+
+export async function findAllUsers(): Promise<User[]> {
+  return prisma.user.findMany({ orderBy: { createdAt: 'asc' } })
+}
+
+export async function updateUser(
+  id: string,
+  data: { role?: User['role']; passwordHash?: string }
+): Promise<User> {
+  return prisma.user.update({ where: { id }, data })
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  await prisma.user.delete({ where: { id } })
+}

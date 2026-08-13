@@ -18,3 +18,10 @@ export class ExternalServiceError extends Error {
     this.name = 'ExternalServiceError'
   }
 }
+
+export class ConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ConflictError'
+  }
+}

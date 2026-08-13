@@ -2,8 +2,9 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAnalysesRoutes } from './routes/analyses.js'
+import { registerAdminUsersRoutes } from './routes/adminUsers.js'
 import { seedAdminUser } from './seed.js'
-import { NotFoundError, ValidationError, ExternalServiceError } from './errors.js'
+import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
 
 if (!process.env.JWT_SECRET) {
   console.error('Error: JWT_SECRET environment variable is required but not set.')
@@ -18,6 +19,7 @@ server.setErrorHandler((err, request, reply) => {
   if (err instanceof NotFoundError) return reply.code(404).send({ error: err.message })
   if (err instanceof ValidationError) return reply.code(400).send({ error: err.message })
   if (err instanceof ExternalServiceError) return reply.code(422).send({ error: err.message })
+  if (err instanceof ConflictError) return reply.code(409).send({ error: err.message })
 
   request.log.error(err)
   return reply.code(500).send({ error: 'Internal server error' })
@@ -33,6 +35,7 @@ const start = async () => {
 
     registerAuthRoutes(server)
     registerAnalysesRoutes(server)
+    registerAdminUsersRoutes(server)
 
     await seedAdminUser()
 
