@@ -10,9 +10,12 @@ type PageMode = 'select' | 'confirming' | 'results'
 
 function formatDate(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })
-      .format(new Date(iso))
-  } catch { return iso }
+    return new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+      new Date(iso)
+    )
+  } catch {
+    return iso
+  }
 }
 
 function StatusBadge({ status }: { status: CoverageInfo['status'] }) {
@@ -45,20 +48,26 @@ export default function ReviewPage() {
   const [manualTexts, setManualTexts] = useState<Map<string, string>>(new Map())
   const [results, setResults] = useState<CoverageInfo[]>([])
 
-  const { data: analysis, isLoading, isError } = useQuery({
+  const {
+    data: analysis,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['analysis', id],
     queryFn: () => fetchAnalysis(id!),
     enabled: !!id,
   })
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- seeds editable selection state from async query data; `analysis` isn't available until after mount
     if (analysis) setCheckedIds(new Set(analysis.coverages.map((c) => c.id)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-seeds only when a *different* analysis loads, not on every coverages content change
   }, [analysis?.id])
 
   const confirmMutation = useMutation({
     mutationFn: (body: Parameters<typeof patchCoverages>[1]) => patchCoverages(id!, body),
     onSuccess: (updatedCoverages) => {
-      queryClient.invalidateQueries({ queryKey: ['analysis', id] })
+      void queryClient.invalidateQueries({ queryKey: ['analysis', id] })
       setResults(updatedCoverages)
       setMode('results')
     },
@@ -81,7 +90,11 @@ export default function ReviewPage() {
 
   const addCustomUrl = () => {
     const trimmed = customUrlInput.trim()
-    try { new URL(trimmed) } catch { return }
+    try {
+      new URL(trimmed)
+    } catch {
+      return
+    }
     if (!customUrls.includes(trimmed)) setCustomUrls((prev) => [...prev, trimmed])
     setCustomUrlInput('')
   }
@@ -134,8 +147,13 @@ export default function ReviewPage() {
                   </p>
                   <StatusBadge status={coverage.status} />
                 </div>
-                <a href={coverage.articleUrl} target="_blank" rel="noopener noreferrer"
-                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5" aria-label="Open article">
+                <a
+                  href={coverage.articleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+                  aria-label="Open article"
+                >
                   <ExternalLink size={16} />
                 </a>
               </div>
@@ -150,9 +168,7 @@ export default function ReviewPage() {
                     className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
                     placeholder="Paste the article body here…"
                     value={manualTexts.get(coverage.id) ?? ''}
-                    onChange={(e) =>
-                      setManualTexts((prev) => new Map(prev).set(coverage.id, e.target.value))
-                    }
+                    onChange={(e) => setManualTexts((prev) => new Map(prev).set(coverage.id, e.target.value))}
                   />
                 </div>
               )}
@@ -162,15 +178,13 @@ export default function ReviewPage() {
 
         {failedIds.length > 0 && (
           <p className="mt-4 text-sm text-muted-foreground">
-            {failedIds.length} source{failedIds.length !== 1 ? 's' : ''} could not be extracted.
-            You can paste the text manually above, or proceed without them.
+            {failedIds.length} source{failedIds.length !== 1 ? 's' : ''} could not be extracted. You can paste
+            the text manually above, or proceed without them.
           </p>
         )}
 
         {proceedMutation.isError && (
-          <p className="mt-3 text-sm text-destructive">
-            {(proceedMutation.error as Error).message}
-          </p>
+          <p className="mt-3 text-sm text-destructive">{proceedMutation.error.message}</p>
         )}
 
         <Button
@@ -188,9 +202,7 @@ export default function ReviewPage() {
   return (
     <main className="container mx-auto py-10 max-w-3xl">
       <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
-      <p className="text-sm text-muted-foreground mt-1">
-        Select the sources to include in the analysis
-      </p>
+      <p className="text-sm text-muted-foreground mt-1">Select the sources to include in the analysis</p>
 
       {analysis.coverages.length === 0 && customUrls.length === 0 ? (
         <div className="mt-8 rounded-lg border border-dashed p-8 text-center">
@@ -201,8 +213,7 @@ export default function ReviewPage() {
       ) : (
         <ul className="mt-6 flex flex-col gap-2">
           {analysis.coverages.map((coverage) => (
-            <li key={coverage.id}
-              className="rounded-lg border bg-card p-4 flex items-start gap-3">
+            <li key={coverage.id} className="rounded-lg border bg-card p-4 flex items-start gap-3">
               <input
                 type="checkbox"
                 className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
@@ -210,7 +221,11 @@ export default function ReviewPage() {
                 onChange={(e) => {
                   setCheckedIds((prev) => {
                     const next = new Set(prev)
-                    e.target.checked ? next.add(coverage.id) : next.delete(coverage.id)
+                    if (e.target.checked) {
+                      next.add(coverage.id)
+                    } else {
+                      next.delete(coverage.id)
+                    }
                     return next
                   })
                 }}
@@ -227,8 +242,13 @@ export default function ReviewPage() {
                     <span className="text-xs text-muted-foreground">{formatDate(coverage.publishedAt)}</span>
                   )}
                 </div>
-                <a href={coverage.articleUrl} target="_blank" rel="noopener noreferrer"
-                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5" aria-label="Open article">
+                <a
+                  href={coverage.articleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+                  aria-label="Open article"
+                >
                   <ExternalLink size={16} />
                 </a>
               </div>
@@ -260,12 +280,21 @@ export default function ReviewPage() {
           value={customUrlInput}
           onChange={(e) => setCustomUrlInput(e.target.value)}
           placeholder="Add article URL…"
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomUrl() } }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              addCustomUrl()
+            }
+          }}
           className="flex-1"
           disabled={mode === 'confirming'}
         />
-        <Button type="button" variant="outline" onClick={addCustomUrl}
-          disabled={!customUrlInput.trim() || mode === 'confirming'}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addCustomUrl}
+          disabled={!customUrlInput.trim() || mode === 'confirming'}
+        >
           Add
         </Button>
       </div>
@@ -279,16 +308,10 @@ export default function ReviewPage() {
       )}
 
       {confirmMutation.isError && (
-        <p className="mt-3 text-sm text-destructive">
-          {(confirmMutation.error as Error).message}
-        </p>
+        <p className="mt-3 text-sm text-destructive">{confirmMutation.error.message}</p>
       )}
 
-      <Button
-        className="mt-6"
-        onClick={handleConfirm}
-        disabled={checkedCount === 0 || mode === 'confirming'}
-      >
+      <Button className="mt-6" onClick={handleConfirm} disabled={checkedCount === 0 || mode === 'confirming'}>
         {mode === 'confirming' ? 'Extracting article text…' : 'Confirm sources'}
       </Button>
     </main>

@@ -7,9 +7,7 @@ import { Input } from '@/components/ui/input'
 import { useAuth } from '@/context/AuthContext'
 import { createAnalysis, discoverSources } from '@/services/analyses'
 
-type PageState =
-  | { step: 'input' }
-  | { step: 'keywords'; analysisId: string; keywords: string[] }
+type PageState = { step: 'input' } | { step: 'keywords'; analysisId: string; keywords: string[] }
 
 function isValidUrl(value: string): boolean {
   try {
@@ -59,17 +57,9 @@ function makeEntry(value: string): KeywordEntry {
   return { id: crypto.randomUUID(), value }
 }
 
-function KeywordsStep({
-  analysisId,
-  initialKeywords,
-}: {
-  analysisId: string
-  initialKeywords: string[]
-}) {
+function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; initialKeywords: string[] }) {
   const navigate = useNavigate()
-  const [entries, setEntries] = useState<KeywordEntry[]>(() =>
-    initialKeywords.map(makeEntry)
-  )
+  const [entries, setEntries] = useState<KeywordEntry[]>(() => initialKeywords.map(makeEntry))
   const [newKeyword, setNewKeyword] = useState('')
   const addInputRef = useRef<HTMLInputElement>(null)
 
@@ -138,16 +128,11 @@ function KeywordsStep({
       </div>
 
       {discoverMutation.isError && (
-        <p className="text-sm text-destructive mb-4">
-          {(discoverMutation.error as Error).message}
-        </p>
+        <p className="text-sm text-destructive mb-4">{discoverMutation.error.message}</p>
       )}
 
       {activeKeywords.length > 0 && (
-        <Button
-          onClick={() => discoverMutation.mutate()}
-          disabled={discoverMutation.isPending}
-        >
+        <Button onClick={() => discoverMutation.mutate()} disabled={discoverMutation.isPending}>
           {discoverMutation.isPending ? 'Searching for coverage…' : 'Discover sources'}
         </Button>
       )}
@@ -167,7 +152,7 @@ export default function HomePage() {
       setState({ step: 'keywords', analysisId: data.id, keywords: data.keywords })
     },
     onError: (err) => {
-      setUrlError((err as Error).message)
+      setUrlError(err.message)
     },
   })
 
@@ -213,17 +198,12 @@ export default function HomePage() {
               {createMutation.isPending ? 'Analysing…' : 'Analyse'}
             </Button>
           </div>
-          {urlError && (
-            <p className="text-sm text-destructive">{urlError}</p>
-          )}
+          {urlError && <p className="text-sm text-destructive">{urlError}</p>}
         </form>
       )}
 
       {state.step === 'keywords' && (
-        <KeywordsStep
-          analysisId={state.analysisId}
-          initialKeywords={state.keywords}
-        />
+        <KeywordsStep analysisId={state.analysisId} initialKeywords={state.keywords} />
       )}
     </main>
   )

@@ -22,10 +22,7 @@ export function verifyAuthCookie(request: FastifyRequest): JwtPayload | null {
   }
 }
 
-export async function requireAdmin(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const payload = verifyAuthCookie(request)
 
   if (!payload) {

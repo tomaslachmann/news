@@ -5,8 +5,8 @@ export const MIN_TEXT_LENGTH = 150
 
 export interface ScrapedArticle {
   title: string
-  excerpt: string   // first ~3 paragraphs — used for keyword extraction
-  fullText: string  // complete article body — used for LLM extraction
+  excerpt: string // first ~3 paragraphs — used for keyword extraction
+  fullText: string // complete article body — used for LLM extraction
 }
 
 export class ScrapeError extends Error {

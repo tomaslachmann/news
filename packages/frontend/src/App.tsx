@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SseEvent } from '@news-triangulator/shared'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { logout } from '@/services/auth'
 import HomePage from './pages/HomePage'
@@ -9,8 +8,6 @@ import AnalysisPage from './pages/AnalysisPage'
 import ResultsPage from './pages/ResultsPage'
 import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
-
-type _SseEvent = SseEvent
 
 function NavBar() {
   const { user } = useAuth()
@@ -21,7 +18,7 @@ function NavBar() {
     mutationFn: logout,
     onSuccess: async () => {
       await queryClient.refetchQueries({ queryKey: ['me'] })
-      navigate('/login', { replace: true })
+      void navigate('/login', { replace: true })
     },
   })
 

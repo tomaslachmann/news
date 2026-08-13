@@ -47,8 +47,12 @@ description = "Run the test suite"
 run = "npm test"
 
 [tasks.lint]
-description = "Run the linter across all packages"
-run = "npm run lint --workspaces --if-present"
+description = "Run ESLint across all packages"
+run = "npm run lint"
+
+[tasks.format]
+description = "Check formatting across all packages with Prettier"
+run = "npx prettier --check ."
 
 # ── Docker Compose ────────────────────────────────────────────────────────────
 

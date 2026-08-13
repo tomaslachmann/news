@@ -1,12 +1,8 @@
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
-import type { SseEvent, AnalysisDimensions } from '@news-triangulator/shared'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAnalysesRoutes } from './routes/analyses.js'
 import { seedAdminUser } from './seed.js'
-
-type _SseEvent = SseEvent
-type _AnalysisDimensions = AnalysisDimensions
 
 if (!process.env.JWT_SECRET) {
   console.error('Error: JWT_SECRET environment variable is required but not set.')
@@ -25,8 +21,8 @@ const start = async () => {
   try {
     await server.register(cookie)
 
-    await registerAuthRoutes(server)
-    await registerAnalysesRoutes(server)
+    registerAuthRoutes(server)
+    registerAnalysesRoutes(server)
 
     await seedAdminUser()
 
@@ -41,4 +37,4 @@ const start = async () => {
   }
 }
 
-start()
+void start()

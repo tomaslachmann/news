@@ -5,11 +5,7 @@ import { RSS_FEEDS } from '../config/rssFeeds.js'
 
 const parser = new Parser({ timeout: 8_000 })
 
-async function fetchFeed(
-  outlet: string,
-  url: string,
-  log?: FastifyBaseLogger
-): Promise<CandidateArticle[]> {
+async function fetchFeed(outlet: string, url: string, log?: FastifyBaseLogger): Promise<CandidateArticle[]> {
   try {
     const feed = await parser.parseURL(url)
     return (feed.items ?? [])
@@ -27,9 +23,7 @@ async function fetchFeed(
 }
 
 export async function queryRssFeeds(log?: FastifyBaseLogger): Promise<CandidateArticle[]> {
-  const results = await Promise.allSettled(
-    RSS_FEEDS.map((feed) => fetchFeed(feed.outlet, feed.url, log))
-  )
+  const results = await Promise.allSettled(RSS_FEEDS.map((feed) => fetchFeed(feed.outlet, feed.url, log)))
 
   return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
 }
