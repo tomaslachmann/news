@@ -10,6 +10,7 @@ import type {
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from './articleScraper.js'
 import { extractKeywords } from './keywordExtractor.js'
 import { discoverCoverage } from './discovery.js'
+import { isBlockedContent } from './blockedContent.js'
 import { NotFoundError, ExternalServiceError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
@@ -110,8 +111,8 @@ export async function confirmCoverages(
     pending.map(async (coverage) => {
       try {
         const scraped = await scrapeArticle(coverage.articleUrl)
-        const isPaywalled = scraped.fullText.length < MIN_TEXT_LENGTH
-        if (isPaywalled) {
+        const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
+        if (isBlocked) {
           await coverageRepo.updateCoverage(coverage.id, { status: 'EXTRACTION_FAILED' })
         } else {
           await coverageRepo.updateCoverage(coverage.id, { extractedText: scraped.fullText, status: 'OK' })
