@@ -1,8 +1,6 @@
 import type { CandidateArticle } from '@news-triangulator/shared'
 import { DOMAIN_TO_OUTLET } from '../config/rssFeeds.js'
-
-const GDELT_BASE = 'https://api.gdeltproject.org/api/v2/doc/doc'
-const TIMEOUT_MS = 10_000
+import { fetchGdelt } from './gdeltClient.js'
 
 interface GdeltArticle {
   url: string
@@ -35,19 +33,7 @@ export async function queryGdelt(keywords: string[]): Promise<CandidateArticle[]
     timespan: '14d',
   })
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-
-  let data: GdeltResponse
-  try {
-    const res = await fetch(`${GDELT_BASE}?${params}`, { signal: controller.signal })
-    clearTimeout(timer)
-    if (!res.ok) throw new Error(`GDELT returned HTTP ${res.status}`)
-    data = (await res.json()) as GdeltResponse
-  } catch (err) {
-    clearTimeout(timer)
-    throw err
-  }
+  const data = (await fetchGdelt(params)) as GdeltResponse
 
   return (data.articles ?? []).map((a) => ({
     outlet: DOMAIN_TO_OUTLET[a.domain] ?? a.domain,

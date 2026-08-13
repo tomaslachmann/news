@@ -2,56 +2,53 @@
 
 Every ticket is implemented on its own branch. Follow these steps exactly.
 
-## Before you start
-
-Confirm you are on `main` and it is clean:
-
-```
-git checkout main
-git pull origin main
-git status   # must be clean
-```
-
 ## Starting a ticket
 
-Create and switch to the ticket branch:
+Run:
 
 ```
-git checkout -b ticket/NN-slug
+mise run ticket-start NN
 ```
 
-Where `NN` is the zero-padded ticket number and `slug` is a short kebab-case description matching the ticket title. Examples:
-- `ticket/10-authentication-authorization`
-- `ticket/05-prompt-engineering`
+This checks that every ticket listed in the target ticket's `Blocked by:` field is `Status: done`
+— refusing to proceed if not — then checks out `main`, pulls, verifies the working tree is clean,
+and creates and checks out `ticket/NN-slug`. `NN` is the ticket number; the slug is read from
+`.scratch/news-triangulator/issues/NN-slug.md`, so you don't need to type it.
+
+If it refuses because a blocker isn't done, resolve that first — don't start the ticket anyway.
 
 ## During implementation
 
-Commit early and often. Each commit should be atomic and have a descriptive message. There is no strict format requirement, but the message should explain *what* changed and *why* if non-obvious.
+Commit early and often. Each commit should be atomic and have a descriptive message. There is no
+strict format requirement, but the message should explain _what_ changed and _why_ if non-obvious.
 
-Check off each acceptance criterion in the ticket file (`.scratch/news-triangulator/issues/NN-slug.md`) as you complete it — change `- [ ]` to `- [x]`.
+Check off each acceptance criterion in the ticket file
+(`.scratch/news-triangulator/issues/NN-slug.md`) as you complete it — change `- [ ]` to `- [x]`.
+
+## Before finishing: review the diff
+
+Run the local `code-review` skill against `git diff main`, using the ticket file as the Spec
+source. It reports two axes — Standards (does the diff follow this repo's conventions?) and Spec
+(does it match the ticket's acceptance criteria, and did anything get added that the ticket didn't
+ask for?). Its Speculative-Generality check is specifically there to catch hooks, components, or
+abstractions the ticket didn't call for — see ADR 0009. Address what it finds before moving on.
 
 ## Finishing a ticket
 
-1. Ensure all acceptance criteria are checked off.
-2. Change `**Status:** ready-for-agent` to `**Status:** done` in the ticket file.
-3. Commit the ticket file update:
-   ```
-   git add .scratch/news-triangulator/issues/NN-slug.md
-   git commit -m "chore: mark ticket NN done"
-   ```
-4. Push the branch:
-   ```
-   git push -u origin ticket/NN-slug
-   ```
-5. Output the PR compare URL for the developer to open:
-   ```
-   https://github.com/OWNER/REPO/compare/ticket/NN-slug?expand=1
-   ```
-   Replace `OWNER/REPO` by reading the remote: `git remote get-url origin`.
+Once every acceptance criterion is checked off and the review above is clean, run:
+
+```
+mise run ticket-done NN
+```
+
+This fails loudly if any `- [ ]` remains in the ticket file. Otherwise it flips
+`**Status:** ready-for-agent` to `**Status:** done`, commits the ticket file, pushes the branch,
+and prints the GitHub compare URL for the developer to open the PR.
 
 ## What NOT to do
 
 - Do not merge into `main` yourself.
 - Do not push directly to `main`.
 - Do not delete the branch — leave it for the developer to merge via the PR.
-- Do not open a new ticket branch without first confirming its blockers are all `done`.
+- Do not run `ticket-start` for a ticket whose blockers aren't done — it will refuse, but don't try
+  to work around that.

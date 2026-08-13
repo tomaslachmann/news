@@ -17,7 +17,7 @@ export default function LoginPage() {
     onSuccess: async () => {
       await queryClient.refetchQueries({ queryKey: ['me'] })
       const redirect = searchParams.get('redirect') ?? '/'
-      navigate(decodeURIComponent(redirect), { replace: true })
+      void navigate(decodeURIComponent(redirect), { replace: true })
     },
   })
 
@@ -59,9 +59,7 @@ export default function LoginPage() {
           />
         </div>
         {mutation.isError && (
-          <p className="text-sm text-destructive">
-            Invalid email or password. Please try again.
-          </p>
+          <p className="text-sm text-destructive">Invalid email or password. Please try again.</p>
         )}
         <Button type="submit" disabled={mutation.isPending}>
           {mutation.isPending ? 'Signing in…' : 'Sign in'}

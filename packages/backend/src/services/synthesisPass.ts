@@ -37,11 +37,15 @@ export interface SourceExtraction {
   extraction: ExtractionResult
 }
 
-export async function runSynthesisPass(sources: SourceExtraction[], excludedCount = 0): Promise<SynthesisResult> {
+export async function runSynthesisPass(
+  sources: SourceExtraction[],
+  excludedCount = 0
+): Promise<SynthesisResult> {
   const model = process.env.SYNTHESIS_MODEL ?? 'gpt-4o'
-  const note = excludedCount > 0
-    ? `Note: ${excludedCount} coverage(s) were excluded from this analysis because their article text could not be extracted.\n\n`
-    : ''
+  const note =
+    excludedCount > 0
+      ? `Note: ${excludedCount} coverage(s) were excluded from this analysis because their article text could not be extracted.\n\n`
+      : ''
   const parsed = await callJsonModel(model, SYSTEM_PROMPT, note + JSON.stringify(sources))
   return SynthesisResultSchema.parse(parsed)
 }

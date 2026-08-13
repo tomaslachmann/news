@@ -11,7 +11,7 @@ interface LoginBody {
   password: string
 }
 
-export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
+export function registerAuthRoutes(fastify: FastifyInstance): void {
   fastify.post<{ Body: LoginBody }>('/api/auth/login', async (request, reply) => {
     const { email, password } = request.body
 
@@ -29,11 +29,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       return reply.code(401).send({ error: 'Invalid credentials' })
     }
 
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET!,
-      { algorithm: 'HS256', expiresIn: THIRTY_DAYS_SECONDS }
-    )
+    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, {
+      algorithm: 'HS256',
+      expiresIn: THIRTY_DAYS_SECONDS,
+    })
 
     reply.setCookie(COOKIE_NAME, token, {
       httpOnly: true,

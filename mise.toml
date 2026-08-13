@@ -43,12 +43,30 @@ run = "npx --prefix packages/backend prisma studio"
 # ── Testing & linting ─────────────────────────────────────────────────────────
 
 [tasks.test]
-description = "Run the test suite"
+description = "Run unit tests only (no Docker required)"
 run = "npm test"
 
+[tasks."test:integration"]
+description = "Run the testcontainers-backed integration suite (requires Docker)"
+run = "npm run test:integration"
+
 [tasks.lint]
-description = "Run the linter across all packages"
-run = "npm run lint --workspaces --if-present"
+description = "Run ESLint across all packages"
+run = "npm run lint"
+
+[tasks.format]
+description = "Check formatting across all packages with Prettier"
+run = "npx prettier --check ."
+
+# ── Ticket workflow ────────────────────────────────────────────────────────────
+
+[tasks.ticket-start]
+description = "Start a ticket: checks blockers are done, then creates and checks out its branch"
+run = "node scripts/ticket-start.mjs"
+
+[tasks."ticket-done"]
+description = "Finish a ticket: verifies its checklist, flips status, commits, pushes, prints the compare URL"
+run = "node scripts/ticket-done.mjs"
 
 # ── Docker Compose ────────────────────────────────────────────────────────────
 

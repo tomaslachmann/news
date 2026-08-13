@@ -1,0 +1,6 @@
+dist
+node_modules
+.scratch
+packages/backend/prisma/migrations
+package-lock.json
+**/*.md

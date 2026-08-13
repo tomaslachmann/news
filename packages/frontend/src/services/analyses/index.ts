@@ -1,9 +1,23 @@
-import type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody, SseEvent } from '@news-triangulator/shared'
+import type {
+  CreateAnalysisResponse,
+  CandidateArticle,
+  AnalysisDetail,
+  CoverageInfo,
+  PatchCoveragesBody,
+  SseEvent,
+} from '@news-triangulator/shared'
 
-export type { CreateAnalysisResponse, CandidateArticle, AnalysisDetail, CoverageInfo, PatchCoveragesBody, SseEvent }
+export type {
+  CreateAnalysisResponse,
+  CandidateArticle,
+  AnalysisDetail,
+  CoverageInfo,
+  PatchCoveragesBody,
+  SseEvent,
+}
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
-  const body = await res.json().catch(() => ({})) as { error?: string }
+  const body = (await res.json().catch(() => ({}))) as { error?: string }
   throw new Error(body.error ?? fallback)
 }
 
@@ -59,7 +73,9 @@ function on<T extends SseEvent['type']>(
   type: T,
   handler: (e: Extract<SseEvent, { type: T }>) => void
 ): void {
-  es.addEventListener(type, (raw) => handler(JSON.parse((raw as MessageEvent).data) as Extract<SseEvent, { type: T }>))
+  es.addEventListener(type, (raw: MessageEvent) =>
+    handler(JSON.parse(raw.data as string) as Extract<SseEvent, { type: T }>)
+  )
 }
 
 export function openAnalysisStream(

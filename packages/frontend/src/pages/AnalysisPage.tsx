@@ -30,7 +30,8 @@ function ExtractionBadge({ state }: { state: ExtractionState }) {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
         <CheckCircle size={12} />
-        {state.claimCount} claims · {state.attributedClaimCount} attributed · {state.framingSignalCount} framing
+        {state.claimCount} claims · {state.attributedClaimCount} attributed · {state.framingSignalCount}{' '}
+        framing
       </span>
     )
   }
@@ -61,9 +62,10 @@ export default function AnalysisPage() {
             outlet: c.outlet,
             articleUrl: c.articleUrl,
             status: c.status,
-            extraction: c.status === 'extraction-failed'
-              ? { phase: 'error', error: 'No article text available' }
-              : { phase: 'pending' },
+            extraction:
+              c.status === 'extraction-failed'
+                ? { phase: 'error', error: 'No article text available' }
+                : { phase: 'pending' },
           }))
         )
       },
@@ -101,7 +103,7 @@ export default function AnalysisPage() {
       onSynthesisComplete: () => {
         setPhase('done')
         es.close()
-        navigate(`/results/${id}`)
+        void navigate(`/results/${id}`)
       },
 
       onSynthesisError: (event) => {
@@ -117,8 +119,11 @@ export default function AnalysisPage() {
     }
 
     esRef.current = es
-    return () => { es.close(); esRef.current = null }
-  }, [id])
+    return () => {
+      es.close()
+      esRef.current = null
+    }
+  }, [id, navigate])
 
   const doneCount = rows.filter((r) => r.extraction.phase !== 'pending').length
   const total = rows.length
@@ -136,7 +141,9 @@ export default function AnalysisPage() {
       {total > 0 && isExtracting && (
         <div className="mt-4">
           <div className="flex justify-between text-sm text-muted-foreground mb-1">
-            <span>{doneCount} of {total} extractions complete</span>
+            <span>
+              {doneCount} of {total} extractions complete
+            </span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
             <div
@@ -154,13 +161,9 @@ export default function AnalysisPage() {
         </div>
       )}
 
-      {hasFailed && synthesisError && (
-        <p className="mt-4 text-sm text-destructive">{synthesisError}</p>
-      )}
+      {hasFailed && synthesisError && <p className="mt-4 text-sm text-destructive">{synthesisError}</p>}
 
-      {streamError && (
-        <p className="mt-4 text-sm text-destructive">{streamError}</p>
-      )}
+      {streamError && <p className="mt-4 text-sm text-destructive">{streamError}</p>}
 
       {rows.length === 0 && !streamError && (
         <p className="mt-6 text-muted-foreground">Connecting to analysis stream…</p>
