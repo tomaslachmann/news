@@ -123,15 +123,17 @@ export default function AnalysisPage() {
   const doneCount = rows.filter((r) => r.extraction.phase !== 'pending').length
   const total = rows.length
 
+  const isExtracting = phase === 'extracting'
+  const isSynthesising = phase === 'synthesising'
+  const hasFailed = phase === 'failed'
+
   return (
     <main className="container mx-auto py-10 max-w-3xl">
       <h1 className="text-2xl font-bold">
-        {phase === 'synthesising' || phase === 'done'
-          ? 'Synthesising analysis…'
-          : 'Extracting sources'}
+        {isSynthesising ? 'Synthesising analysis…' : 'Extracting sources'}
       </h1>
 
-      {total > 0 && phase === 'extracting' && (
+      {total > 0 && isExtracting && (
         <div className="mt-4">
           <div className="flex justify-between text-sm text-muted-foreground mb-1">
             <span>{doneCount} of {total} extractions complete</span>
@@ -145,14 +147,14 @@ export default function AnalysisPage() {
         </div>
       )}
 
-      {phase === 'synthesising' && (
+      {isSynthesising && (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 size={16} className="animate-spin" />
           Running synthesis across {rows.filter((r) => r.extraction.phase === 'complete').length} sources…
         </div>
       )}
 
-      {phase === 'failed' && synthesisError && (
+      {hasFailed && synthesisError && (
         <p className="mt-4 text-sm text-destructive">{synthesisError}</p>
       )}
 

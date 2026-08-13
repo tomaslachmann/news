@@ -306,22 +306,30 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
           orderBy: { id: 'asc' },
         })
 
-        const sources: SourceExtraction[] = extracted.flatMap((c) => {
+        let droppedCount = 0
+        const sources: SourceExtraction[] = []
+        for (const c of extracted) {
           const parsed = ExtractionResultSchema.safeParse(c.extractionResult)
-          return parsed.success
-            ? [{ outlet: c.outlet, articleUrl: c.articleUrl, extraction: parsed.data }]
-            : []
-        })
+          if (parsed.success) {
+            sources.push({ outlet: c.outlet, articleUrl: c.articleUrl, extraction: parsed.data })
+          } else {
+            droppedCount++
+            request.log.warn({ coverageId: c.id }, 'Coverage extractionResult failed schema validation; excluding from synthesis')
+          }
+        }
+
+        const excludedCount = coverages.filter((c) => c.status !== 'OK').length + droppedCount
 
         if (sources.length === 0) {
           send({ type: 'synthesis-error', error: 'No successful extractions to synthesise' })
           await prisma.analysis.update({ where: { id }, data: { status: 'FAILED' } })
+          if (!reply.raw.writableEnded) reply.raw.end()
           resolve()
           return
         }
 
         try {
-          const synthesis = await runSynthesisPass(sources)
+          const synthesis = await runSynthesisPass(sources, excludedCount)
 
           await prisma.$transaction([
             prisma.synthesisResult.upsert({
@@ -338,12 +346,11 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
           send({ type: 'synthesis-error', error: message })
           await prisma.analysis.update({ where: { id }, data: { status: 'FAILED' } }).catch(() => {})
         } finally {
+          if (!reply.raw.writableEnded) reply.raw.end()
           resolve()
         }
       })
     })
-
-    if (!reply.raw.writableEnded) reply.raw.end()
   })
 
   // GET /api/analyses/:id — return analysis with its coverages

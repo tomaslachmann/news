@@ -19,7 +19,7 @@ Do not classify a framing difference as a contradiction.
 
 For each item provide:
 - "prose": English explanation of what specifically is incompatible
-- "sides": exactly two attributions (outlet, czechQuote, articleUrl), one per side of the contradiction
+- "attributions": exactly two entries (outlet, czechQuote, articleUrl), one per side of the contradiction
 
 ### 3. uniqueReporting
 Claims made by exactly one source that all other sources omit entirely. This must be a factual claim or attributed claim — not merely a framing difference.
@@ -72,7 +72,7 @@ You will receive a JSON array of extraction results:
   "contradiction": [
     {
       "prose": "...",
-      "sides": [
+      "attributions": [
         { "outlet": "...", "czechQuote": "...", "articleUrl": "..." },
         { "outlet": "...", "czechQuote": "...", "articleUrl": "..." }
       ]
