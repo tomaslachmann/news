@@ -4,7 +4,7 @@
 
 **Blocked by:** 07 — Synthesis Pass.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Vitest is configured for `packages/backend` and `packages/frontend`; `npm test` at the root runs both packages' unit suites
 - [x] `packages/backend` depends on `testcontainers`; a shared integration-test harness spins up a Postgres container, runs `prisma migrate deploy` against it, and tears it down after the suite
