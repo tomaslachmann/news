@@ -18,3 +18,4 @@
 - [ ] `GET /api/analyses/:id` returns `{ analysis, coverages, synthesisResult }` matching the type in `packages/shared`
 - [ ] If the stream emits `synthesis-error`, an error state replaces the progress indicator with a message and a "Try again" link back to `/`
 - [ ] Navigating directly to a `status: "failed"` Analysis shows the same error state
+- [ ] Any new TanStack Query calls this ticket introduces are wrapped in a dedicated hook colocated with their service file (e.g. `services/analyses/hooks.ts`), per ADR 0011
