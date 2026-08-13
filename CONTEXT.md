@@ -40,10 +40,28 @@ The four outputs of Synthesis:
 Contradiction and Framing are mutually exclusive: a Contradiction is a factual incompatibility; Framing is the same facts presented differently.
 
 ## Review Step
-The UI step between Discovery and Analysis where the user confirms which Coverages to include, deselects irrelevant ones, and optionally adds custom URLs. Paywalled Coverages surface a manual paste field here.
+The UI step between Discovery and Analysis where the user confirms which Coverages to include, deselects irrelevant ones, and optionally adds custom URLs. Blocked Coverages surface a manual paste field here.
+
+## Blocked Coverage
+A Coverage whose scraped text is actually a subscription paywall, cookie-consent wall, or bot-block interstitial rather than the real article — detected by matching extracted text against a list of known block-page phrases, not by length alone (a block page can easily be longer than a short real article).
+_Avoid_: Paywalled Coverage — too narrow, implies every block is a subscription wall.
 
 ## Discovery
-The automated process of finding Coverages for a Story. Uses GDELT as the primary source and RSS polling of eight major Czech outlets as a fallback for recently published articles.
+The automated process of finding Coverages for a Story that already has a seed (a human-submitted Seed Article, or a candidate found by Ingestion). Uses GDELT as the primary source and RSS polling of eight major Czech outlets as a fallback for recently published articles.
+
+## Ingestion
+The automated, scheduled process of finding brand-new articles across all monitored outlets, independent of any existing Story, and creating a Draft Analysis for each one that isn't already a duplicate of a Story being tracked. Distinct from Discovery: Discovery finds Coverage *for* a Story that already has a seed; Ingestion finds new Stories in the first place, using Discovery internally as its own dedup check (does a newly-found article already match Coverage on a recent Analysis?). Triggered externally via a shared-secret-authenticated endpoint, not a User session — no Role applies to it.
+
+## Draft Analysis
+An Analysis created automatically by Ingestion, not yet reviewed by an Admin. Its likely Coverage set has already been found via Discovery, but Extraction and Synthesis have not run — no LLM cost is spent until an Admin approves it from the review queue. Never shown on the reader-facing Article listing.
+
+## Cross-Source Narrative
+A generated continuous-prose narrative for a completed Analysis, built from the full text of every Coverage plus the Analysis's four Dimensions. The Dimensions act as a binding classification the Narrative must respect — Agreement is stated plainly with every confirming Source cited, Contradiction is presented as unresolved disagreement, Unique Reporting is attributed to its one Source, Framing differences are described rather than smoothed over — so it can be detailed without ever resolving a disputed fact itself. Generated once, on first view of an Analysis, and cached.
+_Avoid_: Combined article — collides with Coverage, which is also "an article" from one Source.
+
+## Article
+The reader-facing name for a completed Analysis, shown to anyone without a login — nav labels, page titles, the public listing page. Presentation only; the underlying domain entity, database table, and API are still called `Analysis`.
+_Avoid_: using "Article" for a Coverage — a Coverage is a single-source article; "Article" always refers to the full multi-source Analysis/Cross-Source Narrative.
 
 ## Extraction Model
 The AI model used for the per-Coverage Extraction pass. Configurable via the `EXTRACTION_MODEL` environment variable.

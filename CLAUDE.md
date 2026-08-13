@@ -8,6 +8,8 @@ The output should let a reader separate three layers that news writing routinely
 
 The tool is not meant to declare a winner, assign a truth score, or replace the reader's judgement. It is meant to make the shape of the disagreement visible, so the reader can judge it themselves.
 
+A generated Cross-Source Narrative — a single readable article combining what every source reported, presented to readers as "Article" — is in scope, but only as a *presentation* of the same four-dimension breakdown: it states what's agreed on plainly with citations, presents contradictions as open disagreement rather than resolving them, and attributes anything only one source reported. It never adjudicates a disputed fact itself — that would be exactly the winner-declaring this tool exists to avoid. See ADR 0012.
+
 ---
 
 ## Documentation
