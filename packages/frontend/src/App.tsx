@@ -2,11 +2,13 @@ import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-do
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { logout } from '@/services/auth'
+import ProtectedRoute from '@/components/ProtectedRoute'
 import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
+import AdminUsersPage from './pages/AdminUsersPage'
 
 function NavBar() {
   const { user } = useAuth()
@@ -29,6 +31,11 @@ function NavBar() {
       <Link to="/history" className="text-muted-foreground hover:text-foreground">
         History
       </Link>
+      {user?.role === 'ADMIN' && (
+        <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
+          Users
+        </Link>
+      )}
       <div className="ml-auto flex items-center gap-4">
         {user ? (
           <>
@@ -61,6 +68,14 @@ function AppRoutes() {
         <Route path="/analysis/:id" element={<AnalysisPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute>
+              <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </div>
   )

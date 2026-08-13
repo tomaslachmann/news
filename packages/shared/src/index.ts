@@ -85,6 +85,25 @@ export const LoginBodySchema = z.object({
 })
 export type LoginBody = z.infer<typeof LoginBodySchema>
 
+export const UserRoleSchema = z.enum(['ADMIN', 'READONLY'])
+
+export const CreateAdminUserBodySchema = z.object({
+  email: z.string().min(1),
+  password: z.string().min(1),
+  role: UserRoleSchema,
+})
+export type CreateAdminUserBody = z.infer<typeof CreateAdminUserBodySchema>
+
+export const PatchAdminUserBodySchema = z
+  .object({
+    role: UserRoleSchema.optional(),
+    password: z.string().min(1).optional(),
+  })
+  .refine((data) => data.role !== undefined || data.password !== undefined, {
+    message: 'Provide a role or password to update',
+  })
+export type PatchAdminUserBody = z.infer<typeof PatchAdminUserBodySchema>
+
 // API response types
 
 export interface CreateAnalysisResponse {
@@ -99,6 +118,13 @@ export interface AnalysisListItem {
   createdAt: string
   coverageCount: number
   status: 'pending' | 'complete' | 'failed'
+}
+
+export interface AdminUserListItem {
+  id: string
+  email: string
+  role: UserRole
+  createdAt: string
 }
 
 export interface AnalysisDetail {
