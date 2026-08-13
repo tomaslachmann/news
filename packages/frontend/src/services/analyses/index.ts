@@ -2,6 +2,7 @@ import type {
   CreateAnalysisResponse,
   CandidateArticle,
   AnalysisDetail,
+  AnalysisListItem,
   AnalysisDimensions,
   Attribution,
   CoverageInfo,
@@ -13,6 +14,7 @@ export type {
   CreateAnalysisResponse,
   CandidateArticle,
   AnalysisDetail,
+  AnalysisListItem,
   AnalysisDimensions,
   Attribution,
   CoverageInfo,
@@ -70,6 +72,14 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
   if (!res.ok) return throwApiError(res, 'Failed to load analysis')
 
   return res.json() as Promise<AnalysisDetail>
+}
+
+export async function fetchAnalyses(): Promise<AnalysisListItem[]> {
+  const res = await fetch('/api/analyses', { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Failed to load analyses')
+
+  return res.json() as Promise<AnalysisListItem[]>
 }
 
 function on<T extends SseEvent['type']>(

@@ -1,5 +1,5 @@
-import type { AnalysisDetail, AnalysisDimensions } from '@news-triangulator/shared'
-import type { AnalysisWithDetails } from '../repositories/analysis.js'
+import type { AnalysisDetail, AnalysisDimensions, AnalysisListItem } from '@news-triangulator/shared'
+import type { AnalysisWithDetails, AnalysisListRow } from '../repositories/analysis.js'
 import { toCoverageInfo } from './coverage.js'
 
 export function toAnalysisDetail(analysis: AnalysisWithDetails): AnalysisDetail {
@@ -13,5 +13,15 @@ export function toAnalysisDetail(analysis: AnalysisWithDetails): AnalysisDetail 
     synthesisResult: analysis.synthesisResult
       ? (analysis.synthesisResult.dimensions as unknown as AnalysisDimensions)
       : undefined,
+  }
+}
+
+export function toAnalysisListItem(row: AnalysisListRow): AnalysisListItem {
+  return {
+    id: row.id,
+    seedHeadline: row.seedHeadline,
+    createdAt: row.createdAt.toISOString(),
+    coverageCount: row.okCoverageCount,
+    status: row.status.toLowerCase() as AnalysisListItem['status'],
   }
 }

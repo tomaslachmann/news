@@ -4,7 +4,7 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as articleScraperModule from './articleScraper.js'
 import * as keywordExtractorModule from './keywordExtractor.js'
 import * as discoveryModule from './discovery.js'
-import { createAnalysis, discoverSources, getAnalysisDetail } from './analysisService.js'
+import { createAnalysis, discoverSources, getAnalysisDetail, listAnalyses } from './analysisService.js'
 import { ExternalServiceError, NotFoundError } from '../errors.js'
 
 vi.mock('../repositories/analysis.js')
@@ -120,5 +120,53 @@ describe('getAnalysisDetail', () => {
     expect(result.status).toBe('complete')
     expect(result.coverages).toEqual([])
     expect(result.synthesisResult).toBeUndefined()
+  })
+})
+
+describe('listAnalyses', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('maps each repository row to an AnalysisListItem', async () => {
+    vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([
+      {
+        id: 'a1',
+        seedHeadline: 'Newer analysis',
+        createdAt: new Date('2025-01-02T00:00:00Z'),
+        status: 'COMPLETE',
+        okCoverageCount: 3,
+      },
+      {
+        id: 'a2',
+        seedHeadline: 'Older analysis',
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        status: 'PENDING',
+        okCoverageCount: 0,
+      },
+    ])
+
+    const result = await listAnalyses()
+
+    expect(result).toEqual([
+      {
+        id: 'a1',
+        seedHeadline: 'Newer analysis',
+        createdAt: '2025-01-02T00:00:00.000Z',
+        coverageCount: 3,
+        status: 'complete',
+      },
+      {
+        id: 'a2',
+        seedHeadline: 'Older analysis',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        coverageCount: 0,
+        status: 'pending',
+      },
+    ])
+  })
+
+  it('returns an empty array when there are no analyses', async () => {
+    vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([])
+
+    expect(await listAnalyses()).toEqual([])
   })
 })

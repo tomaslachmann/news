@@ -28,6 +28,31 @@ export async function findAnalysisWithDetails(id: string): Promise<AnalysisWithD
   })
 }
 
+export interface AnalysisListRow {
+  id: string
+  seedHeadline: string
+  createdAt: Date
+  status: AnalysisStatus
+  okCoverageCount: number
+}
+
+export async function findAllAnalyses(): Promise<AnalysisListRow[]> {
+  const rows = await prisma.analysis.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      _count: { select: { coverages: { where: { status: 'OK' } } } },
+    },
+  })
+
+  return rows.map((r) => ({
+    id: r.id,
+    seedHeadline: r.seedHeadline,
+    createdAt: r.createdAt,
+    status: r.status,
+    okCoverageCount: r._count.coverages,
+  }))
+}
+
 export async function updateAnalysisStatus(id: string, status: AnalysisStatus): Promise<void> {
   await prisma.analysis.update({ where: { id }, data: { status } })
 }
