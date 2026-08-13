@@ -3,6 +3,7 @@ import type {
   CandidateArticle,
   CreateAnalysisResponse,
   AnalysisDetail,
+  AnalysisListItem,
   CoverageInfo,
   PatchCoveragesBody,
 } from '@news-triangulator/shared'
@@ -13,7 +14,7 @@ import { NotFoundError, ExternalServiceError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
-import { toAnalysisDetail } from '../mappers/analysis.js'
+import { toAnalysisDetail, toAnalysisListItem } from '../mappers/analysis.js'
 
 export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisResponse> {
   let scraped: ScrapedArticle
@@ -129,4 +130,9 @@ export async function getAnalysisDetail(analysisId: string): Promise<AnalysisDet
   const analysis = await analysisRepo.findAnalysisWithDetails(analysisId)
   if (!analysis) throw new NotFoundError('Analysis not found')
   return toAnalysisDetail(analysis)
+}
+
+export async function listAnalyses(): Promise<AnalysisListItem[]> {
+  const rows = await analysisRepo.findAllAnalyses()
+  return rows.map(toAnalysisListItem)
 }

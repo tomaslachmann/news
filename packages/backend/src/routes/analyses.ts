@@ -81,6 +81,12 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
     }
   )
 
+  // GET /api/analyses — return all analyses, newest first
+  fastify.get('/api/analyses', async (_request, reply) => {
+    const response = await analysisService.listAnalyses()
+    return reply.code(200).send(response)
+  })
+
   // GET /api/analyses/:id — return analysis with its coverages
   fastify.get<{ Params: { id: string } }>('/api/analyses/:id', async (request, reply) => {
     const response = await analysisService.getAnalysisDetail(request.params.id)
