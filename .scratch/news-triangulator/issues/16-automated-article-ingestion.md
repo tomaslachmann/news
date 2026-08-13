@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Discovery: GDELT + RSS, 15 — Cross-Source Narrative & Article Rebrand.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `Analysis.status` gains a `DRAFT` value (`DRAFT | PENDING | COMPLETE | FAILED`)
 - [x] A new endpoint (e.g. `POST /api/ingestion/run`) triggers one ingestion pass; authenticated via a shared secret (a new `INGESTION_SECRET` env var, checked via header) rather than the existing JWT/cookie session, since no human/browser is involved
