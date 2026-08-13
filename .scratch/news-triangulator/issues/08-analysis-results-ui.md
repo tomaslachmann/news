@@ -2,7 +2,7 @@
 
 **What to build:** The `/analysis/:id` page renders the completed Analysis in four tabs — Agreement, Contradiction, Unique Reporting, Framing — sourced from the SSE stream. Per-article extraction cards appear as `extraction-complete` events arrive. The four tabs populate when `synthesis-complete` arrives. Each claim item carries an outlet badge: hovering shows the original Czech quote in a tooltip, clicking opens the source article in a new tab. Navigating directly to `/analysis/:id` for a completed Analysis loads the stored `SynthesisResult` rather than replaying the stream.
 
-**Blocked by:** 07 — Synthesis Pass.
+**Blocked by:** 07 — Synthesis Pass; 12 — Testing & Quality Infrastructure.
 
 **Status:** ready-for-agent
 
