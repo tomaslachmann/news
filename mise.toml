@@ -43,8 +43,12 @@ run = "npx --prefix packages/backend prisma studio"
 # ── Testing & linting ─────────────────────────────────────────────────────────
 
 [tasks.test]
-description = "Run the test suite"
+description = "Run unit tests only (no Docker required)"
 run = "npm test"
+
+[tasks."test:integration"]
+description = "Run the testcontainers-backed integration suite (requires Docker)"
+run = "npm run test:integration"
 
 [tasks.lint]
 description = "Run ESLint across all packages"
