@@ -58,6 +58,16 @@ run = "npm run lint"
 description = "Check formatting across all packages with Prettier"
 run = "npx prettier --check ."
 
+# ── Ticket workflow ────────────────────────────────────────────────────────────
+
+[tasks.ticket-start]
+description = "Start a ticket: checks blockers are done, then creates and checks out its branch"
+run = "node scripts/ticket-start.mjs"
+
+[tasks."ticket-done"]
+description = "Finish a ticket: verifies its checklist, flips status, commits, pushes, prints the compare URL"
+run = "node scripts/ticket-done.mjs"
+
 # ── Docker Compose ────────────────────────────────────────────────────────────
 
 [tasks.up]
