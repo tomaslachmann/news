@@ -1,5 +1,6 @@
 import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
+import { fetchArticleHtml } from './articleFetchClient.js'
 
 export const MIN_TEXT_LENGTH = 150
 
@@ -17,25 +18,10 @@ export class ScrapeError extends Error {
 }
 
 export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 12_000)
-
   let html: string
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'NewsTriangulator/1.0' },
-    })
-    clearTimeout(timer)
-
-    if (!res.ok) {
-      throw new ScrapeError(`Seed article returned HTTP ${res.status}`)
-    }
-
-    html = await res.text()
+    html = await fetchArticleHtml(url)
   } catch (err) {
-    clearTimeout(timer)
-    if (err instanceof ScrapeError) throw err
     throw new ScrapeError(`Could not reach the seed article: ${(err as Error).message}`)
   }
 

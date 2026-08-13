@@ -9,7 +9,7 @@ export async function setup(): Promise<void> {
   const databaseUrl = container.getConnectionUri()
   process.env.DATABASE_URL = databaseUrl
 
-  const schemaPath = path.resolve(import.meta.dirname, '../../prisma/schema.prisma')
+  const schemaPath = path.resolve(__dirname, '../../prisma/schema.prisma')
   execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
     env: { ...process.env, DATABASE_URL: databaseUrl },
     stdio: 'inherit',
