@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { openAnalysisStream, type CoverageInfo } from '@/services/analyses'
 
@@ -7,6 +7,8 @@ type ExtractionState =
   | { phase: 'pending' }
   | { phase: 'complete'; claimCount: number; attributedClaimCount: number; framingSignalCount: number }
   | { phase: 'error'; error: string }
+
+type StreamPhase = 'extracting' | 'synthesising' | 'done' | 'failed'
 
 interface OutletRow {
   coverageId: string
@@ -41,9 +43,11 @@ function ExtractionBadge({ state }: { state: ExtractionState }) {
 
 export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [rows, setRows] = useState<OutletRow[]>([])
   const [streamError, setStreamError] = useState<string | null>(null)
-  const [extractionSettled, setExtractionSettled] = useState(false)
+  const [phase, setPhase] = useState<StreamPhase>('extracting')
+  const [synthesisError, setSynthesisError] = useState<string | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
@@ -57,7 +61,9 @@ export default function AnalysisPage() {
             outlet: c.outlet,
             articleUrl: c.articleUrl,
             status: c.status,
-            extraction: { phase: 'pending' },
+            extraction: c.status === 'extraction-failed'
+              ? { phase: 'error', error: 'No article text available' }
+              : { phase: 'pending' },
           }))
         )
       },
@@ -90,7 +96,19 @@ export default function AnalysisPage() {
         )
       },
 
-      onExtractionSettled: () => setExtractionSettled(true),
+      onExtractionSettled: () => setPhase('synthesising'),
+
+      onSynthesisComplete: () => {
+        setPhase('done')
+        es.close()
+        navigate(`/results/${id}`)
+      },
+
+      onSynthesisError: (event) => {
+        setPhase('failed')
+        setSynthesisError(event.error)
+        es.close()
+      },
     })
 
     es.onerror = () => {
@@ -105,15 +123,20 @@ export default function AnalysisPage() {
   const doneCount = rows.filter((r) => r.extraction.phase !== 'pending').length
   const total = rows.length
 
+  const isExtracting = phase === 'extracting'
+  const isSynthesising = phase === 'synthesising'
+  const hasFailed = phase === 'failed'
+
   return (
     <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-2xl font-bold">Extracting sources</h1>
+      <h1 className="text-2xl font-bold">
+        {isSynthesising ? 'Synthesising analysis…' : 'Extracting sources'}
+      </h1>
 
-      {total > 0 && (
+      {total > 0 && isExtracting && (
         <div className="mt-4">
           <div className="flex justify-between text-sm text-muted-foreground mb-1">
             <span>{doneCount} of {total} extractions complete</span>
-            {extractionSettled && <span className="text-green-700 font-medium">All done</span>}
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
             <div
@@ -122,6 +145,17 @@ export default function AnalysisPage() {
             />
           </div>
         </div>
+      )}
+
+      {isSynthesising && (
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 size={16} className="animate-spin" />
+          Running synthesis across {rows.filter((r) => r.extraction.phase === 'complete').length} sources…
+        </div>
+      )}
+
+      {hasFailed && synthesisError && (
+        <p className="mt-4 text-sm text-destructive">{synthesisError}</p>
       )}
 
       {streamError && (

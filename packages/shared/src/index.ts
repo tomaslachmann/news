@@ -32,7 +32,7 @@ export interface DimensionItem {
 
 export interface ContradictionItem {
   prose: string
-  sides: Attribution[]
+  attributions: Attribution[]
 }
 
 export interface AnalysisDimensions {

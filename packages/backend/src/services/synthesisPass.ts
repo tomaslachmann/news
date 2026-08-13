@@ -19,7 +19,7 @@ const DimensionItemSchema = z.object({
 
 const ContradictionItemSchema = z.object({
   prose: z.string(),
-  sides: z.array(AttributionSchema).length(2),
+  attributions: z.array(AttributionSchema).length(2),
 })
 
 export const SynthesisResultSchema = z.object({
@@ -37,8 +37,11 @@ export interface SourceExtraction {
   extraction: ExtractionResult
 }
 
-export async function runSynthesisPass(sources: SourceExtraction[]): Promise<SynthesisResult> {
+export async function runSynthesisPass(sources: SourceExtraction[], excludedCount = 0): Promise<SynthesisResult> {
   const model = process.env.SYNTHESIS_MODEL ?? 'gpt-4o'
-  const parsed = await callJsonModel(model, SYSTEM_PROMPT, JSON.stringify(sources))
+  const note = excludedCount > 0
+    ? `Note: ${excludedCount} coverage(s) were excluded from this analysis because their article text could not be extracted.\n\n`
+    : ''
+  const parsed = await callJsonModel(model, SYSTEM_PROMPT, note + JSON.stringify(sources))
   return SynthesisResultSchema.parse(parsed)
 }

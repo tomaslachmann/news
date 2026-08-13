@@ -69,6 +69,8 @@ export function openAnalysisStream(
     onExtractionComplete: (e: Extract<SseEvent, { type: 'extraction-complete' }>) => void
     onExtractionError: (e: Extract<SseEvent, { type: 'extraction-error' }>) => void
     onExtractionSettled: () => void
+    onSynthesisComplete: (e: Extract<SseEvent, { type: 'synthesis-complete' }>) => void
+    onSynthesisError: (e: Extract<SseEvent, { type: 'synthesis-error' }>) => void
   }
 ): EventSource {
   const es = new EventSource(`/api/analyses/${analysisId}/stream`, { withCredentials: true })
@@ -77,6 +79,8 @@ export function openAnalysisStream(
   on(es, 'extraction-complete', handlers.onExtractionComplete)
   on(es, 'extraction-error', handlers.onExtractionError)
   on(es, 'extraction-settled', () => handlers.onExtractionSettled())
+  on(es, 'synthesis-complete', handlers.onSynthesisComplete)
+  on(es, 'synthesis-error', handlers.onSynthesisError)
 
   return es
 }
