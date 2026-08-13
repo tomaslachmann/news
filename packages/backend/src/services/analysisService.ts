@@ -50,7 +50,7 @@ export async function discoverSources(
   const analysis = await analysisRepo.findAnalysisById(analysisId)
   if (!analysis) throw new NotFoundError('Analysis not found')
 
-  const candidates = await discoverCoverage(keywords, log)
+  const { candidates } = await discoverCoverage(keywords, log)
 
   await coverageRepo.createCoverages(
     candidates.map((c) => ({

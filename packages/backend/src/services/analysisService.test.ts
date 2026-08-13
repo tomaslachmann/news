@@ -85,9 +85,12 @@ describe('discoverSources', () => {
       status: 'PENDING',
       createdAt: new Date(),
     })
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue([
-      { outlet: 'iDnes', title: 'T', url: 'https://idnes.cz/x', publishedAt: '2025-01-01T00:00:00Z' },
-    ])
+    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
+      candidates: [
+        { outlet: 'iDnes', title: 'T', url: 'https://idnes.cz/x', publishedAt: '2025-01-01T00:00:00Z' },
+      ],
+      gdeltCount: 1,
+    })
 
     const result = await discoverSources('a1', ['keyword'])
 

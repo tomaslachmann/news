@@ -3,12 +3,17 @@ import cookie from '@fastify/cookie'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAnalysesRoutes } from './routes/analyses.js'
 import { registerAdminUsersRoutes } from './routes/adminUsers.js'
+import { registerIngestionRoutes } from './routes/ingestion.js'
 import { seedAdminUser } from './seed.js'
 import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
 
 if (!process.env.JWT_SECRET) {
   console.error('Error: JWT_SECRET environment variable is required but not set.')
   process.exit(1)
+}
+
+if (!process.env.INGESTION_SECRET) {
+  console.warn('Warning: INGESTION_SECRET is not set — POST /api/ingestion/run will always reject.')
 }
 
 const server = Fastify({
@@ -36,6 +41,7 @@ const start = async () => {
     registerAuthRoutes(server)
     registerAnalysesRoutes(server)
     registerAdminUsersRoutes(server)
+    registerIngestionRoutes(server)
 
     await seedAdminUser()
 

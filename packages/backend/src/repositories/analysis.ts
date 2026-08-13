@@ -14,6 +14,22 @@ export async function createAnalysis(data: { seedUrl: string; seedHeadline: stri
   })
 }
 
+export async function createDraftAnalysis(data: {
+  seedUrl: string
+  seedHeadline: string
+}): Promise<Analysis> {
+  return prisma.analysis.create({
+    data: { seedUrl: data.seedUrl, seedHeadline: data.seedHeadline, status: 'DRAFT' },
+  })
+}
+
+/** Every Seed Article URL ever recorded, across all Analyses — used by Ingestion alongside
+ *  findAllArticleUrls to skip RSS items it has already turned into an Analysis. */
+export async function findAllSeedUrls(): Promise<string[]> {
+  const rows = await prisma.analysis.findMany({ select: { seedUrl: true } })
+  return rows.map((r) => r.seedUrl)
+}
+
 export async function findAnalysisById(id: string): Promise<Analysis | null> {
   return prisma.analysis.findUnique({ where: { id } })
 }
