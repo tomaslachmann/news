@@ -135,4 +135,6 @@ export interface AnalysisDetail {
   status: 'pending' | 'complete' | 'failed'
   coverages: CoverageInfo[]
   synthesisResult?: AnalysisDimensions
+  /** Cross-Source Narrative segments — generated lazily on first view, undefined until then. */
+  narrative?: DimensionItem[]
 }

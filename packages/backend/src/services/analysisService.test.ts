@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
+import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import * as articleScraperModule from './articleScraper.js'
 import * as keywordExtractorModule from './keywordExtractor.js'
 import * as discoveryModule from './discovery.js'
+import * as narrativePassModule from './narrativePass.js'
 import {
   createAnalysis,
   discoverSources,
@@ -15,9 +17,11 @@ import { ExternalServiceError, NotFoundError } from '../errors.js'
 
 vi.mock('../repositories/analysis.js')
 vi.mock('../repositories/coverage.js')
+vi.mock('../repositories/synthesisResult.js')
 vi.mock('./articleScraper.js')
 vi.mock('./keywordExtractor.js')
 vi.mock('./discovery.js')
+vi.mock('./narrativePass.js')
 
 describe('createAnalysis', () => {
   beforeEach(() => vi.resetAllMocks())
@@ -164,6 +168,21 @@ describe('confirmCoverages', () => {
 describe('getAnalysisDetail', () => {
   beforeEach(() => vi.resetAllMocks())
 
+  const OK_COVERAGE = {
+    id: 'c1',
+    analysisId: 'a1',
+    outlet: 'iDnes',
+    title: null,
+    articleUrl: 'https://idnes.cz/x',
+    publishedAt: null,
+    extractedText: 'Plný text článku.',
+    extractionResult: null,
+    status: 'OK' as const,
+    excluded: false,
+  }
+
+  const DIMENSIONS = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
+
   it('throws NotFoundError when the Analysis does not exist', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue(null)
 
@@ -186,6 +205,117 @@ describe('getAnalysisDetail', () => {
     expect(result.status).toBe('complete')
     expect(result.coverages).toEqual([])
     expect(result.synthesisResult).toBeUndefined()
+  })
+
+  it('generates and caches the narrative when the Analysis is complete and has no narrative yet', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+    })
+    const segments = [
+      {
+        prose: 'Combined narrative.',
+        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
+      },
+    ]
+    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(narrativePassModule.runNarrativePass).toHaveBeenCalledWith(
+      [{ outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku.' }],
+      DIMENSIONS
+    )
+    expect(synthesisResultRepo.updateSynthesisResultNarrative).toHaveBeenCalledWith('a1', segments)
+    expect(result.narrative).toEqual(segments)
+  })
+
+  it('does not regenerate the narrative when one is already cached', async () => {
+    const cachedSegments = [
+      {
+        prose: 'Cached.',
+        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
+      },
+    ]
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: cachedSegments },
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
+    expect(result.narrative).toEqual(cachedSegments)
+  })
+
+  it('serves the Analysis without a narrative if narrative generation fails', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+    })
+    vi.mocked(narrativePassModule.runNarrativePass).mockRejectedValue(new Error('LLM down'))
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(result.narrative).toBeUndefined()
+    expect(result.status).toBe('complete')
+  })
+
+  it('deduplicates concurrent narrative generation for the same Analysis', async () => {
+    const freshAnalysis = () => ({
+      id: 'a1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE' as const,
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+    })
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockImplementation(() => Promise.resolve(freshAnalysis()))
+    const segments = [
+      {
+        prose: 'Combined narrative.',
+        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
+      },
+    ]
+    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments })
+
+    const [resultA, resultB] = await Promise.all([getAnalysisDetail('a1'), getAnalysisDetail('a1')])
+
+    expect(narrativePassModule.runNarrativePass).toHaveBeenCalledTimes(1)
+    expect(resultA.narrative).toEqual(segments)
+    expect(resultB.narrative).toEqual(segments)
+  })
+
+  it('does not attempt narrative generation when the Analysis is not complete', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: null,
+    })
+
+    await getAnalysisDetail('a1')
+
+    expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
   })
 })
 
@@ -210,8 +340,9 @@ describe('listAnalyses', () => {
       },
     ])
 
-    const result = await listAnalyses()
+    const result = await listAnalyses(true)
 
+    expect(analysisRepo.findAllAnalyses).toHaveBeenCalledWith(true)
     expect(result).toEqual([
       {
         id: 'a1',
@@ -230,9 +361,17 @@ describe('listAnalyses', () => {
     ])
   })
 
+  it('passes includeAllStatuses through to the repository', async () => {
+    vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([])
+
+    await listAnalyses(false)
+
+    expect(analysisRepo.findAllAnalyses).toHaveBeenCalledWith(false)
+  })
+
   it('returns an empty array when there are no analyses', async () => {
     vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([])
 
-    expect(await listAnalyses()).toEqual([])
+    expect(await listAnalyses(true)).toEqual([])
   })
 })

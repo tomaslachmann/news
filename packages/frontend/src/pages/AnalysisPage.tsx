@@ -7,6 +7,7 @@ import {
   openAnalysisStream,
   type Attribution,
   type AnalysisDimensions,
+  type DimensionItem,
   type CoverageInfo,
 } from '@/services/analyses'
 import { useAnalysisDetail } from '@/services/analyses/hooks'
@@ -90,16 +91,30 @@ function DimensionList({ items }: { items: Array<{ prose: string; attributions: 
   )
 }
 
-function ResultsTabs({ dimensions }: { dimensions: AnalysisDimensions }) {
+function ResultsTabs({
+  dimensions,
+  narrative,
+}: {
+  dimensions: AnalysisDimensions
+  narrative?: DimensionItem[]
+}) {
+  const hasNarrative = !!narrative && narrative.length > 0
+
   return (
     <TooltipProvider>
-      <Tabs defaultValue="agreement" className="mt-6">
+      <Tabs defaultValue={hasNarrative ? 'narrative' : 'agreement'} className="mt-6">
         <TabsList>
+          {hasNarrative && <TabsTrigger value="narrative">Article</TabsTrigger>}
           <TabsTrigger value="agreement">Agreement</TabsTrigger>
           <TabsTrigger value="contradiction">Contradiction</TabsTrigger>
           <TabsTrigger value="uniqueReporting">Unique Reporting</TabsTrigger>
           <TabsTrigger value="framing">Framing</TabsTrigger>
         </TabsList>
+        {hasNarrative && (
+          <TabsContent value="narrative">
+            <DimensionList items={narrative} />
+          </TabsContent>
+        )}
         <TabsContent value="agreement">
           <DimensionList items={dimensions.agreement} />
         </TabsContent>
@@ -308,7 +323,7 @@ export default function AnalysisPage() {
     return (
       <main className="container mx-auto py-10 max-w-3xl">
         <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
-        <ResultsTabs dimensions={analysis.synthesisResult} />
+        <ResultsTabs dimensions={analysis.synthesisResult} narrative={analysis.narrative} />
       </main>
     )
   }

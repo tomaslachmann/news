@@ -64,4 +64,5 @@ model SynthesisResult {
   analysisId String   @unique
   analysis   Analysis @relation(fields: [analysisId], references: [id])
   dimensions Json
+  narrative  Json?
 }

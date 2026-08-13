@@ -12,7 +12,7 @@ const AttributionSchema = z.object({
   articleUrl: z.string(),
 })
 
-const DimensionItemSchema = z.object({
+export const DimensionItemSchema = z.object({
   prose: z.string(),
   attributions: z.array(AttributionSchema).min(1),
 })

@@ -4,7 +4,7 @@ import {
   PostDiscoverBodySchema,
   PatchCoveragesBodySchema,
 } from '@news-triangulator/shared'
-import { requireAdmin } from '../plugins/auth.js'
+import { requireAdmin, verifyAuthCookie } from '../plugins/auth.js'
 import { ValidationError } from '../errors.js'
 import * as analysisService from '../services/analysisService.js'
 import { runAnalysisStream } from '../services/analysisStream.js'
@@ -81,15 +81,17 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
     }
   )
 
-  // GET /api/analyses — return all analyses, newest first
-  fastify.get('/api/analyses', async (_request, reply) => {
-    const response = await analysisService.listAnalyses()
+  // GET /api/analyses — return all analyses, newest first; Admins see every status,
+  // everyone else (including unauthenticated readers) only sees completed ones
+  fastify.get('/api/analyses', async (request, reply) => {
+    const isAdmin = verifyAuthCookie(request)?.role === 'ADMIN'
+    const response = await analysisService.listAnalyses(isAdmin)
     return reply.code(200).send(response)
   })
 
   // GET /api/analyses/:id — return analysis with its coverages
   fastify.get<{ Params: { id: string } }>('/api/analyses/:id', async (request, reply) => {
-    const response = await analysisService.getAnalysisDetail(request.params.id)
+    const response = await analysisService.getAnalysisDetail(request.params.id, request.log)
     return reply.code(200).send(response)
   })
 }

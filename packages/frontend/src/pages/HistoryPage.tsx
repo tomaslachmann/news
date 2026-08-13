@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { AnalysisListItem } from '@/services/analyses'
 import { useAnalysesList } from '@/services/analyses/hooks'
+import { useAuth } from '@/context/AuthContext'
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -44,23 +45,33 @@ function HistoryEntry({ item }: { item: AnalysisListItem }) {
 }
 
 export default function HistoryPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
   const { data: analyses, isLoading, isError } = useAnalysesList()
 
   return (
     <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-3xl font-bold">History</h1>
-      <p className="mt-2 text-muted-foreground">Browse your previous analyses.</p>
+      <h1 className="text-3xl font-bold">{isAdmin ? 'History' : 'Articles'}</h1>
+      <p className="mt-2 text-muted-foreground">
+        {isAdmin ? 'Browse your previous analyses.' : 'Browse past articles.'}
+      </p>
 
-      {isLoading && <p className="mt-8 text-muted-foreground">Loading analyses…</p>}
+      {isLoading && <p className="mt-8 text-muted-foreground">Loading…</p>}
 
-      {isError && <p className="mt-8 text-destructive">Failed to load analyses.</p>}
+      {isError && <p className="mt-8 text-destructive">Failed to load.</p>}
 
       {analyses && analyses.length === 0 && (
         <div className="mt-8 rounded-lg border bg-card p-8 text-center">
-          <p className="text-muted-foreground">No analyses yet.</p>
-          <Link to="/" className="mt-2 inline-block text-sm text-primary underline">
-            Start an analysis
-          </Link>
+          {isAdmin ? (
+            <>
+              <p className="text-muted-foreground">No analyses yet.</p>
+              <Link to="/" className="mt-2 inline-block text-sm text-primary underline">
+                Start an analysis
+              </Link>
+            </>
+          ) : (
+            <p className="text-muted-foreground">No articles yet — check back soon.</p>
+          )}
         </div>
       )}
 
