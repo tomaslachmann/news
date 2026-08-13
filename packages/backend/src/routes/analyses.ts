@@ -6,10 +6,12 @@ import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from
 import { extractKeywords } from '../services/keywordExtractor.js'
 import { discoverCoverage } from '../services/discovery.js'
 import { runExtractionPass, ExtractionResultSchema } from '../services/extractionPass.js'
+import { runSynthesisPass, type SourceExtraction } from '../services/synthesisPass.js'
 import type {
   CreateAnalysisResponse,
   CandidateArticle,
   AnalysisDetail,
+  AnalysisDimensions,
   CoverageInfo,
   PatchCoveragesBody,
   SseEvent,
@@ -287,9 +289,57 @@ export async function registerAnalysesRoutes(fastify: FastifyInstance): Promise<
             send({ type: 'extraction-error', coverageId: coverage.id, outlet: coverage.outlet, error: message })
           }
         })
-      ).then(() => {
-        // Ticket 07 will run synthesis here; signal that extraction is done
-        if (!reply.raw.writableEnded) send({ type: 'extraction-settled' })
+      ).then(async () => {
+        send({ type: 'extraction-settled' })
+
+        // Re-use cached synthesis result if the stream is reconnected
+        const cached = await prisma.synthesisResult.findUnique({ where: { analysisId: id } })
+        if (cached) {
+          send({ type: 'synthesis-complete', dimensions: cached.dimensions as unknown as AnalysisDimensions })
+          resolve()
+          return
+        }
+
+        // Build source list from coverages that have a validated extraction result
+        const extracted = await prisma.coverage.findMany({
+          where: { analysisId: id, excluded: false, status: 'OK' },
+          orderBy: { id: 'asc' },
+        })
+
+        const sources: SourceExtraction[] = extracted.flatMap((c) => {
+          const parsed = ExtractionResultSchema.safeParse(c.extractionResult)
+          return parsed.success
+            ? [{ outlet: c.outlet, articleUrl: c.articleUrl, extraction: parsed.data }]
+            : []
+        })
+
+        if (sources.length === 0) {
+          send({ type: 'synthesis-error', error: 'No successful extractions to synthesise' })
+          await prisma.analysis.update({ where: { id }, data: { status: 'FAILED' } })
+          resolve()
+          return
+        }
+
+        try {
+          const synthesis = await runSynthesisPass(sources)
+
+          await prisma.$transaction([
+            prisma.synthesisResult.upsert({
+              where: { analysisId: id },
+              create: { analysisId: id, dimensions: synthesis as object },
+              update: { dimensions: synthesis as object },
+            }),
+            prisma.analysis.update({ where: { id }, data: { status: 'COMPLETE' } }),
+          ])
+
+          send({ type: 'synthesis-complete', dimensions: synthesis as AnalysisDimensions })
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Synthesis failed'
+          send({ type: 'synthesis-error', error: message })
+          await prisma.analysis.update({ where: { id }, data: { status: 'FAILED' } }).catch(() => {})
+        } finally {
+          resolve()
+        }
       })
     })
 

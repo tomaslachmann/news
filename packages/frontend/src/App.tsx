@@ -6,6 +6,7 @@ import { logout } from '@/services/auth'
 import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import AnalysisPage from './pages/AnalysisPage'
+import ResultsPage from './pages/ResultsPage'
 import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 
@@ -62,6 +63,7 @@ function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/review/:id" element={<ReviewPage />} />
         <Route path="/analysis/:id" element={<AnalysisPage />} />
+        <Route path="/results/:id" element={<ResultsPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/login" element={<LoginPage />} />
       </Routes>
