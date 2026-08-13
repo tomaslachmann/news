@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
-import { openAnalysisStream, type CoverageInfo } from '@/services/analyses'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  openAnalysisStream,
+  type Attribution,
+  type AnalysisDimensions,
+  type CoverageInfo,
+} from '@/services/analyses'
+import { useAnalysisDetail } from '@/services/analyses/hooks'
 
 type ExtractionState =
   | { phase: 'pending' }
   | { phase: 'complete'; claimCount: number; attributedClaimCount: number; framingSignalCount: number }
   | { phase: 'error'; error: string }
 
-type StreamPhase = 'extracting' | 'synthesising' | 'done' | 'failed'
+type StreamPhase = 'extracting' | 'synthesising' | 'failed'
 
 interface OutletRow {
   coverageId: string
@@ -42,18 +50,93 @@ function ExtractionBadge({ state }: { state: ExtractionState }) {
   )
 }
 
-export default function AnalysisPage() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
+function OutletBadge({ attribution }: { attribution: Attribution }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={attribution.articleUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center rounded-full border bg-secondary px-2.5 py-0.5 text-xs font-medium hover:bg-secondary/80"
+        >
+          {attribution.outlet}
+        </a>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="max-w-xs">{attribution.czechQuote}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function DimensionList({ items }: { items: Array<{ prose: string; attributions: Attribution[] }> }) {
+  if (items.length === 0) {
+    return <p className="mt-4 text-sm text-muted-foreground">Nothing in this category.</p>
+  }
+  return (
+    <ul className="mt-4 flex flex-col gap-3">
+      {items.map((item, i) => (
+        <li key={i} className="rounded-lg border bg-card p-4 flex flex-col gap-2">
+          <p className="text-sm">{item.prose}</p>
+          <div className="flex flex-wrap gap-2">
+            {item.attributions.map((a, j) => (
+              <OutletBadge key={j} attribution={a} />
+            ))}
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ResultsTabs({ dimensions }: { dimensions: AnalysisDimensions }) {
+  return (
+    <TooltipProvider>
+      <Tabs defaultValue="agreement" className="mt-6">
+        <TabsList>
+          <TabsTrigger value="agreement">Agreement</TabsTrigger>
+          <TabsTrigger value="contradiction">Contradiction</TabsTrigger>
+          <TabsTrigger value="uniqueReporting">Unique Reporting</TabsTrigger>
+          <TabsTrigger value="framing">Framing</TabsTrigger>
+        </TabsList>
+        <TabsContent value="agreement">
+          <DimensionList items={dimensions.agreement} />
+        </TabsContent>
+        <TabsContent value="contradiction">
+          <DimensionList items={dimensions.contradiction} />
+        </TabsContent>
+        <TabsContent value="uniqueReporting">
+          <DimensionList items={dimensions.uniqueReporting} />
+        </TabsContent>
+        <TabsContent value="framing">
+          <DimensionList items={dimensions.framing} />
+        </TabsContent>
+      </Tabs>
+    </TooltipProvider>
+  )
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <main className="container mx-auto py-10 max-w-3xl">
+      <p className="text-destructive">{message}</p>
+      <Link to="/" className="mt-4 inline-block text-sm text-primary underline">
+        Try again
+      </Link>
+    </main>
+  )
+}
+
+function StreamingAnalysis({ id }: { id: string }) {
   const [rows, setRows] = useState<OutletRow[]>([])
   const [streamError, setStreamError] = useState<string | null>(null)
   const [phase, setPhase] = useState<StreamPhase>('extracting')
   const [synthesisError, setSynthesisError] = useState<string | null>(null)
+  const [dimensions, setDimensions] = useState<AnalysisDimensions | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
-    if (!id) return
-
     const es = openAnalysisStream(id, {
       onSourcesConfirmed: (event) => {
         setRows(
@@ -100,10 +183,9 @@ export default function AnalysisPage() {
 
       onExtractionSettled: () => setPhase('synthesising'),
 
-      onSynthesisComplete: () => {
-        setPhase('done')
+      onSynthesisComplete: (event) => {
+        setDimensions(event.dimensions)
         es.close()
-        void navigate(`/results/${id}`)
       },
 
       onSynthesisError: (event) => {
@@ -123,14 +205,25 @@ export default function AnalysisPage() {
       es.close()
       esRef.current = null
     }
-  }, [id, navigate])
+  }, [id])
+
+  if (dimensions) {
+    return (
+      <main className="container mx-auto py-10 max-w-3xl">
+        <h1 className="text-2xl font-bold">Analysis</h1>
+        <ResultsTabs dimensions={dimensions} />
+      </main>
+    )
+  }
+
+  if (phase === 'failed' && synthesisError) {
+    return <ErrorState message={synthesisError} />
+  }
 
   const doneCount = rows.filter((r) => r.extraction.phase !== 'pending').length
   const total = rows.length
-
   const isExtracting = phase === 'extracting'
   const isSynthesising = phase === 'synthesising'
-  const hasFailed = phase === 'failed'
 
   return (
     <main className="container mx-auto py-10 max-w-3xl">
@@ -142,7 +235,7 @@ export default function AnalysisPage() {
         <div className="mt-4">
           <div className="flex justify-between text-sm text-muted-foreground mb-1">
             <span>
-              {doneCount} of {total} extractions complete
+              {doneCount} of {total} sources analysed
             </span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -160,8 +253,6 @@ export default function AnalysisPage() {
           Running synthesis across {rows.filter((r) => r.extraction.phase === 'complete').length} sources…
         </div>
       )}
-
-      {hasFailed && synthesisError && <p className="mt-4 text-sm text-destructive">{synthesisError}</p>}
 
       {streamError && <p className="mt-4 text-sm text-destructive">{streamError}</p>}
 
@@ -191,4 +282,36 @@ export default function AnalysisPage() {
       </ul>
     </main>
   )
+}
+
+export default function AnalysisPage() {
+  const { id } = useParams<{ id: string }>()
+  const { data: analysis, isLoading, isError } = useAnalysisDetail(id)
+
+  if (isLoading) {
+    return (
+      <main className="container mx-auto py-10 max-w-3xl">
+        <p className="text-muted-foreground">Loading analysis…</p>
+      </main>
+    )
+  }
+
+  if (isError || !analysis) {
+    return <ErrorState message="Failed to load analysis." />
+  }
+
+  if (analysis.status === 'failed') {
+    return <ErrorState message="Analysis failed." />
+  }
+
+  if (analysis.status === 'complete' && analysis.synthesisResult) {
+    return (
+      <main className="container mx-auto py-10 max-w-3xl">
+        <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
+        <ResultsTabs dimensions={analysis.synthesisResult} />
+      </main>
+    )
+  }
+
+  return <StreamingAnalysis id={id!} />
 }
