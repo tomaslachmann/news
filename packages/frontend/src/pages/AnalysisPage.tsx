@@ -11,6 +11,7 @@ import {
   type CoverageInfo,
 } from '@/services/analyses'
 import { useAnalysisDetail } from '@/services/analyses/hooks'
+import { useAuth } from '@/context/AuthContext'
 
 type ExtractionState =
   | { phase: 'pending' }
@@ -301,6 +302,7 @@ function StreamingAnalysis({ id }: { id: string }) {
 
 export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>()
+  const { user } = useAuth()
   const { data: analysis, isLoading, isError } = useAnalysisDetail(id)
 
   if (isLoading) {
@@ -313,6 +315,19 @@ export default function AnalysisPage() {
 
   if (isError || !analysis) {
     return <ErrorState message="Failed to load analysis." />
+  }
+
+  if (analysis.status === 'draft') {
+    return (
+      <main className="container mx-auto py-10 max-w-3xl">
+        <p className="text-muted-foreground">This article is still being reviewed and isn't available yet.</p>
+        {user?.role === 'ADMIN' && (
+          <Link to="/admin/ingestion" className="mt-4 inline-block text-sm text-primary underline">
+            Go to the review queue
+          </Link>
+        )}
+      </main>
+    )
   }
 
   if (analysis.status === 'failed') {

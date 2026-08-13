@@ -112,12 +112,33 @@ export interface CreateAnalysisResponse {
   keywords: string[]
 }
 
+export type AnalysisStatusLabel = 'draft' | 'pending' | 'complete' | 'failed'
+
 export interface AnalysisListItem {
   id: string
   seedHeadline: string
   createdAt: string
   coverageCount: number
-  status: 'pending' | 'complete' | 'failed'
+  status: AnalysisStatusLabel
+}
+
+export interface PendingAdditionItem {
+  id: string
+  analysisId: string
+  analysisSeedHeadline: string
+  outlet: string
+  title?: string
+  articleUrl: string
+  publishedAt?: string
+  createdAt: string
+}
+
+export interface IngestionRunSummary {
+  checked: number
+  created: number
+  attached: number
+  flagged: number
+  skipped: number
 }
 
 export interface AdminUserListItem {
@@ -132,7 +153,7 @@ export interface AnalysisDetail {
   seedUrl: string
   seedHeadline: string
   createdAt: string
-  status: 'pending' | 'complete' | 'failed'
+  status: AnalysisStatusLabel
   coverages: CoverageInfo[]
   synthesisResult?: AnalysisDimensions
   /** Cross-Source Narrative segments — generated lazily on first view, undefined until then. */

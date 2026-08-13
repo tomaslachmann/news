@@ -9,6 +9,7 @@ import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
+import IngestionReviewPage from './pages/IngestionReviewPage'
 
 function NavBar() {
   const { user } = useAuth()
@@ -33,9 +34,14 @@ function NavBar() {
         {isAdmin ? 'History' : 'Articles'}
       </Link>
       {isAdmin && (
-        <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
-          Users
-        </Link>
+        <>
+          <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
+            Users
+          </Link>
+          <Link to="/admin/ingestion" className="text-muted-foreground hover:text-foreground">
+            Ingestion
+          </Link>
+        </>
       )}
       <div className="ml-auto flex items-center gap-4">
         {user ? (
@@ -74,6 +80,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/ingestion"
+          element={
+            <ProtectedRoute>
+              <IngestionReviewPage />
             </ProtectedRoute>
           }
         />

@@ -29,6 +29,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      INGESTION_SECRET: ${INGESTION_SECRET}
       PORT: 3001
       HOST: 0.0.0.0
     ports:
@@ -36,6 +37,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # Polls POST /api/ingestion/run on a timer — see ADR 0013. Not started until INGESTION_SECRET
+  # is set; the endpoint itself always rejects without it, so this is safe to leave unconfigured.
+  ingestion-cron:
+    image: curlimages/curl:8.10.1
+    restart: unless-stopped
+    environment:
+      INGESTION_SECRET: ${INGESTION_SECRET}
+    depends_on:
+      - backend
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          curl -sf -X POST -H "x-ingestion-secret: $$INGESTION_SECRET" http://backend:3001/api/ingestion/run || true
+          sleep 1200
+        done
 
   frontend:
     build:

@@ -7,7 +7,7 @@ const KEYWORDS = ['Fiala', 'vláda', 'rozpočet']
 
 async function main() {
   console.log(`Discovering articles for keywords: ${KEYWORDS.join(', ')}…`)
-  const candidates = await discoverCoverage(KEYWORDS)
+  const { candidates } = await discoverCoverage(KEYWORDS)
   console.log(`Found ${candidates.length} candidates`)
 
   const toTest = candidates.slice(0, 3)

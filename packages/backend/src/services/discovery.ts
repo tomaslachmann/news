@@ -31,10 +31,19 @@ function deduplicateInto(
   return result
 }
 
+export interface DiscoveryResult {
+  candidates: CandidateArticle[]
+  /** How many of `candidates` came from GDELT's keyword search, as opposed to the RSS fallback
+   *  layer — which returns whatever's currently trending, unfiltered by keyword. Callers that need
+   *  confidence the candidates are actually about the same Story (not just "also recent") should
+   *  only trust this list when gdeltCount > 0. */
+  gdeltCount: number
+}
+
 export async function discoverCoverage(
   keywords: string[],
   log?: FastifyBaseLogger
-): Promise<CandidateArticle[]> {
+): Promise<DiscoveryResult> {
   const seen = new Set<string>()
   let gdeltResults: CandidateArticle[] = []
 
@@ -47,11 +56,11 @@ export async function discoverCoverage(
   const gdeltDeduped = deduplicateInto(gdeltResults, seen, MAX_CANDIDATES)
 
   if (gdeltDeduped.length >= GDELT_MIN_THRESHOLD) {
-    return gdeltDeduped
+    return { candidates: gdeltDeduped, gdeltCount: gdeltDeduped.length }
   }
 
   const rssResults = await queryRssFeeds(log)
   const rssDeduped = deduplicateInto(rssResults, seen, MAX_CANDIDATES - gdeltDeduped.length)
 
-  return [...gdeltDeduped, ...rssDeduped]
+  return { candidates: [...gdeltDeduped, ...rssDeduped], gdeltCount: gdeltDeduped.length }
 }

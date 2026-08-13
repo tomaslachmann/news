@@ -11,6 +11,7 @@ datasource db {
 }
 
 enum AnalysisStatus {
+  DRAFT
   PENDING
   COMPLETE
   FAILED
@@ -36,13 +37,14 @@ model User {
 }
 
 model Analysis {
-  id              String           @id @default(cuid())
-  seedUrl         String
-  seedHeadline    String
-  status          AnalysisStatus   @default(PENDING)
-  createdAt       DateTime         @default(now())
-  coverages       Coverage[]
-  synthesisResult SynthesisResult?
+  id               String            @id @default(cuid())
+  seedUrl          String
+  seedHeadline     String
+  status           AnalysisStatus    @default(PENDING)
+  createdAt        DateTime          @default(now())
+  coverages        Coverage[]
+  synthesisResult  SynthesisResult?
+  pendingAdditions PendingAddition[]
 }
 
 model Coverage {
@@ -65,4 +67,17 @@ model SynthesisResult {
   analysis   Analysis @relation(fields: [analysisId], references: [id])
   dimensions Json
   narrative  Json?
+}
+
+/// A candidate Coverage that Ingestion found for an already-COMPLETE Analysis — surfaced for Admin
+/// review rather than silently reopening a completed Analysis (see ADR 0013).
+model PendingAddition {
+  id          String   @id @default(cuid())
+  analysisId  String
+  analysis    Analysis @relation(fields: [analysisId], references: [id])
+  outlet      String
+  title       String?
+  articleUrl  String
+  publishedAt String?
+  createdAt   DateTime @default(now())
 }

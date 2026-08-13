@@ -8,6 +8,7 @@ import type { AnalysisWithDetails, AnalysisListRow, AnalysisStatus } from '../re
 import { toCoverageInfo } from './coverage.js'
 
 const STATUS_MAP: Record<AnalysisStatus, AnalysisDetail['status']> = {
+  DRAFT: 'draft',
   PENDING: 'pending',
   COMPLETE: 'complete',
   FAILED: 'failed',
