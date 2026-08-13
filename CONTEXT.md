@@ -4,7 +4,7 @@
 The single article URL the user provides as the entry point to an investigation. The tool scrapes it to extract search terms and uses it to anchor the story.
 
 ## Story
-The real-world event being investigated. A story is distinct from any individual Coverage — it is what the Coverages are all about.
+The real-world event being investigated. A story is distinct from any individual Coverage — it is what the Coverages are all about. A persisted entity (one row per real-world event, `Analysis.storyId`) holding an `anchorHeadline` — the seed/triggering article's title — that every candidate article is checked against before it's allowed to become Coverage on that Story. Created in the same transaction as its Analysis, so Discovery/Ingestion's "does this look like the same event" question always has a stable, independent thing to compare against, separate from Analysis's own DRAFT/PENDING/COMPLETE/FAILED lifecycle.
 
 ## Source
 A distinct news outlet (e.g. iDnes, ČT24, Novinky). Each Source contributes at most one Coverage per Analysis.
