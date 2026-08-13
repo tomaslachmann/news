@@ -3,6 +3,7 @@ import {
   createAnalysis,
   findAnalysisWithDetails,
   findAllAnalyses,
+  updateAnalysisStatus,
   disconnect,
 } from '../../src/repositories/analysis.js'
 import {
@@ -48,7 +49,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
       { analysisId: newer.id, outlet: 'Novinky', articleUrl: 'https://novinky.cz/y', status: 'PENDING' },
     ])
 
-    const list = await findAllAnalyses()
+    const list = await findAllAnalyses(true)
     const olderIndex = list.findIndex((a) => a.id === older.id)
     const newerIndex = list.findIndex((a) => a.id === newer.id)
     const newerEntry = list[newerIndex]
@@ -70,9 +71,21 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const [kept] = await findCoveragesForAnalysis(analysis.id)
     await excludeCoverages(analysis.id, [kept.id])
 
-    const list = await findAllAnalyses()
+    const list = await findAllAnalyses(true)
     const entry = list.find((a) => a.id === analysis.id)
 
     expect(entry?.okCoverageCount).toBe(1)
+  })
+
+  it('excludes non-complete analyses when includeAllStatuses is false', async () => {
+    const pending = await createAnalysis({ seedUrl: 'https://example.cz/d', seedHeadline: 'Still pending' })
+    const complete = await createAnalysis({ seedUrl: 'https://example.cz/e', seedHeadline: 'Done' })
+    await updateAnalysisStatus(complete.id, 'COMPLETE')
+
+    const list = await findAllAnalyses(false)
+    const ids = list.map((a) => a.id)
+
+    expect(ids).toContain(complete.id)
+    expect(ids).not.toContain(pending.id)
   })
 })

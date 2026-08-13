@@ -36,8 +36,9 @@ export interface AnalysisListRow {
   okCoverageCount: number
 }
 
-export async function findAllAnalyses(): Promise<AnalysisListRow[]> {
+export async function findAllAnalyses(includeAllStatuses: boolean): Promise<AnalysisListRow[]> {
   const rows = await prisma.analysis.findMany({
+    where: includeAllStatuses ? undefined : { status: 'COMPLETE' },
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },

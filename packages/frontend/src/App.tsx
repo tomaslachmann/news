@@ -12,6 +12,7 @@ import AdminUsersPage from './pages/AdminUsersPage'
 
 function NavBar() {
   const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
@@ -29,9 +30,9 @@ function NavBar() {
         News Triangulator
       </Link>
       <Link to="/history" className="text-muted-foreground hover:text-foreground">
-        History
+        {isAdmin ? 'History' : 'Articles'}
       </Link>
-      {user?.role === 'ADMIN' && (
+      {isAdmin && (
         <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
           Users
         </Link>

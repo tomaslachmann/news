@@ -11,9 +11,12 @@ import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from
 import { extractKeywords } from './keywordExtractor.js'
 import { discoverCoverage } from './discovery.js'
 import { isBlockedContent } from './blockedContent.js'
+import { runNarrativePass, type NarrativeSource, type NarrativeResult } from './narrativePass.js'
+import type { SynthesisResult as SynthesisDimensions } from './synthesisPass.js'
 import { NotFoundError, ExternalServiceError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
+import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { toAnalysisDetail, toAnalysisListItem } from '../mappers/analysis.js'
 
@@ -127,13 +130,59 @@ export async function confirmCoverages(
   return updated.map(toCoverageInfo)
 }
 
-export async function getAnalysisDetail(analysisId: string): Promise<AnalysisDetail> {
+// Keyed by analysisId — dedupes concurrent first-view requests for the same Analysis so they
+// share one LLM call instead of each racing to generate (and pay for) their own.
+const inFlightNarrativeGenerations = new Map<string, Promise<NarrativeResult['segments'] | null>>()
+
+function generateAndCacheNarrative(
+  analysisId: string,
+  sources: NarrativeSource[],
+  dimensions: SynthesisDimensions,
+  log?: FastifyBaseLogger
+): Promise<NarrativeResult['segments'] | null> {
+  const existing = inFlightNarrativeGenerations.get(analysisId)
+  if (existing) return existing
+
+  const generation = (async () => {
+    try {
+      const narrativeResult = await runNarrativePass(sources, dimensions)
+      await synthesisResultRepo.updateSynthesisResultNarrative(analysisId, narrativeResult.segments)
+      return narrativeResult.segments
+    } catch (err) {
+      log?.warn({ analysisId, err }, 'Cross-Source Narrative generation failed; serving without one')
+      return null
+    } finally {
+      inFlightNarrativeGenerations.delete(analysisId)
+    }
+  })()
+
+  inFlightNarrativeGenerations.set(analysisId, generation)
+  return generation
+}
+
+export async function getAnalysisDetail(
+  analysisId: string,
+  log?: FastifyBaseLogger
+): Promise<AnalysisDetail> {
   const analysis = await analysisRepo.findAnalysisWithDetails(analysisId)
   if (!analysis) throw new NotFoundError('Analysis not found')
+
+  if (analysis.status === 'COMPLETE' && analysis.synthesisResult && !analysis.synthesisResult.narrative) {
+    const sources: NarrativeSource[] = analysis.coverages
+      .filter((c) => c.status === 'OK' && c.extractedText)
+      .map((c) => ({ outlet: c.outlet, articleUrl: c.articleUrl, fullText: c.extractedText! }))
+
+    if (sources.length > 0) {
+      const dimensions = analysis.synthesisResult.dimensions as unknown as SynthesisDimensions
+      const segments = await generateAndCacheNarrative(analysisId, sources, dimensions, log)
+      if (segments) analysis.synthesisResult.narrative = segments
+    }
+  }
+
   return toAnalysisDetail(analysis)
 }
 
-export async function listAnalyses(): Promise<AnalysisListItem[]> {
-  const rows = await analysisRepo.findAllAnalyses()
+export async function listAnalyses(includeAllStatuses: boolean): Promise<AnalysisListItem[]> {
+  const rows = await analysisRepo.findAllAnalyses(includeAllStatuses)
   return rows.map(toAnalysisListItem)
 }
