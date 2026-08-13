@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import { prisma } from './db.js'
+import * as userRepo from './repositories/user.js'
 
 export async function seedAdminUser(): Promise<void> {
   const adminEmail = process.env.ADMIN_EMAIL
@@ -9,19 +9,17 @@ export async function seedAdminUser(): Promise<void> {
     return
   }
 
-  const existingUser = await prisma.user.findFirst()
+  const existingUser = await userRepo.findAnyUser()
   if (existingUser) {
     return
   }
 
   const passwordHash = await bcrypt.hash(adminPassword, 12)
 
-  await prisma.user.create({
-    data: {
-      email: adminEmail,
-      passwordHash,
-      role: 'ADMIN',
-    },
+  await userRepo.createUser({
+    email: adminEmail,
+    passwordHash,
+    role: 'ADMIN',
   })
 
   console.log(`Admin user created: ${adminEmail}`)

@@ -37,5 +37,29 @@ export default defineConfig(
       ...reactHooks.configs.recommended.rules,
     },
   },
+  {
+    // Only repositories/ may talk to Prisma — see ADR 0010.
+    files: ['packages/backend/**/*.ts'],
+    ignores: ['packages/backend/src/repositories/**', 'packages/backend/src/db.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@prisma/client',
+              message: 'Only repositories/ may import @prisma/client — see ADR 0010.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['*db.js', '**/db.js'],
+              message: 'Only repositories/ may import db.ts — see ADR 0010.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   eslintConfigPrettier
 )
