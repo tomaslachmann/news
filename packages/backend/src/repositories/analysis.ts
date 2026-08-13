@@ -40,7 +40,7 @@ export async function findAllAnalyses(): Promise<AnalysisListRow[]> {
   const rows = await prisma.analysis.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
-      _count: { select: { coverages: { where: { status: 'OK' } } } },
+      _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },
     },
   })
 
