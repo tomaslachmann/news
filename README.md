@@ -34,7 +34,8 @@ npm install
 cp .env.example .env
 # Edit .env and fill in real values (at minimum DATABASE_URL and OPENAI_API_KEY)
 
-# 4. Start Postgres
+# 4. Start Postgres (runs in the foreground — use a separate terminal,
+#    or run `docker compose up -d db` instead to start it detached)
 npm run db
 
 # 5. Run database migrations
