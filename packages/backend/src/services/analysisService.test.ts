@@ -4,7 +4,13 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as articleScraperModule from './articleScraper.js'
 import * as keywordExtractorModule from './keywordExtractor.js'
 import * as discoveryModule from './discovery.js'
-import { createAnalysis, discoverSources, getAnalysisDetail, listAnalyses } from './analysisService.js'
+import {
+  createAnalysis,
+  discoverSources,
+  confirmCoverages,
+  getAnalysisDetail,
+  listAnalyses,
+} from './analysisService.js'
 import { ExternalServiceError, NotFoundError } from '../errors.js'
 
 vi.mock('../repositories/analysis.js')
@@ -92,6 +98,66 @@ describe('discoverSources', () => {
         status: 'PENDING',
       },
     ])
+  })
+})
+
+describe('confirmCoverages', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  const ANALYSIS = {
+    id: 'a1',
+    seedUrl: 'x',
+    seedHeadline: 'x',
+    status: 'PENDING' as const,
+    createdAt: new Date(),
+  }
+
+  const PENDING_COVERAGE = {
+    id: 'c1',
+    analysisId: 'a1',
+    outlet: 'iDnes',
+    title: null,
+    articleUrl: 'https://idnes.cz/x',
+    publishedAt: null,
+    extractedText: null,
+    extractionResult: null,
+    status: 'PENDING' as const,
+    excluded: false,
+  }
+
+  function stubHappyPath() {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoverageUrlsForAnalysis).mockResolvedValue([])
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockResolvedValueOnce([PENDING_COVERAGE])
+      .mockResolvedValueOnce([PENDING_COVERAGE])
+  }
+
+  it('marks a Coverage extraction-failed when the scraped text matches a blocked-content phrase, even though it is long', async () => {
+    stubHappyPath()
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
+      title: 'Article',
+      excerpt: 'excerpt',
+      fullText: 'Neblokujete reklamy a vidíte tuto stránku? '.repeat(50),
+    })
+
+    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+
+    expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('c1', { status: 'EXTRACTION_FAILED' })
+  })
+
+  it('marks a Coverage ok when the scraped text is ordinary article content', async () => {
+    stubHappyPath()
+    const fullText = 'A perfectly ordinary article body with plenty of real content in it. '.repeat(10)
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
+      title: 'Article',
+      excerpt: 'excerpt',
+      fullText,
+    })
+
+    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+
+    expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('c1', { extractedText: fullText, status: 'OK' })
   })
 })
 
