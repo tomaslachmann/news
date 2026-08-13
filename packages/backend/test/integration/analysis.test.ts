@@ -1,33 +1,28 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { prisma } from '../../src/db.js'
+import { createAnalysis, findAnalysisWithDetails, disconnect } from '../../src/repositories/analysis.js'
+import { createCoverages } from '../../src/repositories/coverage.js'
 
-describe('Analysis + Coverage against a real Postgres instance', () => {
+describe('Analysis + Coverage repositories against a real Postgres instance', () => {
   afterAll(async () => {
-    await prisma.$disconnect()
+    await disconnect()
   })
 
   it('persists an Analysis with a related Coverage and reads it back', async () => {
-    const analysis = await prisma.analysis.create({
-      data: {
-        seedUrl: 'https://example.cz/some-article',
-        seedHeadline: 'Test headline',
-        status: 'PENDING',
-      },
+    const analysis = await createAnalysis({
+      seedUrl: 'https://example.cz/some-article',
+      seedHeadline: 'Test headline',
     })
 
-    await prisma.coverage.create({
-      data: {
+    await createCoverages([
+      {
         analysisId: analysis.id,
         outlet: 'iDnes',
         articleUrl: 'https://idnes.cz/some-article',
         status: 'PENDING',
       },
-    })
+    ])
 
-    const found = await prisma.analysis.findUnique({
-      where: { id: analysis.id },
-      include: { coverages: true },
-    })
+    const found = await findAnalysisWithDetails(analysis.id)
 
     expect(found).not.toBeNull()
     expect(found?.seedHeadline).toBe('Test headline')

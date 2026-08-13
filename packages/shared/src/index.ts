@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export type UserRole = 'ADMIN' | 'READONLY'
 
 // SSE Event types
@@ -58,13 +60,32 @@ export type SseEvent =
   | { type: 'synthesis-error'; error: string }
   | { type: 'warning'; message: string }
 
-// API response types
+// Request body schemas
 
-export interface PatchCoveragesBody {
-  confirmedIds: string[]
-  customUrls?: string[]
-  manualTexts?: Array<{ id: string; text: string }>
-}
+export const PostAnalysisBodySchema = z.object({
+  seedUrl: z.url(),
+})
+export type PostAnalysisBody = z.infer<typeof PostAnalysisBodySchema>
+
+export const PostDiscoverBodySchema = z.object({
+  keywords: z.array(z.string()).min(1),
+})
+export type PostDiscoverBody = z.infer<typeof PostDiscoverBodySchema>
+
+export const PatchCoveragesBodySchema = z.object({
+  confirmedIds: z.array(z.string()),
+  customUrls: z.array(z.string()).optional(),
+  manualTexts: z.array(z.object({ id: z.string(), text: z.string() })).optional(),
+})
+export type PatchCoveragesBody = z.infer<typeof PatchCoveragesBodySchema>
+
+export const LoginBodySchema = z.object({
+  email: z.string().min(1),
+  password: z.string().min(1),
+})
+export type LoginBody = z.infer<typeof LoginBodySchema>
+
+// API response types
 
 export interface CreateAnalysisResponse {
   id: string
