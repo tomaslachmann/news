@@ -14,7 +14,8 @@
     "typecheck": "npm run typecheck --workspace=packages/backend && npm run typecheck --workspace=packages/frontend",
     "lint": "eslint .",
     "test": "npm run test --workspace=packages/backend --if-present && npm run test --workspace=packages/frontend --if-present",
-    "test:integration": "npm run test:integration --workspace=packages/backend"
+    "test:integration": "npm run test:integration --workspace=packages/backend",
+    "prepare": "husky"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
