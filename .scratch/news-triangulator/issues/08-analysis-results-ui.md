@@ -4,7 +4,7 @@
 
 **Blocked by:** 07 — Synthesis Pass; 12 — Testing & Quality Infrastructure.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `/analysis/:id` opens the SSE stream via `EventSource` on mount when the Analysis status is not yet `"complete"`
 - [x] While the stream is open, per-article extraction cards render as `extraction-complete` events arrive; each card shows outlet name and claim count
