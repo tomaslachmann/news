@@ -40,6 +40,7 @@ For each item provide:
 - "attributions": array of per-outlet evidence showing the contrasting choices (outlet, czechQuote, articleUrl)
 
 ## Rules
+- Be exhaustive. Identify every agreement, contradiction, unique claim, and framing difference across the provided sources that meets the criteria above — not just the handful that seem most notable. Coverage with many extracted claims should produce a correspondingly thorough synthesis.
 - Every item in every dimension must have at least one attribution with a verbatim czechQuote.
 - articleUrl must be the exact URL of the source article you are drawing from.
 - If a dimension has no examples across the provided sources, return an empty array.

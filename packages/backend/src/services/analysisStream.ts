@@ -75,7 +75,7 @@ async function runExtractionAndSynthesis(
       }
 
       try {
-        const extraction = await runExtractionPass(coverage.extractedText!)
+        const extraction = await runExtractionPass(coverage.extractedText!, log)
         await coverageRepo.updateCoverage(coverage.id, { extractionResult: extraction })
         send({
           type: 'extraction-complete',
@@ -109,7 +109,12 @@ async function runExtractionAndSynthesis(
   for (const c of extracted) {
     const parsed = ExtractionResultSchema.safeParse(c.extractionResult)
     if (parsed.success) {
-      sources.push({ outlet: c.outlet, articleUrl: c.articleUrl, extraction: parsed.data })
+      sources.push({
+        outlet: c.outlet,
+        articleUrl: c.articleUrl,
+        extraction: parsed.data,
+        extractedText: c.extractedText!,
+      })
     } else {
       droppedCount++
       log?.warn(
@@ -128,7 +133,7 @@ async function runExtractionAndSynthesis(
   }
 
   try {
-    const synthesis = await runSynthesisPass(sources, excludedCount)
+    const synthesis = await runSynthesisPass(sources, excludedCount, log)
     await analysisRepo.completeAnalysisWithSynthesis(analysisId, synthesis)
     send({ type: 'synthesis-complete', dimensions: synthesis })
   } catch (err) {

@@ -277,10 +277,30 @@ describe('getAnalysisDetail', () => {
 
     expect(narrativePassModule.runNarrativePass).toHaveBeenCalledWith(
       [{ outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku.' }],
-      DIMENSIONS
+      DIMENSIONS,
+      undefined
     )
     expect(synthesisResultRepo.updateSynthesisResultNarrative).toHaveBeenCalledWith('a1', segments)
     expect(result.narrative).toEqual(segments)
+  })
+
+  it('does not cache an empty narrative result, so the next view can retry generation', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+    })
+    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments: [] })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(synthesisResultRepo.updateSynthesisResultNarrative).not.toHaveBeenCalled()
+    expect(result.narrative).toBeUndefined()
   })
 
   it('does not regenerate the narrative when one is already cached', async () => {
