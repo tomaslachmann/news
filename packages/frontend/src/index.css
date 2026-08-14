@@ -57,3 +57,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  /* "Wire Service" small-caps eyebrow label — section headers, kickers, utility metadata.
+   * Shared by the Article page (ticket 20); ticket 22 reuses it site-wide instead of every
+   * page re-typing "text-xs font-semibold uppercase tracking-wide text-muted-foreground". */
+  .utility-label {
+    @apply font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+}

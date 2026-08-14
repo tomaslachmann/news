@@ -51,6 +51,14 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      // "Wire Service" reading-typography tokens — shared by the Article page (ticket 20) and
+      // reused site-wide by ticket 22, rather than each page re-picking its own arbitrary values.
+      maxWidth: {
+        measure: '70ch',
+      },
+      fontSize: {
+        article: ['17px', { lineHeight: '1.7' }],
+      },
       keyframes: {
         'accordion-down': {
           from: { height: '0' },
