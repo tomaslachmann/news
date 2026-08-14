@@ -15,6 +15,7 @@ async function fetchFeed(outlet: string, url: string, log?: FastifyBaseLogger): 
         title: item.title!,
         url: item.link!,
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+        excerpt: item.contentSnippet?.trim() || undefined,
       }))
   } catch (err) {
     log?.warn(`RSS feed failed for ${outlet} (${url}): ${(err as Error).message}`)

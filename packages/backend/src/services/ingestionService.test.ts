@@ -3,10 +3,7 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as rssModule from './rss.js'
-import * as discoveryModule from './discovery.js'
-import * as articleScraperModule from './articleScraper.js'
-import * as keywordExtractorModule from './keywordExtractor.js'
-import * as storyVerificationModule from './storyVerification.js'
+import * as embeddingClientModule from './embeddingClient.js'
 import { runIngestionPass, approveDraft, rejectDraft, listPendingAdditions } from './ingestionService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
@@ -14,10 +11,7 @@ vi.mock('../repositories/analysis.js')
 vi.mock('../repositories/coverage.js')
 vi.mock('../repositories/pendingAddition.js')
 vi.mock('./rss.js')
-vi.mock('./discovery.js')
-vi.mock('./articleScraper.js')
-vi.mock('./keywordExtractor.js')
-vi.mock('./storyVerification.js')
+vi.mock('./embeddingClient.js')
 
 const RSS_ITEM = {
   outlet: 'iDnes',
@@ -26,22 +20,15 @@ const RSS_ITEM = {
   publishedAt: '2026-01-01T00:00:00Z',
 }
 
-const SAME_EVENT = { sameEvent: true, reasoning: 'stub: same event' }
-const DIFFERENT_EVENT = { sameEvent: false, reasoning: 'stub: different event' }
+const ITEM_EMBEDDING = [1, 0, 0]
+const MATCHING_EMBEDDING = [1, 0, 0] // identical vector — cosine similarity 1.0
+const UNRELATED_EMBEDDING = [0, 1, 0] // orthogonal — cosine similarity 0.0
 
 function stubCommon() {
   vi.mocked(analysisRepo.findAllSeedUrls).mockResolvedValue([])
   vi.mocked(coverageRepo.findAllArticleUrls).mockResolvedValue([])
-  vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
-    title: 'Fresh headline',
-    excerpt: 'excerpt',
-    fullText: 'full text',
-  })
-  vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword'])
-  vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue(SAME_EVENT)
-  vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockImplementation((candidates) =>
-    Promise.resolve(candidates)
-  )
+  vi.mocked(embeddingClientModule.generateEmbedding).mockResolvedValue(ITEM_EMBEDDING)
+  vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([])
 }
 
 describe('runIngestionPass', () => {
@@ -55,19 +42,12 @@ describe('runIngestionPass', () => {
     const summary = await runIngestionPass()
 
     expect(summary).toEqual({ checked: 1, created: 0, attached: 0, flagged: 0, skipped: 1 })
-    expect(articleScraperModule.scrapeArticle).not.toHaveBeenCalled()
+    expect(embeddingClientModule.generateEmbedding).not.toHaveBeenCalled()
   })
 
-  it('creates a new Draft Analysis when nothing matches an existing recent Analysis', async () => {
+  it('creates a new Draft Analysis, seeded with only its own Coverage, when nothing matches', async () => {
     stubCommon()
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
-      candidates: [
-        { outlet: 'Novinky', title: 'T', url: 'https://novinky.cz/x', publishedAt: '2026-01-01T00:00:00Z' },
-      ],
-      gdeltCount: 5,
-    })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue(null)
     vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
       id: 'draft-1',
       storyId: 'story-1',
@@ -82,29 +62,69 @@ describe('runIngestionPass', () => {
     expect(analysisRepo.createDraftAnalysis).toHaveBeenCalledWith({
       seedUrl: RSS_ITEM.url,
       seedHeadline: 'Fresh headline',
+      embedding: ITEM_EMBEDDING,
     })
     expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
       {
         analysisId: 'draft-1',
-        outlet: 'Novinky',
-        title: 'T',
-        articleUrl: 'https://novinky.cz/x',
-        publishedAt: '2026-01-01T00:00:00Z',
+        outlet: RSS_ITEM.outlet,
+        title: RSS_ITEM.title,
+        articleUrl: RSS_ITEM.url,
+        publishedAt: RSS_ITEM.publishedAt,
         status: 'PENDING',
       },
     ])
     expect(summary).toEqual({ checked: 1, created: 1, attached: 0, flagged: 0, skipped: 0 })
   })
 
-  it('attaches as Coverage to an existing DRAFT or PENDING Analysis instead of creating a new one', async () => {
+  it('lets a Story created earlier in the same poll be matched by a later item in that same poll', async () => {
+    // Regression: candidates are fetched once per poll, not once per item, for efficiency — but
+    // a Story created by an earlier item in this same run must still be visible to a later
+    // item's own match check, exactly as when candidates were re-fetched every time.
+    stubCommon()
+    const ITEM_A = {
+      outlet: 'iDnes',
+      title: 'Item A headline',
+      url: 'https://idnes.cz/item-a',
+      publishedAt: '2026-01-01T00:00:00Z',
+    }
+    const ITEM_B = {
+      outlet: 'Novinky',
+      title: 'Item B headline',
+      url: 'https://novinky.cz/item-b',
+      publishedAt: '2026-01-01T00:00:00Z',
+    }
+    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([ITEM_A, ITEM_B])
+    vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
+      id: 'draft-a',
+      storyId: 'story-a',
+      seedUrl: ITEM_A.url,
+      seedHeadline: 'Item A headline',
+      status: 'DRAFT',
+      createdAt: new Date(),
+    })
+
+    const summary = await runIngestionPass()
+
+    expect(analysisRepo.createDraftAnalysis).toHaveBeenCalledTimes(1)
+    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
+      expect.objectContaining({ analysisId: 'draft-a', articleUrl: ITEM_B.url }),
+    ])
+    expect(summary).toEqual({ checked: 2, created: 1, attached: 1, flagged: 0, skipped: 0 })
+  })
+
+  it('attaches as Coverage to a matching DRAFT or PENDING Analysis instead of creating a new one', async () => {
     stubCommon()
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({ candidates: [], gdeltCount: 0 })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue({
-      analysisId: 'existing-1',
-      status: 'PENDING',
-      anchorHeadline: 'Fresh headline',
-    })
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 'story-x',
+        analysisId: 'existing-1',
+        analysisStatus: 'PENDING',
+        embedding: MATCHING_EMBEDDING,
+        createdAt: new Date(),
+      },
+    ])
 
     const summary = await runIngestionPass()
 
@@ -122,83 +142,18 @@ describe('runIngestionPass', () => {
     expect(summary).toEqual({ checked: 1, created: 0, attached: 1, flagged: 0, skipped: 0 })
   })
 
-  it('does not lose a genuinely novel candidate just because it also surfaced as an unattached search candidate for an earlier matched item in the same poll', async () => {
-    // Regression: a verified dedup match only ever attaches item.url as Coverage — its other
-    // Discovery search candidates were never verified against anything and must stay eligible
-    // for a later item in the same poll to attach them for real, if that later item's own
-    // candidate check confirms them.
-    stubCommon()
-    const ITEM_A = {
-      outlet: 'iDnes',
-      title: 'Item A headline',
-      url: 'https://idnes.cz/item-a',
-      publishedAt: '2026-01-01T00:00:00Z',
-    }
-    const ITEM_B = {
-      outlet: 'Novinky',
-      title: 'Item B headline',
-      url: 'https://novinky.cz/item-b',
-      publishedAt: '2026-01-01T00:00:00Z',
-    }
-    const SHARED_CANDIDATE = {
-      outlet: 'ČT24',
-      title: 'Shared candidate',
-      url: 'https://ct24.cz/shared-candidate',
-      publishedAt: '2026-01-01T00:00:00Z',
-    }
-    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([ITEM_A, ITEM_B])
-    vi.mocked(articleScraperModule.scrapeArticle)
-      .mockResolvedValueOnce({ title: 'Item A headline', excerpt: 'e', fullText: 'f' })
-      .mockResolvedValueOnce({ title: 'Item B headline', excerpt: 'e', fullText: 'f' })
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
-      candidates: [SHARED_CANDIDATE],
-      gdeltCount: 5,
-    })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls)
-      .mockResolvedValueOnce({
-        analysisId: 'existing-1',
-        status: 'PENDING',
-        anchorHeadline: 'Item A headline',
-      })
-      .mockResolvedValueOnce(null)
-    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockImplementation((candidates) =>
-      Promise.resolve(candidates)
-    )
-    vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
-      id: 'draft-8',
-      storyId: 'story-8',
-      seedUrl: ITEM_B.url,
-      seedHeadline: 'Item B headline',
-      status: 'DRAFT',
-      createdAt: new Date(),
-    })
-
-    await runIngestionPass()
-
-    // Item A attaches only its own URL — the shared candidate is not attached here.
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
-      expect.objectContaining({ analysisId: 'existing-1', articleUrl: ITEM_A.url }),
-    ])
-    // Item B's own candidate check still sees the shared candidate and attaches it.
-    expect(storyVerificationModule.verifyCandidatesAgainstAnchor).toHaveBeenCalledWith(
-      [SHARED_CANDIDATE],
-      'Item B headline',
-      undefined
-    )
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
-      expect.objectContaining({ analysisId: 'draft-8', articleUrl: SHARED_CANDIDATE.url }),
-    ])
-  })
-
   it('flags a possible addition instead of modifying a matched COMPLETE Analysis', async () => {
     stubCommon()
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({ candidates: [], gdeltCount: 0 })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue({
-      analysisId: 'completed-1',
-      status: 'COMPLETE',
-      anchorHeadline: 'Fresh headline',
-    })
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 'story-x',
+        analysisId: 'completed-1',
+        analysisStatus: 'COMPLETE',
+        embedding: MATCHING_EMBEDDING,
+        createdAt: new Date(),
+      },
+    ])
 
     const summary = await runIngestionPass()
 
@@ -216,12 +171,15 @@ describe('runIngestionPass', () => {
   it('skips without side effects when the match is against a FAILED (rejected) Analysis', async () => {
     stubCommon()
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({ candidates: [], gdeltCount: 0 })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue({
-      analysisId: 'failed-1',
-      status: 'FAILED',
-      anchorHeadline: 'Fresh headline',
-    })
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 'story-x',
+        analysisId: 'failed-1',
+        analysisStatus: 'FAILED',
+        embedding: MATCHING_EMBEDDING,
+        createdAt: new Date(),
+      },
+    ])
 
     const summary = await runIngestionPass()
 
@@ -231,193 +189,21 @@ describe('runIngestionPass', () => {
     expect(summary).toEqual({ checked: 1, created: 0, attached: 0, flagged: 0, skipped: 1 })
   })
 
-  it('skips an item that fails to scrape or keyword-extract without aborting the pass', async () => {
+  it('does not match a candidate whose embedding is unrelated, creating a new Draft instead', async () => {
     stubCommon()
-    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([
-      RSS_ITEM,
+    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
       {
-        outlet: 'Novinky',
-        title: 'Second',
-        url: 'https://novinky.cz/second',
-        publishedAt: '2026-01-01T00:00:00Z',
+        storyId: 'story-x',
+        analysisId: 'unrelated-1',
+        analysisStatus: 'PENDING',
+        embedding: UNRELATED_EMBEDDING,
+        createdAt: new Date(),
       },
     ])
-    vi.mocked(articleScraperModule.scrapeArticle)
-      .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValueOnce({ title: 'Second', excerpt: 'excerpt', fullText: 'full text' })
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({ candidates: [], gdeltCount: 0 })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue(null)
     vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
       id: 'draft-2',
       storyId: 'story-2',
-      seedUrl: 'https://novinky.cz/second',
-      seedHeadline: 'Second',
-      status: 'DRAFT',
-      createdAt: new Date(),
-    })
-
-    const summary = await runIngestionPass()
-
-    expect(summary).toEqual({ checked: 2, created: 1, attached: 0, flagged: 0, skipped: 1 })
-  })
-
-  it('does not trust RSS-fallback-only candidates for the dedup match', async () => {
-    // Regression: when GDELT is unreachable, discoverCoverage falls back to "whatever's
-    // currently trending" unfiltered by keyword. Those candidates must not be used to decide
-    // this item is the same Story as something else — only GDELT-confirmed candidates count.
-    stubCommon()
-    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
-      candidates: [
-        {
-          outlet: 'Novinky',
-          title: 'Unrelated',
-          url: 'https://novinky.cz/unrelated',
-          publishedAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-      gdeltCount: 0,
-    })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue(null)
-    vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
-      id: 'draft-3',
-      storyId: 'story-3',
-      seedUrl: RSS_ITEM.url,
-      seedHeadline: 'Fresh headline',
-      status: 'DRAFT',
-      createdAt: new Date(),
-    })
-
-    await runIngestionPass()
-
-    expect(coverageRepo.findRecentAnalysisMatchingUrls).toHaveBeenCalledWith([], 48)
-    expect(analysisRepo.createDraftAnalysis).toHaveBeenCalled()
-  })
-
-  it('does not attach Coverage sourced from unrelated candidates to a brand-new Draft (regression)', async () => {
-    // Regression for the confirmed production bug: a Draft's own candidate Coverage — sourced
-    // from GDELT/RSS, not from an existing-Analysis dedup match — must be verified against the
-    // triggering article before being persisted, or unrelated trending items become Coverage.
-    stubCommon()
-    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
-      candidates: [
-        {
-          outlet: 'Novinky',
-          title: 'Related',
-          url: 'https://novinky.cz/related',
-          publishedAt: '2026-01-01T00:00:00Z',
-        },
-        {
-          outlet: 'ČT24',
-          title: 'D8 kamion havaroval',
-          url: 'https://ct24.cz/d8',
-          publishedAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-      gdeltCount: 5,
-    })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue(null)
-    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockImplementation((candidates) =>
-      Promise.resolve(candidates.filter((c) => c.title === 'Related'))
-    )
-    vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
-      id: 'draft-4',
-      storyId: 'story-4',
-      seedUrl: RSS_ITEM.url,
-      seedHeadline: 'Fresh headline',
-      status: 'DRAFT',
-      createdAt: new Date(),
-    })
-
-    await runIngestionPass()
-
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
-      {
-        analysisId: 'draft-4',
-        outlet: 'Novinky',
-        title: 'Related',
-        articleUrl: 'https://novinky.cz/related',
-        publishedAt: '2026-01-01T00:00:00Z',
-        status: 'PENDING',
-      },
-    ])
-  })
-
-  it('excludes an already-known URL from a new Draft candidate list without re-verifying it', async () => {
-    // Regression: a URL that's already real Coverage (from an earlier item in this same poll,
-    // or a prior poll) must not be re-attached to a second Analysis just because this item's
-    // own candidate check (comparing the candidate to *this* item's title) independently accepts
-    // it — the dedup-match check above compares a different pair and can legitimately disagree.
-    stubCommon()
-    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(coverageRepo.findAllArticleUrls).mockResolvedValue(['https://novinky.cz/already-covered'])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
-      candidates: [
-        {
-          outlet: 'Novinky',
-          title: 'Already covered elsewhere',
-          url: 'https://novinky.cz/already-covered',
-          publishedAt: '2026-01-01T00:00:00Z',
-        },
-        {
-          outlet: 'ČT24',
-          title: 'Genuinely new',
-          url: 'https://ct24.cz/new',
-          publishedAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-      gdeltCount: 5,
-    })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue(null)
-    vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
-      id: 'draft-7',
-      storyId: 'story-7',
-      seedUrl: RSS_ITEM.url,
-      seedHeadline: 'Fresh headline',
-      status: 'DRAFT',
-      createdAt: new Date(),
-    })
-
-    await runIngestionPass()
-
-    expect(storyVerificationModule.verifyCandidatesAgainstAnchor).toHaveBeenCalledWith(
-      [
-        {
-          outlet: 'ČT24',
-          title: 'Genuinely new',
-          url: 'https://ct24.cz/new',
-          publishedAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-      'Fresh headline',
-      undefined
-    )
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
-      {
-        analysisId: 'draft-7',
-        outlet: 'ČT24',
-        title: 'Genuinely new',
-        articleUrl: 'https://ct24.cz/new',
-        publishedAt: '2026-01-01T00:00:00Z',
-        status: 'PENDING',
-      },
-    ])
-  })
-
-  it('falls through to creating a new Draft when the dedup match fails same-story verification', async () => {
-    stubCommon()
-    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({ candidates: [], gdeltCount: 5 })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue({
-      analysisId: 'existing-1',
-      status: 'PENDING',
-      anchorHeadline: 'A completely different story',
-    })
-    vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue(DIFFERENT_EVENT)
-    vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
-      id: 'draft-5',
-      storyId: 'story-5',
       seedUrl: RSS_ITEM.url,
       seedHeadline: 'Fresh headline',
       status: 'DRAFT',
@@ -427,29 +213,31 @@ describe('runIngestionPass', () => {
     const summary = await runIngestionPass()
 
     expect(coverageRepo.createCoverages).not.toHaveBeenCalledWith([
-      expect.objectContaining({ analysisId: 'existing-1' }),
+      expect.objectContaining({ analysisId: 'unrelated-1' }),
     ])
-    expect(pendingAdditionRepo.createPendingAddition).not.toHaveBeenCalled()
-    expect(analysisRepo.createDraftAnalysis).toHaveBeenCalledWith({
-      seedUrl: RSS_ITEM.url,
-      seedHeadline: 'Fresh headline',
-    })
-    expect(summary).toEqual({ checked: 1, created: 1, attached: 0, flagged: 0, skipped: 0 })
+    expect(analysisRepo.createDraftAnalysis).toHaveBeenCalled()
+    expect(summary.created).toBe(1)
   })
 
-  it('verifies same-story before flagging a possible addition against a COMPLETE Analysis', async () => {
+  it('lets time decay prevent a match against an otherwise-identical but very old Story', async () => {
+    // A candidate with a perfect similarity score (identical embedding) but from weeks ago must
+    // still fail to match — otherwise "Trump announced new tariffs" three weeks apart would keep
+    // re-attaching to the same stale Story forever. See ADR 0018.
     stubCommon()
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
-    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({ candidates: [], gdeltCount: 5 })
-    vi.mocked(coverageRepo.findRecentAnalysisMatchingUrls).mockResolvedValue({
-      analysisId: 'completed-1',
-      status: 'COMPLETE',
-      anchorHeadline: 'A completely different story',
-    })
-    vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue(DIFFERENT_EVENT)
+    const veryOld = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 'story-x',
+        analysisId: 'stale-1',
+        analysisStatus: 'PENDING',
+        embedding: MATCHING_EMBEDDING,
+        createdAt: veryOld,
+      },
+    ])
     vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
-      id: 'draft-6',
-      storyId: 'story-6',
+      id: 'draft-3',
+      storyId: 'story-3',
       seedUrl: RSS_ITEM.url,
       seedHeadline: 'Fresh headline',
       status: 'DRAFT',
@@ -458,9 +246,37 @@ describe('runIngestionPass', () => {
 
     const summary = await runIngestionPass()
 
-    expect(pendingAdditionRepo.createPendingAddition).not.toHaveBeenCalled()
-    expect(summary.flagged).toBe(0)
+    expect(coverageRepo.createCoverages).not.toHaveBeenCalledWith([
+      expect.objectContaining({ analysisId: 'stale-1' }),
+    ])
+    expect(analysisRepo.createDraftAnalysis).toHaveBeenCalled()
     expect(summary.created).toBe(1)
+  })
+
+  it('skips an item whose embedding generation fails, without aborting the rest of the pass', async () => {
+    stubCommon()
+    const secondItem = {
+      outlet: 'Novinky',
+      title: 'Second',
+      url: 'https://novinky.cz/second',
+      publishedAt: '2026-01-01T00:00:00Z',
+    }
+    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM, secondItem])
+    vi.mocked(embeddingClientModule.generateEmbedding)
+      .mockRejectedValueOnce(new Error('embeddings API down'))
+      .mockResolvedValueOnce(ITEM_EMBEDDING)
+    vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
+      id: 'draft-4',
+      storyId: 'story-4',
+      seedUrl: secondItem.url,
+      seedHeadline: 'Second',
+      status: 'DRAFT',
+      createdAt: new Date(),
+    })
+
+    const summary = await runIngestionPass()
+
+    expect(summary).toEqual({ checked: 2, created: 1, attached: 0, flagged: 0, skipped: 1 })
   })
 })
 
