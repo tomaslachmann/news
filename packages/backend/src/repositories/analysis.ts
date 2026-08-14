@@ -1,4 +1,4 @@
-import type { Analysis, AnalysisStatus, Coverage, SynthesisResult, Prisma } from '@prisma/client'
+import type { Analysis, AnalysisStatus, Coverage, Story, SynthesisResult, Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 
 export type { Analysis, AnalysisStatus }
@@ -8,9 +8,18 @@ export type AnalysisWithDetails = Analysis & {
   synthesisResult: SynthesisResult | null
 }
 
+export type AnalysisWithStory = Analysis & { story: Story }
+
+/** Creates the Analysis and its Story together — a Story is always created alongside its
+ *  Analysis, anchored to the same seed headline, per ADR 0017. */
 export async function createAnalysis(data: { seedUrl: string; seedHeadline: string }): Promise<Analysis> {
   return prisma.analysis.create({
-    data: { seedUrl: data.seedUrl, seedHeadline: data.seedHeadline, status: 'PENDING' },
+    data: {
+      seedUrl: data.seedUrl,
+      seedHeadline: data.seedHeadline,
+      status: 'PENDING',
+      story: { create: { anchorHeadline: data.seedHeadline } },
+    },
   })
 }
 
@@ -19,8 +28,17 @@ export async function createDraftAnalysis(data: {
   seedHeadline: string
 }): Promise<Analysis> {
   return prisma.analysis.create({
-    data: { seedUrl: data.seedUrl, seedHeadline: data.seedHeadline, status: 'DRAFT' },
+    data: {
+      seedUrl: data.seedUrl,
+      seedHeadline: data.seedHeadline,
+      status: 'DRAFT',
+      story: { create: { anchorHeadline: data.seedHeadline } },
+    },
   })
+}
+
+export async function findAnalysisWithStory(id: string): Promise<AnalysisWithStory | null> {
+  return prisma.analysis.findUnique({ where: { id }, include: { story: true } })
 }
 
 /** Every Seed Article URL ever recorded, across all Analyses — used by Ingestion alongside

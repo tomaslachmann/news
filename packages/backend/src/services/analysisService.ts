@@ -11,6 +11,7 @@ import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from
 import { extractKeywords } from './keywordExtractor.js'
 import { discoverCoverage } from './discovery.js'
 import { isBlockedContent } from './blockedContent.js'
+import { verifyCandidatesAgainstAnchor } from './storyVerification.js'
 import { runNarrativePass, type NarrativeSource, type NarrativeResult } from './narrativePass.js'
 import type { SynthesisResult as SynthesisDimensions } from './synthesisPass.js'
 import { NotFoundError, ExternalServiceError } from '../errors.js'
@@ -47,13 +48,19 @@ export async function discoverSources(
   keywords: string[],
   log?: FastifyBaseLogger
 ): Promise<CandidateArticle[]> {
-  const analysis = await analysisRepo.findAnalysisById(analysisId)
+  const analysis = await analysisRepo.findAnalysisWithStory(analysisId)
   if (!analysis) throw new NotFoundError('Analysis not found')
 
   const { candidates } = await discoverCoverage(keywords, log)
 
+  // Every Discovery candidate is verified against the seed's Story before it's ever offered
+  // at the Review Step — closes the gap where a human was the only defense against a bad
+  // keyword/GDELT match (ADR 0017). A verification failure excludes the candidate rather than
+  // aborting the whole request — see verifyCandidatesAgainstAnchor.
+  const verified = await verifyCandidatesAgainstAnchor(candidates, analysis.story.anchorHeadline, log)
+
   await coverageRepo.createCoverages(
-    candidates.map((c) => ({
+    verified.map((c) => ({
       analysisId,
       outlet: c.outlet,
       title: c.title,
@@ -63,7 +70,7 @@ export async function discoverSources(
     }))
   )
 
-  return candidates
+  return verified
 }
 
 export async function confirmCoverages(

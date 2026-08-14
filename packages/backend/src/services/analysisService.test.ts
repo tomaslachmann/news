@@ -6,6 +6,7 @@ import * as articleScraperModule from './articleScraper.js'
 import * as keywordExtractorModule from './keywordExtractor.js'
 import * as discoveryModule from './discovery.js'
 import * as narrativePassModule from './narrativePass.js'
+import * as storyVerificationModule from './storyVerification.js'
 import {
   createAnalysis,
   discoverSources,
@@ -22,6 +23,7 @@ vi.mock('./articleScraper.js')
 vi.mock('./keywordExtractor.js')
 vi.mock('./discovery.js')
 vi.mock('./narrativePass.js')
+vi.mock('./storyVerification.js')
 
 describe('createAnalysis', () => {
   beforeEach(() => vi.resetAllMocks())
@@ -35,6 +37,7 @@ describe('createAnalysis', () => {
     vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword1', 'keyword2'])
     vi.mocked(analysisRepo.createAnalysis).mockResolvedValue({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       status: 'PENDING',
@@ -72,18 +75,20 @@ describe('discoverSources', () => {
   beforeEach(() => vi.resetAllMocks())
 
   it('throws NotFoundError when the Analysis does not exist', async () => {
-    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(null)
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(null)
 
     await expect(discoverSources('missing', ['keyword'])).rejects.toThrow(NotFoundError)
   })
 
-  it('discovers candidates and persists them as Coverage rows', async () => {
-    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+  it('discovers candidates, verifies each against the Story, and persists the verified ones as Coverage', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'x',
       seedHeadline: 'x',
       status: 'PENDING',
       createdAt: new Date(),
+      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x' },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
       candidates: [
@@ -91,9 +96,17 @@ describe('discoverSources', () => {
       ],
       gdeltCount: 1,
     })
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockImplementation((candidates) =>
+      Promise.resolve(candidates)
+    )
 
     const result = await discoverSources('a1', ['keyword'])
 
+    expect(storyVerificationModule.verifyCandidatesAgainstAnchor).toHaveBeenCalledWith(
+      [{ outlet: 'iDnes', title: 'T', url: 'https://idnes.cz/x', publishedAt: '2025-01-01T00:00:00Z' }],
+      'x',
+      undefined
+    )
     expect(result).toHaveLength(1)
     expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
       {
@@ -106,6 +119,35 @@ describe('discoverSources', () => {
       },
     ])
   })
+
+  it('excludes a candidate that fails same-story verification', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'x',
+      seedHeadline: 'x',
+      status: 'PENDING',
+      createdAt: new Date(),
+      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x' },
+    })
+    vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
+      candidates: [
+        {
+          outlet: 'iDnes',
+          title: 'Unrelated',
+          url: 'https://idnes.cz/x',
+          publishedAt: '2025-01-01T00:00:00Z',
+        },
+      ],
+      gdeltCount: 1,
+    })
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockResolvedValue([])
+
+    const result = await discoverSources('a1', ['keyword'])
+
+    expect(result).toEqual([])
+    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([])
+  })
 })
 
 describe('confirmCoverages', () => {
@@ -113,6 +155,7 @@ describe('confirmCoverages', () => {
 
   const ANALYSIS = {
     id: 'a1',
+    storyId: 's1',
     seedUrl: 'x',
     seedHeadline: 'x',
     status: 'PENDING' as const,
@@ -195,6 +238,7 @@ describe('getAnalysisDetail', () => {
   it('maps the Analysis, its coverages, and synthesis result to AnalysisDetail', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       status: 'COMPLETE',
@@ -213,6 +257,7 @@ describe('getAnalysisDetail', () => {
   it('generates and caches the narrative when the Analysis is complete and has no narrative yet', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       status: 'COMPLETE',
@@ -247,6 +292,7 @@ describe('getAnalysisDetail', () => {
     ]
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       status: 'COMPLETE',
@@ -264,6 +310,7 @@ describe('getAnalysisDetail', () => {
   it('serves the Analysis without a narrative if narrative generation fails', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       status: 'COMPLETE',
@@ -282,6 +329,7 @@ describe('getAnalysisDetail', () => {
   it('deduplicates concurrent narrative generation for the same Analysis', async () => {
     const freshAnalysis = () => ({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       status: 'COMPLETE' as const,
@@ -308,6 +356,7 @@ describe('getAnalysisDetail', () => {
   it('does not attempt narrative generation when the Analysis is not complete', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',
+      storyId: 's1',
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       status: 'PENDING',

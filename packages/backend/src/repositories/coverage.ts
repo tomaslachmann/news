@@ -65,10 +65,14 @@ export async function findAllArticleUrls(): Promise<string[]> {
 export interface RecentAnalysisMatch {
   analysisId: string
   status: AnalysisStatus
+  /** The matched Analysis's Story anchor headline — what a same-event verification call
+   *  compares the triggering article against before this match is trusted. See ADR 0017. */
+  anchorHeadline: string
 }
 
 /** The most recently created Analysis (within `sinceHours`) that already has a Coverage matching
- *  one of `urls`, or null if none — Ingestion's dedup check against Stories already being tracked. */
+ *  one of `urls`, or null if none — a candidate match for Ingestion's dedup check, still subject
+ *  to same-event verification against `anchorHeadline` before it's trusted (ADR 0017). */
 export async function findRecentAnalysisMatchingUrls(
   urls: string[],
   sinceHours: number
@@ -79,8 +83,14 @@ export async function findRecentAnalysisMatchingUrls(
   const match = await prisma.coverage.findFirst({
     where: { articleUrl: { in: urls }, analysis: { createdAt: { gte: since } } },
     orderBy: { analysis: { createdAt: 'desc' } },
-    select: { analysis: { select: { id: true, status: true } } },
+    select: { analysis: { select: { id: true, status: true, story: { select: { anchorHeadline: true } } } } },
   })
 
-  return match ? { analysisId: match.analysis.id, status: match.analysis.status } : null
+  return match
+    ? {
+        analysisId: match.analysis.id,
+        status: match.analysis.status,
+        anchorHeadline: match.analysis.story.anchorHeadline,
+      }
+    : null
 }
