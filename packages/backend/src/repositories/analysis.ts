@@ -124,6 +124,22 @@ export async function updateAnalysisStatus(id: string, status: AnalysisStatus): 
   await prisma.analysis.update({ where: { id }, data: { status } })
 }
 
+/** Like updateAnalysisStatus, but only writes if the row is still `fromStatus` — returns
+ *  whether the transition actually happened. Used after a slow async gap (e.g. LLM
+ *  verification) to avoid clobbering a status change (like a concurrent rejection) that landed
+ *  in the meantime. See ticket 24. */
+export async function updateAnalysisStatusIfCurrently(
+  id: string,
+  fromStatus: AnalysisStatus,
+  toStatus: AnalysisStatus
+): Promise<boolean> {
+  const result = await prisma.analysis.updateMany({
+    where: { id, status: fromStatus },
+    data: { status: toStatus },
+  })
+  return result.count > 0
+}
+
 /** Closes the underlying Prisma connection pool — for test teardown only. */
 export async function disconnect(): Promise<void> {
   await prisma.$disconnect()

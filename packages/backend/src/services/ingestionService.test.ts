@@ -4,6 +4,7 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as rssModule from './rss.js'
 import * as embeddingClientModule from './embeddingClient.js'
+import * as storyVerificationModule from './storyVerification.js'
 import { runIngestionPass, approveDraft, rejectDraft, listPendingAdditions } from './ingestionService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
@@ -12,6 +13,7 @@ vi.mock('../repositories/coverage.js')
 vi.mock('../repositories/pendingAddition.js')
 vi.mock('./rss.js')
 vi.mock('./embeddingClient.js')
+vi.mock('./storyVerification.js')
 
 const RSS_ITEM = {
   outlet: 'iDnes',
@@ -280,38 +282,122 @@ describe('runIngestionPass', () => {
   })
 })
 
-describe('approveDraft', () => {
-  beforeEach(() => vi.resetAllMocks())
+const DRAFT_WITH_STORY = {
+  id: 'a1',
+  storyId: 's1',
+  seedUrl: 'x',
+  seedHeadline: 'x',
+  status: 'DRAFT' as const,
+  createdAt: new Date(),
+  story: { id: 's1', createdAt: new Date(), anchorHeadline: 'Anchor headline', embedding: [] },
+}
 
-  it('flips a Draft to PENDING', async () => {
-    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'x',
-      seedHeadline: 'x',
-      status: 'DRAFT',
-      createdAt: new Date(),
-    })
+function makeCoverage(id: string, title: string) {
+  return {
+    id,
+    analysisId: 'a1',
+    outlet: 'iDnes',
+    title,
+    articleUrl: `https://idnes.cz/${id}`,
+    publishedAt: '2026-01-01T00:00:00Z',
+    extractedText: null,
+    extractionResult: null,
+    status: 'PENDING' as const,
+    excluded: false,
+  }
+}
+
+function makeTitlelessCoverage(id: string) {
+  return { ...makeCoverage(id, ''), title: null }
+}
+
+describe('approveDraft', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(true)
+  })
+
+  it('flips a Draft to PENDING and excludes nothing when every Coverage verifies', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const coverages = [makeCoverage('c1', 'T1'), makeCoverage('c2', 'T2')]
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue(coverages)
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue(coverages)
 
     await approveDraft('a1')
 
-    expect(analysisRepo.updateAnalysisStatus).toHaveBeenCalledWith('a1', 'PENDING')
+    expect(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).toHaveBeenCalledWith(
+      coverages,
+      'Anchor headline',
+      undefined
+    )
+    expect(coverageRepo.excludeCoverageIds).not.toHaveBeenCalled()
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
+  })
+
+  it('excludes only the specific Coverage that fails verification and proceeds to PENDING with the remainder', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const good = makeCoverage('c1', 'Related to the anchor')
+    const bad = makeCoverage('c2', 'Unrelated trending item')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([good, bad])
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([good])
+
+    await approveDraft('a1')
+
+    expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c2'])
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
+  })
+
+  it('still proceeds to PENDING when every Coverage fails verification, without throwing', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const coverages = [makeCoverage('c1', 'Unrelated'), makeCoverage('c2', 'Also unrelated')]
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue(coverages)
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([])
+
+    await approveDraft('a1')
+
+    expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c1', 'c2'])
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
+  })
+
+  it('never sends a title-less Coverage to verification, treating it as unverifiable', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const titled = makeCoverage('c1', 'T1')
+    const titleless = makeTitlelessCoverage('c2')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([titled, titleless])
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([titled])
+
+    await approveDraft('a1')
+
+    expect(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).toHaveBeenCalledWith(
+      [titled],
+      'Anchor headline',
+      undefined
+    )
+    expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c2'])
+  })
+
+  it('does not resurrect a Draft that was concurrently rejected while verification was in flight', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const coverages = [makeCoverage('c1', 'T1')]
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue(coverages)
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue(coverages)
+    vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(false)
+
+    await expect(approveDraft('a1')).resolves.toBeUndefined()
+
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
   })
 
   it('throws NotFoundError when the Analysis does not exist', async () => {
-    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(null)
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(null)
 
     await expect(approveDraft('missing')).rejects.toThrow(NotFoundError)
   })
 
   it('throws ValidationError when the Analysis is not a Draft', async () => {
-    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'x',
-      seedHeadline: 'x',
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue({
+      ...DRAFT_WITH_STORY,
       status: 'COMPLETE',
-      createdAt: new Date(),
     })
 
     await expect(approveDraft('a1')).rejects.toThrow(ValidationError)

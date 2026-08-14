@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as llmClientModule from './llmClient.js'
-import { verifySameStory, verifySameStoryLogged, verifyCandidatesAgainstAnchor } from './storyVerification.js'
+import {
+  verifySameStory,
+  verifySameStoryLogged,
+  verifyCandidatesAgainstAnchor,
+  verifyCandidatesAgainstAnchorInBatches,
+} from './storyVerification.js'
 
 vi.mock('./llmClient.js')
 
@@ -93,6 +98,51 @@ describe('verifyCandidatesAgainstAnchor', () => {
 
   it('returns an empty array without calling the LLM when there are no candidates', async () => {
     const result = await verifyCandidatesAgainstAnchor([], 'Anchor story')
+
+    expect(result).toEqual([])
+    expect(llmClientModule.callJsonModel).not.toHaveBeenCalled()
+  })
+})
+
+describe('verifyCandidatesAgainstAnchorInBatches', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('verifies every candidate across multiple batches and preserves the confirmed ones', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockImplementation((_model, _system, userContent) => {
+      const sameEvent = !userContent.includes('Candidate headline: Unrelated')
+      return Promise.resolve({ sameEvent, reasoning: 'stub' })
+    })
+
+    const candidates = Array.from({ length: 5 }, (_, i) => ({ title: `Related ${i}`, url: `https://x/${i}` }))
+    candidates.push({ title: 'Unrelated', url: 'https://x/unrelated' })
+
+    const result = await verifyCandidatesAgainstAnchorInBatches(candidates, 'Anchor story', undefined, 2)
+
+    expect(result).toHaveLength(5)
+    expect(result.every((c) => c.title.startsWith('Related'))).toBe(true)
+    expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(6)
+  })
+
+  it('never fans out more than batchSize calls at once', async () => {
+    let concurrent = 0
+    let maxConcurrent = 0
+    vi.mocked(llmClientModule.callJsonModel).mockImplementation(async () => {
+      concurrent++
+      maxConcurrent = Math.max(maxConcurrent, concurrent)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      concurrent--
+      return { sameEvent: true, reasoning: 'stub' }
+    })
+
+    const candidates = Array.from({ length: 9 }, (_, i) => ({ title: `T${i}`, url: `https://x/${i}` }))
+
+    await verifyCandidatesAgainstAnchorInBatches(candidates, 'Anchor story', undefined, 3)
+
+    expect(maxConcurrent).toBeLessThanOrEqual(3)
+  })
+
+  it('returns an empty array without calling the LLM when there are no candidates', async () => {
+    const result = await verifyCandidatesAgainstAnchorInBatches([], 'Anchor story')
 
     expect(result).toEqual([])
     expect(llmClientModule.callJsonModel).not.toHaveBeenCalled()

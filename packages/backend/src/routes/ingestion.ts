@@ -25,7 +25,7 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     '/api/admin/ingestion/drafts/:id/approve',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      await ingestionService.approveDraft(request.params.id)
+      await ingestionService.approveDraft(request.params.id, request.log)
       return reply.code(200).send({ ok: true })
     }
   )
