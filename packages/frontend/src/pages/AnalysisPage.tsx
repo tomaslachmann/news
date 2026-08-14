@@ -92,6 +92,160 @@ function DimensionList({ items }: { items: Array<{ prose: string; attributions: 
   )
 }
 
+// A real <button> (not a bare <span>) so Radix's Tooltip opens on tap via the focus event it
+// already listens for, not just hover — the touch fallback a citation marker needs, since hover
+// has no mobile equivalent.
+function CitationMarker({ index, attribution }: { index: number; attribution: Attribution }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="ml-0.5 align-super text-[11px] font-semibold text-primary hover:underline"
+        >
+          [{index}]
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="max-w-xs">
+          <span className="font-semibold">{attribution.outlet}:</span> {attribution.czechQuote}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+const MAX_REFERENCE_EXCERPT_LENGTH = 100
+
+function truncateExcerpt(text: string): string {
+  if (text.length <= MAX_REFERENCE_EXCERPT_LENGTH) return text
+  return text.slice(0, MAX_REFERENCE_EXCERPT_LENGTH).trimEnd() + '…'
+}
+
+// TODO(ticket 19): this copy will move to Czech alongside the rest of the app's LLM-generated
+// and UI-facing text; written in English for now to stay consistent with everything else.
+function CoverageAnalysisSummary({ dimensions }: { dimensions: AnalysisDimensions }) {
+  const total =
+    dimensions.agreement.length +
+    dimensions.contradiction.length +
+    dimensions.uniqueReporting.length +
+    dimensions.framing.length
+
+  if (total === 0) return null
+
+  const agreementPct = Math.round((dimensions.agreement.length / total) * 100)
+
+  const stats = [
+    {
+      value: `${agreementPct}%`,
+      label: 'agreement',
+      detail: 'Most sources report the same core facts.',
+    },
+    {
+      value: dimensions.uniqueReporting.length,
+      label: 'unique findings',
+      detail: 'Only some sources report this additional information.',
+    },
+    {
+      value: dimensions.framing.length,
+      label: 'framing differences',
+      detail: 'Some outlets emphasise different aspects of the same facts.',
+    },
+    {
+      value: dimensions.contradiction.length,
+      label: 'direct contradictions',
+      detail:
+        dimensions.contradiction.length === 0
+          ? 'No sources directly contradict each other in the available reporting.'
+          : 'Sources report incompatible facts about this story.',
+    },
+  ]
+
+  return (
+    <section className="mb-8 rounded-lg border bg-muted/30 p-4 font-sans">
+      <h2 className="utility-label">Coverage analysis</h2>
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label}>
+            <p className="text-2xl font-bold">{stat.value}</p>
+            <p className="text-sm font-medium">{stat.label}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{stat.detail}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// The Article tab: continuous prose with inline numbered citations, not the card-per-segment
+// layout DimensionList uses for the four Dimension tabs (those are genuinely discrete lists;
+// the Article is meant to read as one piece of writing — ADR 0012).
+function NarrativeArticle({
+  segments,
+  dimensions,
+}: {
+  segments: DimensionItem[]
+  dimensions: AnalysisDimensions
+}) {
+  // Every attribution is numbered once per source article — a source cited more than once
+  // across the Article reuses its existing number rather than getting a new entry.
+  const references: Attribution[] = []
+  const refIndexFor = (a: Attribution) => {
+    const existing = references.findIndex((r) => r.articleUrl === a.articleUrl)
+    if (existing >= 0) return existing + 1
+    references.push(a)
+    return references.length
+  }
+  const rendered = segments.map((seg) => ({
+    prose: seg.prose,
+    refs: seg.attributions.map((a) => ({ index: refIndexFor(a), attribution: a })),
+  }))
+
+  return (
+    <div className="font-serif">
+      <CoverageAnalysisSummary dimensions={dimensions} />
+
+      <div className="mx-auto flex max-w-measure flex-col gap-5 text-article">
+        {rendered.map((seg, i) => (
+          <p key={i}>
+            {seg.prose}
+            {seg.refs.map(({ index, attribution }) => (
+              <CitationMarker key={index} index={index} attribution={attribution} />
+            ))}
+          </p>
+        ))}
+      </div>
+
+      {references.length > 0 && (
+        <section className="mx-auto mt-12 max-w-measure border-t pt-6">
+          <h2 className="utility-label">References</h2>
+          <ol className="mt-3 flex flex-col gap-2 text-sm">
+            {references.map((r, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-muted-foreground">[{i + 1}]</span>
+                <span>
+                  <span className="font-medium">{r.outlet}</span>
+                  {' — “'}
+                  {truncateExcerpt(r.czechQuote)}
+                  {'” '}
+                  <a
+                    href={r.articleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="whitespace-nowrap text-primary underline"
+                  >
+                    → Read original
+                  </a>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+    </div>
+  )
+}
+
 function ResultsTabs({
   dimensions,
   narrative,
@@ -113,7 +267,7 @@ function ResultsTabs({
         </TabsList>
         {hasNarrative && (
           <TabsContent value="narrative">
-            <DimensionList items={narrative} />
+            <NarrativeArticle segments={narrative} dimensions={dimensions} />
           </TabsContent>
         )}
         <TabsContent value="agreement">
