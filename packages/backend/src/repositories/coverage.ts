@@ -55,6 +55,15 @@ export async function includeCoverages(analysisId: string, ids: string[]): Promi
   })
 }
 
+/** Excludes exactly the given Coverage ids — unlike excludeCoverages (which excludes everything
+ *  *not* in a keep-list), this never touches a row that isn't named, so it's safe to call after
+ *  a slow async gap (e.g. LLM verification) during which unrelated Coverage may have been
+ *  attached concurrently by another process. See ticket 24. */
+export async function excludeCoverageIds(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  await prisma.coverage.updateMany({ where: { id: { in: ids } }, data: { excluded: true } })
+}
+
 /** Every Coverage article URL ever recorded, across all Analyses — used by Ingestion to skip
  *  RSS items it has already turned into a Coverage on some earlier pass. */
 export async function findAllArticleUrls(): Promise<string[]> {

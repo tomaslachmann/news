@@ -73,3 +73,23 @@ export async function verifyCandidatesAgainstAnchor<T extends { title: string }>
   )
   return candidates.filter((_, i) => verdicts[i].sameEvent)
 }
+
+const DEFAULT_VERIFICATION_BATCH_SIZE = 10
+
+/** verifyCandidatesAgainstAnchor, chunked so the fan-out per batch stays bounded — for the
+ *  callers verifyCandidatesAgainstAnchor's own doc warns about: an unbounded candidate list
+ *  (e.g. Coverage a Draft accumulated across many Ingestion polls, per ADR 0018) that isn't
+ *  already capped the way discovery.ts's MAX_CANDIDATES caps a single Discovery search. */
+export async function verifyCandidatesAgainstAnchorInBatches<T extends { title: string }>(
+  candidates: T[],
+  anchorHeadline: string,
+  log?: FastifyBaseLogger,
+  batchSize = DEFAULT_VERIFICATION_BATCH_SIZE
+): Promise<T[]> {
+  const verified: T[] = []
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const batch = candidates.slice(i, i + batchSize)
+    verified.push(...(await verifyCandidatesAgainstAnchor(batch, anchorHeadline, log)))
+  }
+  return verified
+}

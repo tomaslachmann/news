@@ -3,6 +3,7 @@ import type { IngestionRunSummary, PendingAdditionItem } from '@news-triangulato
 import { queryRssFeeds } from './rss.js'
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput } from './storyMatching.js'
+import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
@@ -109,12 +110,47 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
   return summary
 }
 
-export async function approveDraft(analysisId: string): Promise<void> {
-  const analysis = await analysisRepo.findAnalysisById(analysisId)
+export async function approveDraft(analysisId: string, log?: FastifyBaseLogger): Promise<void> {
+  const analysis = await analysisRepo.findAnalysisWithStory(analysisId)
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
   if (analysis.status !== 'DRAFT') throw new ValidationError('Schválit lze pouze koncepty')
 
-  await analysisRepo.updateAnalysisStatus(analysisId, 'PENDING')
+  // Ingestion's own attach decision is unverified (cheap embedding matching only, per ADR 0018)
+  // — this bulk re-check right before Extraction is the backstop that guarantees nothing
+  // reaches it without ever having been LLM-confirmed against the Story's anchor headline.
+  // Batched (not a single unbounded fan-out) per verifyCandidatesAgainstAnchor's own documented
+  // contract — a Draft can accumulate many Coverage rows across polls before it's reviewed.
+  const coverages = await coverageRepo.findCoveragesForAnalysis(analysisId)
+  const verifiable = coverages.filter((c): c is typeof c & { title: string } => c.title !== null)
+  const verified = await verifyCandidatesAgainstAnchorInBatches(
+    verifiable,
+    analysis.story.anchorHeadline,
+    log
+  )
+
+  // Excludes only the specific ids that failed — not "keep just these" — so Coverage attached by
+  // a concurrent Ingestion poll during this (LLM-backed, now multi-second) verification pass is
+  // never touched, verified or not.
+  const verifiedIds = new Set(verified.map((c) => c.id))
+  const failedIds = coverages.filter((c) => !verifiedIds.has(c.id)).map((c) => c.id)
+  if (failedIds.length > 0) {
+    log?.warn(
+      { analysisId, excludedCount: failedIds.length, totalCount: coverages.length },
+      'Pre-Extraction quality gate excluded Coverage that failed or errored during same-story ' +
+        'verification (see individual verifySameStory log entries to tell the two apart)'
+    )
+    await coverageRepo.excludeCoverageIds(failedIds)
+  }
+
+  // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during
+  // the verification pass above; if so, this must not resurrect it back to PENDING.
+  const transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(analysisId, 'DRAFT', 'PENDING')
+  if (!transitioned) {
+    log?.warn(
+      { analysisId },
+      'Draft was no longer DRAFT when the quality gate finished (likely rejected concurrently); not overwriting its status'
+    )
+  }
 }
 
 export async function rejectDraft(analysisId: string): Promise<void> {
