@@ -19,7 +19,7 @@ import { useAuth } from '@/context/AuthContext'
 import type { AdminUserListItem } from '@/services/users'
 import { useUsersList, useCreateUser, useUpdateUser, useDeleteUser } from '@/services/users/hooks'
 
-const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
 function formatDate(iso: string): string {
   return dateFormatter.format(new Date(iso))
@@ -33,7 +33,7 @@ function RoleSelect({ value, onChange }: { value: UserRole; onChange: (role: Use
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="ADMIN">Admin</SelectItem>
-        <SelectItem value="READONLY">Read-only</SelectItem>
+        <SelectItem value="READONLY">Pouze pro čtení</SelectItem>
       </SelectContent>
     </Select>
   )
@@ -67,13 +67,13 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Create user</DialogTitle>
-            <DialogDescription>Add a new user with an email, password, and role.</DialogDescription>
+            <DialogTitle>Vytvořit uživatele</DialogTitle>
+            <DialogDescription>Přidejte nového uživatele se zadáním e-mailu, hesla a role.</DialogDescription>
           </DialogHeader>
 
           <div className="mt-4 flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="create-email">Email</Label>
+              <Label htmlFor="create-email">E-mail</Label>
               <Input
                 id="create-email"
                 type="email"
@@ -83,7 +83,7 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="create-password">Password</Label>
+              <Label htmlFor="create-password">Heslo</Label>
               <Input
                 id="create-password"
                 type="password"
@@ -104,7 +104,7 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
           <DialogFooter className="mt-6">
             <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Creating…' : 'Create user'}
+              {createMutation.isPending ? 'Vytváření…' : 'Vytvořit uživatele'}
             </Button>
           </DialogFooter>
         </form>
@@ -140,8 +140,8 @@ function EditUserDialog({
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Edit {user.email}</DialogTitle>
-            <DialogDescription>Change this user's role or set a new password.</DialogDescription>
+            <DialogTitle>Upravit uživatele {user.email}</DialogTitle>
+            <DialogDescription>Změňte roli tohoto uživatele nebo nastavte nové heslo.</DialogDescription>
           </DialogHeader>
 
           <div className="mt-4 flex flex-col gap-4">
@@ -150,13 +150,13 @@ function EditUserDialog({
               <RoleSelect value={role} onChange={setRole} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-password">New password</Label>
+              <Label htmlFor="edit-password">Nové heslo</Label>
               <Input
                 id="edit-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Leave blank to keep current password"
+                placeholder="Ponechte prázdné pro zachování stávajícího hesla"
               />
             </div>
           </div>
@@ -167,7 +167,7 @@ function EditUserDialog({
 
           <DialogFooter className="mt-6">
             <Button type="submit" disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? 'Saving…' : 'Save changes'}
+              {updateMutation.isPending ? 'Ukládání…' : 'Uložit změny'}
             </Button>
           </DialogFooter>
         </form>
@@ -194,22 +194,22 @@ function DeleteUserDialog({
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete {user.email}?</DialogTitle>
-          <DialogDescription>This cannot be undone.</DialogDescription>
+          <DialogTitle>Smazat uživatele {user.email}?</DialogTitle>
+          <DialogDescription>Tuto akci nelze vrátit zpět.</DialogDescription>
         </DialogHeader>
 
         {deleteMutation.isError && <p className="text-sm text-destructive">{deleteMutation.error.message}</p>}
 
         <DialogFooter className="mt-2">
           <Button variant="outline" type="button" onClick={() => handleOpenChange(false)}>
-            Cancel
+            Zrušit
           </Button>
           <Button
             variant="destructive"
             disabled={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate(user.id, { onSuccess: () => handleOpenChange(false) })}
           >
-            {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+            {deleteMutation.isPending ? 'Mazání…' : 'Smazat'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -248,24 +248,24 @@ function UserRow({
       <TableCell>{user.email}</TableCell>
       <TableCell>
         <Badge variant={user.role === 'ADMIN' ? 'default' : 'secondary'}>
-          {user.role === 'ADMIN' ? 'Admin' : 'Read-only'}
+          {user.role === 'ADMIN' ? 'Admin' : 'Pouze pro čtení'}
         </Badge>
       </TableCell>
       <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
       <TableCell>
         <div className="flex gap-2">
           {isSelf ? (
-            <DisabledActionButton label="Edit" tooltip="You can't edit your own account here" />
+            <DisabledActionButton label="Upravit" tooltip="Svůj vlastní účet zde nemůžete upravit" />
           ) : (
             <Button variant="outline" size="sm" onClick={onEdit}>
-              Edit
+              Upravit
             </Button>
           )}
           {isSelf ? (
-            <DisabledActionButton label="Delete" tooltip="You can't delete your own account" />
+            <DisabledActionButton label="Smazat" tooltip="Svůj vlastní účet nemůžete smazat" />
           ) : (
             <Button variant="destructive" size="sm" onClick={onDelete}>
-              Delete
+              Smazat
             </Button>
           )}
         </div>
@@ -285,21 +285,21 @@ export default function AdminUsersPage() {
     <TooltipProvider>
       <main className="container mx-auto py-10 max-w-4xl">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Users</h1>
-          <Button onClick={() => setCreateOpen(true)}>Create user</Button>
+          <h1 className="text-3xl font-bold">Uživatelé</h1>
+          <Button onClick={() => setCreateOpen(true)}>Vytvořit uživatele</Button>
         </div>
 
-        {isLoading && <p className="mt-8 text-muted-foreground">Loading users…</p>}
-        {isError && <p className="mt-8 text-destructive">Failed to load users.</p>}
+        {isLoading && <p className="mt-8 text-muted-foreground">Načítání uživatelů…</p>}
+        {isError && <p className="mt-8 text-destructive">Nepodařilo se načíst uživatele.</p>}
 
         {users && (
           <Table className="mt-8">
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
+                <TableHead>E-mail</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>Vytvořeno</TableHead>
+                <TableHead>Akce</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

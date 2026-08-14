@@ -3,7 +3,7 @@ import type { AnalysisListItem } from '@/services/analyses'
 import { useAnalysesList } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
 
-const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
 function formatDate(iso: string): string {
   return dateFormatter.format(new Date(iso))
@@ -16,12 +16,19 @@ const STATUS_STYLES: Record<AnalysisListItem['status'], string> = {
   pending: 'bg-muted text-muted-foreground',
 }
 
+const STATUS_LABELS: Record<AnalysisListItem['status'], string> = {
+  draft: 'Koncept',
+  complete: 'Dokončeno',
+  failed: 'Selhalo',
+  pending: 'Zpracovává se',
+}
+
 function StatusBadge({ status }: { status: AnalysisListItem['status'] }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[status]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
     >
-      {status}
+      {STATUS_LABELS[status]}
     </span>
   )
 }
@@ -36,7 +43,7 @@ function HistoryEntry({ item }: { item: AnalysisListItem }) {
         <div className="min-w-0">
           <p className="truncate font-medium">{item.seedHeadline}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {formatDate(item.createdAt)} · {item.coverageCount} sources
+            {formatDate(item.createdAt)} · zdrojů: {item.coverageCount}
           </p>
         </div>
         <StatusBadge status={item.status} />
@@ -52,26 +59,26 @@ export default function HistoryPage() {
 
   return (
     <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-3xl font-bold">{isAdmin ? 'History' : 'Articles'}</h1>
+      <h1 className="text-3xl font-bold">{isAdmin ? 'Historie' : 'Články'}</h1>
       <p className="mt-2 text-muted-foreground">
-        {isAdmin ? 'Browse your previous analyses.' : 'Browse past articles.'}
+        {isAdmin ? 'Procházejte své předchozí analýzy.' : 'Procházejte starší články.'}
       </p>
 
-      {isLoading && <p className="mt-8 text-muted-foreground">Loading…</p>}
+      {isLoading && <p className="mt-8 text-muted-foreground">Načítání…</p>}
 
-      {isError && <p className="mt-8 text-destructive">Failed to load.</p>}
+      {isError && <p className="mt-8 text-destructive">Nepodařilo se načíst data.</p>}
 
       {analyses && analyses.length === 0 && (
         <div className="mt-8 rounded-lg border bg-card p-8 text-center">
           {isAdmin ? (
             <>
-              <p className="text-muted-foreground">No analyses yet.</p>
+              <p className="text-muted-foreground">Zatím žádné analýzy.</p>
               <Link to="/" className="mt-2 inline-block text-sm text-primary underline">
-                Start an analysis
+                Spustit analýzu
               </Link>
             </>
           ) : (
-            <p className="text-muted-foreground">No articles yet — check back soon.</p>
+            <p className="text-muted-foreground">Zatím žádné články — zkuste to brzy znovu.</p>
           )}
         </div>
       )}

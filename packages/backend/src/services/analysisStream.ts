@@ -23,7 +23,7 @@ export async function runAnalysisStream(
   { onReady, send, onClientClose, log }: RunAnalysisStreamOptions
 ): Promise<void> {
   const analysis = await analysisRepo.findAnalysisById(analysisId)
-  if (!analysis) throw new NotFoundError('Analysis not found')
+  if (!analysis) throw new NotFoundError('Analýza nenalezena')
 
   onReady()
 
@@ -37,7 +37,7 @@ export async function runAnalysisStream(
       type: 'extraction-error',
       coverageId: c.id,
       outlet: c.outlet,
-      error: 'No article text available',
+      error: 'Text článku není k dispozici',
     })
   }
 
@@ -86,7 +86,7 @@ async function runExtractionAndSynthesis(
           framingSignalCount: extraction.framingSignals.length,
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Extraction failed'
+        const message = err instanceof Error ? err.message : 'Extrakce se nezdařila'
         send({ type: 'extraction-error', coverageId: coverage.id, outlet: coverage.outlet, error: message })
       }
     })
@@ -122,7 +122,7 @@ async function runExtractionAndSynthesis(
   const excludedCount = allCoverages.filter((c) => c.status !== 'OK').length + droppedCount
 
   if (sources.length === 0) {
-    send({ type: 'synthesis-error', error: 'No successful extractions to synthesise' })
+    send({ type: 'synthesis-error', error: 'Žádné úspěšné extrakce k syntéze' })
     await analysisRepo.updateAnalysisStatus(analysisId, 'FAILED')
     return
   }
@@ -132,7 +132,7 @@ async function runExtractionAndSynthesis(
     await analysisRepo.completeAnalysisWithSynthesis(analysisId, synthesis)
     send({ type: 'synthesis-complete', dimensions: synthesis })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Synthesis failed'
+    const message = err instanceof Error ? err.message : 'Syntéza se nezdařila'
     send({ type: 'synthesis-error', error: message })
     await analysisRepo.updateAnalysisStatus(analysisId, 'FAILED').catch(() => {})
   }

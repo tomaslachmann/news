@@ -8,7 +8,7 @@ export function registerAuthRoutes(fastify: FastifyInstance): void {
   fastify.post('/api/auth/login', async (request, reply) => {
     const parsed = LoginBodySchema.safeParse(request.body)
     if (!parsed.success) {
-      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Email and password are required')
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'E-mail a heslo jsou povinné')
     }
 
     const session = await authService.authenticate(parsed.data.email, parsed.data.password)

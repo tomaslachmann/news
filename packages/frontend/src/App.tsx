@@ -31,15 +31,15 @@ function NavBar() {
         News Triangulator
       </Link>
       <Link to="/history" className="text-muted-foreground hover:text-foreground">
-        {isAdmin ? 'History' : 'Articles'}
+        {isAdmin ? 'Historie' : 'Články'}
       </Link>
       {isAdmin && (
         <>
           <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
-            Users
+            Uživatelé
           </Link>
           <Link to="/admin/ingestion" className="text-muted-foreground hover:text-foreground">
-            Ingestion
+            Sběr článků
           </Link>
         </>
       )}
@@ -52,12 +52,12 @@ function NavBar() {
               disabled={logoutMutation.isPending}
               className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              {logoutMutation.isPending ? 'Signing out…' : 'Sign out'}
+              {logoutMutation.isPending ? 'Odhlašování…' : 'Odhlásit se'}
             </button>
           </>
         ) : (
           <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
-            Sign in
+            Přihlásit se
           </Link>
         )}
       </div>

@@ -32,7 +32,7 @@ function ExtractionBadge({ state }: { state: ExtractionState }) {
   if (state.phase === 'pending') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <Loader2 size={12} className="animate-spin" /> Extracting…
+        <Loader2 size={12} className="animate-spin" /> Extrahování…
       </span>
     )
   }
@@ -40,8 +40,8 @@ function ExtractionBadge({ state }: { state: ExtractionState }) {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
         <CheckCircle size={12} />
-        {state.claimCount} claims · {state.attributedClaimCount} attributed · {state.framingSignalCount}{' '}
-        framing
+        {state.claimCount} tvrzení · {state.attributedClaimCount} citací · {state.framingSignalCount}{' '}
+        framingových signálů
       </span>
     )
   }
@@ -74,7 +74,7 @@ function OutletBadge({ attribution }: { attribution: Attribution }) {
 
 function DimensionList({ items }: { items: Array<{ prose: string; attributions: Attribution[] }> }) {
   if (items.length === 0) {
-    return <p className="mt-4 text-sm text-muted-foreground">Nothing in this category.</p>
+    return <p className="mt-4 text-sm text-muted-foreground">V této kategorii nic není.</p>
   }
   return (
     <ul className="mt-4 flex flex-col gap-3">
@@ -122,8 +122,6 @@ function truncateExcerpt(text: string): string {
   return text.slice(0, MAX_REFERENCE_EXCERPT_LENGTH).trimEnd() + '…'
 }
 
-// TODO(ticket 19): this copy will move to Czech alongside the rest of the app's LLM-generated
-// and UI-facing text; written in English for now to stay consistent with everything else.
 function CoverageAnalysisSummary({ dimensions }: { dimensions: AnalysisDimensions }) {
   const total =
     dimensions.agreement.length +
@@ -138,32 +136,32 @@ function CoverageAnalysisSummary({ dimensions }: { dimensions: AnalysisDimension
   const stats = [
     {
       value: `${agreementPct}%`,
-      label: 'agreement',
-      detail: 'Most sources report the same core facts.',
+      label: 'shoda',
+      detail: 'Většina zdrojů uvádí stejné základní skutečnosti.',
     },
     {
       value: dimensions.uniqueReporting.length,
-      label: 'unique findings',
-      detail: 'Only some sources report this additional information.',
+      label: 'unikátní informace',
+      detail: 'Pouze některé zdroje uvádějí další informace.',
     },
     {
       value: dimensions.framing.length,
-      label: 'framing differences',
-      detail: 'Some outlets emphasise different aspects of the same facts.',
+      label: 'rozdíly ve framingu',
+      detail: 'Různá média zdůrazňují odlišné aspekty stejných faktů.',
     },
     {
       value: dimensions.contradiction.length,
-      label: 'direct contradictions',
+      label: 'přímé rozpory',
       detail:
         dimensions.contradiction.length === 0
-          ? 'No sources directly contradict each other in the available reporting.'
-          : 'Sources report incompatible facts about this story.',
+          ? 'Žádné zdroje si v dostupných informacích přímo neodporují.'
+          : 'Zdroje uvádějí neslučitelné informace o této události.',
     },
   ]
 
   return (
     <section className="mb-8 rounded-lg border bg-muted/30 p-4 font-sans">
-      <h2 className="utility-label">Coverage analysis</h2>
+      <h2 className="utility-label">Analýza pokrytí</h2>
       <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <div key={stat.label}>
@@ -218,7 +216,7 @@ function NarrativeArticle({
 
       {references.length > 0 && (
         <section className="mx-auto mt-12 max-w-measure border-t pt-6">
-          <h2 className="utility-label">References</h2>
+          <h2 className="utility-label">Zdroje</h2>
           <ol className="mt-3 flex flex-col gap-2 text-sm">
             {references.map((r, i) => (
               <li key={i} className="flex gap-2">
@@ -234,7 +232,7 @@ function NarrativeArticle({
                     rel="noopener noreferrer"
                     className="whitespace-nowrap text-primary underline"
                   >
-                    → Read original
+                    → Číst originál
                   </a>
                 </span>
               </li>
@@ -259,10 +257,10 @@ function ResultsTabs({
     <TooltipProvider>
       <Tabs defaultValue={hasNarrative ? 'narrative' : 'agreement'} className="mt-6">
         <TabsList>
-          {hasNarrative && <TabsTrigger value="narrative">Article</TabsTrigger>}
-          <TabsTrigger value="agreement">Agreement</TabsTrigger>
-          <TabsTrigger value="contradiction">Contradiction</TabsTrigger>
-          <TabsTrigger value="uniqueReporting">Unique Reporting</TabsTrigger>
+          {hasNarrative && <TabsTrigger value="narrative">Článek</TabsTrigger>}
+          <TabsTrigger value="agreement">Shoda</TabsTrigger>
+          <TabsTrigger value="contradiction">Rozpory</TabsTrigger>
+          <TabsTrigger value="uniqueReporting">Unikátní zprávy</TabsTrigger>
           <TabsTrigger value="framing">Framing</TabsTrigger>
         </TabsList>
         {hasNarrative && (
@@ -292,7 +290,7 @@ function ErrorState({ message }: { message: string }) {
     <main className="container mx-auto py-10 max-w-3xl">
       <p className="text-destructive">{message}</p>
       <Link to="/" className="mt-4 inline-block text-sm text-primary underline">
-        Try again
+        Zkusit znovu
       </Link>
     </main>
   )
@@ -317,7 +315,7 @@ function StreamingAnalysis({ id }: { id: string }) {
             status: c.status,
             extraction:
               c.status === 'extraction-failed'
-                ? { phase: 'error', error: 'No article text available' }
+                ? { phase: 'error', error: 'Text článku není k dispozici' }
                 : { phase: 'pending' },
           }))
         )
@@ -366,7 +364,7 @@ function StreamingAnalysis({ id }: { id: string }) {
     })
 
     es.onerror = () => {
-      setStreamError('Connection to analysis stream lost.')
+      setStreamError('Spojení s datovým proudem analýzy bylo přerušeno.')
       es.close()
     }
 
@@ -380,7 +378,7 @@ function StreamingAnalysis({ id }: { id: string }) {
   if (dimensions) {
     return (
       <main className="container mx-auto py-10 max-w-3xl">
-        <h1 className="text-2xl font-bold">Analysis</h1>
+        <h1 className="text-2xl font-bold">Analýza</h1>
         <ResultsTabs dimensions={dimensions} />
       </main>
     )
@@ -397,15 +395,13 @@ function StreamingAnalysis({ id }: { id: string }) {
 
   return (
     <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-2xl font-bold">
-        {isSynthesising ? 'Synthesising analysis…' : 'Extracting sources'}
-      </h1>
+      <h1 className="text-2xl font-bold">{isSynthesising ? 'Syntéza analýzy…' : 'Extrakce zdrojů'}</h1>
 
       {total > 0 && isExtracting && (
         <div className="mt-4">
           <div className="flex justify-between text-sm text-muted-foreground mb-1">
             <span>
-              {doneCount} of {total} sources analysed
+              Zpracováno {doneCount} z {total} zdrojů
             </span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -420,14 +416,14 @@ function StreamingAnalysis({ id }: { id: string }) {
       {isSynthesising && (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 size={16} className="animate-spin" />
-          Running synthesis across {rows.filter((r) => r.extraction.phase === 'complete').length} sources…
+          Probíhá syntéza napříč {rows.filter((r) => r.extraction.phase === 'complete').length} zdroji…
         </div>
       )}
 
       {streamError && <p className="mt-4 text-sm text-destructive">{streamError}</p>}
 
       {rows.length === 0 && !streamError && (
-        <p className="mt-6 text-muted-foreground">Connecting to analysis stream…</p>
+        <p className="mt-6 text-muted-foreground">Připojování k datovému proudu analýzy…</p>
       )}
 
       <ul className="mt-6 flex flex-col gap-3">
@@ -462,22 +458,22 @@ export default function AnalysisPage() {
   if (isLoading) {
     return (
       <main className="container mx-auto py-10 max-w-3xl">
-        <p className="text-muted-foreground">Loading analysis…</p>
+        <p className="text-muted-foreground">Načítání analýzy…</p>
       </main>
     )
   }
 
   if (isError || !analysis) {
-    return <ErrorState message="Failed to load analysis." />
+    return <ErrorState message="Nepodařilo se načíst analýzu." />
   }
 
   if (analysis.status === 'draft') {
     return (
       <main className="container mx-auto py-10 max-w-3xl">
-        <p className="text-muted-foreground">This article is still being reviewed and isn't available yet.</p>
+        <p className="text-muted-foreground">Tento článek se ještě posuzuje a zatím není dostupný.</p>
         {user?.role === 'ADMIN' && (
           <Link to="/admin/ingestion" className="mt-4 inline-block text-sm text-primary underline">
-            Go to the review queue
+            Přejít do fronty ke schválení
           </Link>
         )}
       </main>
@@ -485,7 +481,7 @@ export default function AnalysisPage() {
   }
 
   if (analysis.status === 'failed') {
-    return <ErrorState message="Analysis failed." />
+    return <ErrorState message="Analýza selhala." />
   }
 
   if (analysis.status === 'complete' && analysis.synthesisResult) {

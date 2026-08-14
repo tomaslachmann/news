@@ -13,7 +13,9 @@ COPY packages/backend/ ./packages/backend/
 
 RUN cd packages/backend && npx prisma generate
 
-RUN cd packages/backend && npx tsc --project tsconfig.json
+RUN cd packages/backend && npx tsc --project tsconfig.build.json
+
+RUN cp -r packages/backend/src/prompts packages/backend/dist/prompts
 
 # ---- Production image ----
 FROM node:22-alpine AS runner

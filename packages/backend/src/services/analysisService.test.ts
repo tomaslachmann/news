@@ -267,7 +267,7 @@ describe('getAnalysisDetail', () => {
     })
     const segments = [
       {
-        prose: 'Combined narrative.',
+        prose: 'Kombinovaná zpráva.',
         attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
       },
     ]
@@ -286,7 +286,7 @@ describe('getAnalysisDetail', () => {
   it('does not regenerate the narrative when one is already cached', async () => {
     const cachedSegments = [
       {
-        prose: 'Cached.',
+        prose: 'Uloženo v mezipaměti.',
         attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
       },
     ]
@@ -340,7 +340,7 @@ describe('getAnalysisDetail', () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockImplementation(() => Promise.resolve(freshAnalysis()))
     const segments = [
       {
-        prose: 'Combined narrative.',
+        prose: 'Kombinovaná zpráva.',
         attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
       },
     ]

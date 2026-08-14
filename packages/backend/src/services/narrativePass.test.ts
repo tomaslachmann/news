@@ -19,7 +19,7 @@ describe('runNarrativePass', () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       segments: [
         {
-          prose: 'Both outlets confirmed the event took place.',
+          prose: 'Oba deníky potvrdily, že k události došlo.',
           attributions: [
             { outlet: 'iDnes', czechQuote: 'Událost se stala', articleUrl: 'https://idnes.cz/x' },
           ],
@@ -32,7 +32,7 @@ describe('runNarrativePass', () => {
     const result = await runNarrativePass(sources, EMPTY_DIMENSIONS)
 
     expect(result.segments).toHaveLength(1)
-    expect(result.segments[0]?.prose).toBe('Both outlets confirmed the event took place.')
+    expect(result.segments[0]?.prose).toBe('Oba deníky potvrdily, že k události došlo.')
     expect(llmClientModule.callJsonModel).toHaveBeenCalledWith(
       'gpt-4o',
       expect.any(String),

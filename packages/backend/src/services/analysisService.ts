@@ -27,7 +27,7 @@ export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisRes
     scraped = await scrapeArticle(seedUrl)
   } catch (err) {
     throw new ExternalServiceError(
-      err instanceof ScrapeError ? err.message : 'Failed to fetch the seed article'
+      err instanceof ScrapeError ? err.message : 'Nepodařilo se načíst zdrojový článek'
     )
   }
 
@@ -35,7 +35,7 @@ export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisRes
   try {
     keywords = await extractKeywords(scraped.title, scraped.excerpt)
   } catch {
-    throw new ExternalServiceError('Failed to extract keywords from the article')
+    throw new ExternalServiceError('Nepodařilo se extrahovat klíčová slova z článku')
   }
 
   const analysis = await analysisRepo.createAnalysis({ seedUrl, seedHeadline: scraped.title })
@@ -49,7 +49,7 @@ export async function discoverSources(
   log?: FastifyBaseLogger
 ): Promise<CandidateArticle[]> {
   const analysis = await analysisRepo.findAnalysisWithStory(analysisId)
-  if (!analysis) throw new NotFoundError('Analysis not found')
+  if (!analysis) throw new NotFoundError('Analýza nenalezena')
 
   const { candidates } = await discoverCoverage(keywords, log)
 
@@ -80,7 +80,7 @@ export async function confirmCoverages(
   const { confirmedIds, customUrls = [], manualTexts = [] } = body
 
   const analysis = await analysisRepo.findAnalysisById(analysisId)
-  if (!analysis) throw new NotFoundError('Analysis not found')
+  if (!analysis) throw new NotFoundError('Analýza nenalezena')
 
   const manualMap = new Map(manualTexts.map((m) => [m.id, m.text]))
   if (manualMap.size > 0) {
@@ -172,7 +172,7 @@ export async function getAnalysisDetail(
   log?: FastifyBaseLogger
 ): Promise<AnalysisDetail> {
   const analysis = await analysisRepo.findAnalysisWithDetails(analysisId)
-  if (!analysis) throw new NotFoundError('Analysis not found')
+  if (!analysis) throw new NotFoundError('Analýza nenalezena')
 
   if (analysis.status === 'COMPLETE' && analysis.synthesisResult && !analysis.synthesisResult.narrative) {
     const sources: NarrativeSource[] = analysis.coverages

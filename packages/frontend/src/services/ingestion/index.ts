@@ -10,7 +10,7 @@ async function throwApiError(res: Response, fallback: string): Promise<never> {
 export async function fetchPendingAdditions(): Promise<PendingAdditionItem[]> {
   const res = await fetch('/api/admin/ingestion/pending-additions', { credentials: 'include' })
 
-  if (!res.ok) return throwApiError(res, 'Failed to load pending additions')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst čekající doplnění')
 
   return res.json() as Promise<PendingAdditionItem[]>
 }
@@ -21,7 +21,7 @@ export async function approveDraft(analysisId: string): Promise<void> {
     credentials: 'include',
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to approve draft')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se schválit koncept')
 }
 
 export async function rejectDraft(analysisId: string): Promise<void> {
@@ -30,5 +30,5 @@ export async function rejectDraft(analysisId: string): Promise<void> {
     credentials: 'include',
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to reject draft')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se zamítnout koncept')
 }

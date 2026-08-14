@@ -10,7 +10,7 @@ async function throwApiError(res: Response, fallback: string): Promise<never> {
 export async function fetchUsers(): Promise<AdminUserListItem[]> {
   const res = await fetch('/api/admin/users', { credentials: 'include' })
 
-  if (!res.ok) return throwApiError(res, 'Failed to load users')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst uživatele')
 
   return res.json() as Promise<AdminUserListItem[]>
 }
@@ -23,7 +23,7 @@ export async function createUser(body: CreateAdminUserBody): Promise<AdminUserLi
     body: JSON.stringify(body),
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to create user')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se vytvořit uživatele')
 
   return res.json() as Promise<AdminUserListItem>
 }
@@ -36,7 +36,7 @@ export async function updateUser(userId: string, body: PatchAdminUserBody): Prom
     body: JSON.stringify(body),
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to update user')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se aktualizovat uživatele')
 
   return res.json() as Promise<AdminUserListItem>
 }
@@ -47,5 +47,5 @@ export async function deleteUser(userId: string): Promise<void> {
     credentials: 'include',
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to delete user')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se smazat uživatele')
 }

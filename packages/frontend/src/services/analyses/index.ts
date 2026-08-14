@@ -37,7 +37,7 @@ export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisRes
     body: JSON.stringify({ seedUrl }),
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to create analysis')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se vytvořit analýzu')
 
   return res.json() as Promise<CreateAnalysisResponse>
 }
@@ -50,7 +50,7 @@ export async function discoverSources(analysisId: string, keywords: string[]): P
     body: JSON.stringify({ keywords }),
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to start discovery')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se spustit vyhledávání zdrojů')
 
   return res.json() as Promise<CandidateArticle[]>
 }
@@ -63,7 +63,7 @@ export async function patchCoverages(analysisId: string, body: PatchCoveragesBod
     body: JSON.stringify(body),
   })
 
-  if (!res.ok) return throwApiError(res, 'Failed to confirm sources')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se potvrdit zdroje')
 
   return res.json() as Promise<CoverageInfo[]>
 }
@@ -71,7 +71,7 @@ export async function patchCoverages(analysisId: string, body: PatchCoveragesBod
 export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail> {
   const res = await fetch(`/api/analyses/${analysisId}`, { credentials: 'include' })
 
-  if (!res.ok) return throwApiError(res, 'Failed to load analysis')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst analýzu')
 
   return res.json() as Promise<AnalysisDetail>
 }
@@ -79,7 +79,7 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
 export async function fetchAnalyses(): Promise<AnalysisListItem[]> {
   const res = await fetch('/api/analyses', { credentials: 'include' })
 
-  if (!res.ok) return throwApiError(res, 'Failed to load analyses')
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst analýzy')
 
   return res.json() as Promise<AnalysisListItem[]>
 }
