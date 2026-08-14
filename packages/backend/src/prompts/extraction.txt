@@ -32,6 +32,7 @@ For each item provide:
 - "czechQuote": the shortest verbatim Czech passage that illustrates it (use the headline if the signal is in the headline)
 
 ## Rules
+- Be exhaustive. Identify every claim, attribution, interpretive statement, and framing signal in the article that meets the criteria above — not just the handful that seem most notable. A long, detailed article should produce a long, detailed extraction.
 - Extract only what is explicitly present. Do not infer or hallucinate.
 - Every item must have a czechQuote that is a verbatim substring of the article text.
 - If a category has no examples in this article, return an empty array for it.

@@ -38,7 +38,12 @@ async function main() {
     console.log(`  interpretiveStatements: ${extraction.interpretiveStatements.length}`)
     console.log(`  framingSignals: ${extraction.framingSignals.length}`)
 
-    sources.push({ outlet: candidate.outlet, articleUrl: candidate.url, extraction })
+    sources.push({
+      outlet: candidate.outlet,
+      articleUrl: candidate.url,
+      extraction,
+      extractedText: scraped.fullText,
+    })
   }
 
   if (sources.length >= 2) {

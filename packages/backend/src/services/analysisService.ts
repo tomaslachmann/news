@@ -152,7 +152,17 @@ function generateAndCacheNarrative(
 
   const generation = (async () => {
     try {
-      const narrativeResult = await runNarrativePass(sources, dimensions)
+      const narrativeResult = await runNarrativePass(sources, dimensions, log)
+      // Every segment can end up dropped by quote verification (see quoteVerification.ts). An
+      // empty result must not be cached as if generation succeeded — [] is truthy, so a naive
+      // `!narrative` regeneration check would treat this Analysis as permanently, unfixably done.
+      if (narrativeResult.segments.length === 0) {
+        log?.warn(
+          { analysisId },
+          'Cross-Source Narrative generation produced no verifiable segments; serving without one'
+        )
+        return null
+      }
       await synthesisResultRepo.updateSynthesisResultNarrative(analysisId, narrativeResult.segments)
       return narrativeResult.segments
     } catch (err) {

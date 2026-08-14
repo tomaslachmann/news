@@ -12,6 +12,10 @@ const EMPTY_DIMENSIONS: SynthesisResult = {
   framing: [],
 }
 
+const SOURCES = [
+  { outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku. Událost se stala.' },
+]
+
 describe('runNarrativePass', () => {
   beforeEach(() => vi.resetAllMocks())
 
@@ -27,16 +31,14 @@ describe('runNarrativePass', () => {
       ],
     })
 
-    const sources = [{ outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku.' }]
-
-    const result = await runNarrativePass(sources, EMPTY_DIMENSIONS)
+    const result = await runNarrativePass(SOURCES, EMPTY_DIMENSIONS)
 
     expect(result.segments).toHaveLength(1)
     expect(result.segments[0]?.prose).toBe('Oba deníky potvrdily, že k události došlo.')
     expect(llmClientModule.callJsonModel).toHaveBeenCalledWith(
       'gpt-4o',
       expect.any(String),
-      JSON.stringify({ sources, dimensions: EMPTY_DIMENSIONS })
+      JSON.stringify({ sources: SOURCES, dimensions: EMPTY_DIMENSIONS })
     )
   })
 
@@ -46,6 +48,65 @@ describe('runNarrativePass', () => {
     })
 
     await expect(runNarrativePass([], EMPTY_DIMENSIONS)).rejects.toThrow()
+  })
+
+  it('retries once and returns the corrected segment when a quote fails verification then passes', async () => {
+    vi.mocked(llmClientModule.callJsonModel)
+      .mockResolvedValueOnce({
+        segments: [
+          {
+            prose: 'Tvrzení s vymyšleným citátem.',
+            attributions: [
+              { outlet: 'iDnes', czechQuote: 'citát, který v článku není', articleUrl: 'https://idnes.cz/x' },
+            ],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        segments: [
+          {
+            prose: 'Tvrzení s vymyšleným citátem.',
+            attributions: [
+              { outlet: 'iDnes', czechQuote: 'Událost se stala', articleUrl: 'https://idnes.cz/x' },
+            ],
+          },
+        ],
+      })
+
+    const result = await runNarrativePass(SOURCES, EMPTY_DIMENSIONS)
+
+    expect(result.segments).toHaveLength(1)
+    expect(result.segments[0]?.attributions[0]?.czechQuote).toBe('Událost se stala')
+    expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops a segment whose quote still fails verification after the retry', async () => {
+    vi.mocked(llmClientModule.callJsonModel)
+      .mockResolvedValueOnce({
+        segments: [
+          {
+            prose: 'Tvrzení s vymyšleným citátem.',
+            attributions: [
+              { outlet: 'iDnes', czechQuote: 'citát, který v článku není', articleUrl: 'https://idnes.cz/x' },
+            ],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        segments: [
+          {
+            prose: 'Tvrzení s vymyšleným citátem.',
+            attributions: [
+              { outlet: 'iDnes', czechQuote: 'stále vymyšlený citát', articleUrl: 'https://idnes.cz/x' },
+            ],
+          },
+        ],
+      })
+
+    const result = await runNarrativePass(SOURCES, EMPTY_DIMENSIONS)
+
+    expect(result.segments).toHaveLength(0)
+    expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(2)
   })
 })
 
