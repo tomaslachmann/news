@@ -25,7 +25,7 @@ export async function login(body: LoginBody): Promise<AuthUser> {
     credentials: 'include',
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error('Invalid credentials')
+  if (!res.ok) throw new Error('Neplatné přihlašovací údaje')
   return res.json() as Promise<AuthUser>
 }
 

@@ -28,11 +28,11 @@ export default function LoginPage() {
 
   return (
     <main className="container mx-auto py-10 max-w-sm">
-      <h1 className="text-2xl font-bold mb-6">Sign in</h1>
+      <h1 className="text-2xl font-bold mb-6">Přihlášení</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="email" className="text-sm font-medium">
-            Email
+            E-mail
           </label>
           <Input
             id="email"
@@ -46,7 +46,7 @@ export default function LoginPage() {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="password" className="text-sm font-medium">
-            Password
+            Heslo
           </label>
           <Input
             id="password"
@@ -59,10 +59,10 @@ export default function LoginPage() {
           />
         </div>
         {mutation.isError && (
-          <p className="text-sm text-destructive">Invalid email or password. Please try again.</p>
+          <p className="text-sm text-destructive">Neplatný e-mail nebo heslo. Zkuste to prosím znovu.</p>
         )}
         <Button type="submit" disabled={mutation.isPending}>
-          {mutation.isPending ? 'Signing in…' : 'Sign in'}
+          {mutation.isPending ? 'Přihlašování…' : 'Přihlásit se'}
         </Button>
       </form>
     </main>

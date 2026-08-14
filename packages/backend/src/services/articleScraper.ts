@@ -22,7 +22,7 @@ export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
   try {
     html = await fetchArticleHtml(url)
   } catch (err) {
-    throw new ScrapeError(`Could not reach the seed article: ${(err as Error).message}`)
+    throw new ScrapeError(`Nepodařilo se načíst zdrojový článek: ${(err as Error).message}`)
   }
 
   const dom = new JSDOM(html, { url })
@@ -30,10 +30,10 @@ export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
   const article = reader.parse()
 
   if (!article) {
-    throw new ScrapeError('Could not extract article content from the page')
+    throw new ScrapeError('Nepodařilo se extrahovat obsah článku ze stránky')
   }
 
-  const title = article.title?.trim() || 'Untitled'
+  const title = article.title?.trim() || 'Bez názvu'
 
   const excerpt = (article.textContent ?? '')
     .split('\n')

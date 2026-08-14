@@ -22,14 +22,14 @@ function StatusBadge({ status }: { status: CoverageInfo['status'] }) {
   if (status === 'ok') {
     return (
       <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-        <CheckCircle size={12} /> Extracted
+        <CheckCircle size={12} /> Extrahováno
       </span>
     )
   }
   if (status === 'extraction-failed') {
     return (
       <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
-        <XCircle size={12} /> Could not extract
+        <XCircle size={12} /> Nelze extrahovat
       </span>
     )
   }
@@ -112,7 +112,7 @@ export default function ReviewPage() {
   if (isLoading) {
     return (
       <main className="container mx-auto py-10">
-        <p className="text-muted-foreground">Loading sources…</p>
+        <p className="text-muted-foreground">Načítání zdrojů…</p>
       </main>
     )
   }
@@ -120,7 +120,7 @@ export default function ReviewPage() {
   if (isError || !analysis) {
     return (
       <main className="container mx-auto py-10">
-        <p className="text-destructive">Failed to load analysis. Please go back and try again.</p>
+        <p className="text-destructive">Nepodařilo se načíst analýzu. Vraťte se zpět a zkuste to znovu.</p>
       </main>
     )
   }
@@ -132,7 +132,7 @@ export default function ReviewPage() {
     return (
       <main className="container mx-auto py-10 max-w-3xl">
         <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
-        <p className="text-sm text-muted-foreground mt-1">Extraction complete</p>
+        <p className="text-sm text-muted-foreground mt-1">Extrakce dokončena</p>
 
         <ul className="mt-6 flex flex-col gap-3">
           {results.map((coverage) => (
@@ -152,7 +152,7 @@ export default function ReviewPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                  aria-label="Open article"
+                  aria-label="Otevřít článek"
                 >
                   <ExternalLink size={16} />
                 </a>
@@ -161,12 +161,12 @@ export default function ReviewPage() {
               {coverage.status === 'extraction-failed' && (
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-muted-foreground">
-                    Paste article text manually (optional):
+                    Vložte text článku ručně (nepovinné):
                   </label>
                   <textarea
                     rows={4}
                     className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
-                    placeholder="Paste the article body here…"
+                    placeholder="Sem vložte text článku…"
                     value={manualTexts.get(coverage.id) ?? ''}
                     onChange={(e) => setManualTexts((prev) => new Map(prev).set(coverage.id, e.target.value))}
                   />
@@ -178,8 +178,8 @@ export default function ReviewPage() {
 
         {failedIds.length > 0 && (
           <p className="mt-4 text-sm text-muted-foreground">
-            {failedIds.length} source{failedIds.length !== 1 ? 's' : ''} could not be extracted. You can paste
-            the text manually above, or proceed without them.
+            Počet zdrojů, které se nepodařilo extrahovat: {failedIds.length}. Text můžete vložit ručně výše,
+            nebo pokračovat bez nich.
           </p>
         )}
 
@@ -192,7 +192,7 @@ export default function ReviewPage() {
           onClick={() => proceedMutation.mutate()}
           disabled={proceedMutation.isPending}
         >
-          {proceedMutation.isPending ? 'Saving…' : 'Proceed to analysis'}
+          {proceedMutation.isPending ? 'Ukládání…' : 'Pokračovat k analýze'}
         </Button>
       </main>
     )
@@ -202,12 +202,13 @@ export default function ReviewPage() {
   return (
     <main className="container mx-auto py-10 max-w-3xl">
       <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
-      <p className="text-sm text-muted-foreground mt-1">Select the sources to include in the analysis</p>
+      <p className="text-sm text-muted-foreground mt-1">Vyberte zdroje, které chcete zahrnout do analýzy</p>
 
       {analysis.coverages.length === 0 && customUrls.length === 0 ? (
         <div className="mt-8 rounded-lg border border-dashed p-8 text-center">
           <p className="text-muted-foreground">
-            No coverage found. Add article URLs below or go back to adjust keywords.
+            Nebylo nalezeno žádné pokrytí. Přidejte odkazy na články níže, nebo se vraťte a upravte klíčová
+            slova.
           </p>
         </div>
       ) : (
@@ -247,7 +248,7 @@ export default function ReviewPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                  aria-label="Open article"
+                  aria-label="Otevřít článek"
                 >
                   <ExternalLink size={16} />
                 </a>
@@ -265,7 +266,7 @@ export default function ReviewPage() {
               />
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Custom URL
+                  Vlastní URL
                 </span>
                 <p className="text-sm text-muted-foreground truncate">{url}</p>
               </div>
@@ -279,7 +280,7 @@ export default function ReviewPage() {
         <Input
           value={customUrlInput}
           onChange={(e) => setCustomUrlInput(e.target.value)}
-          placeholder="Add article URL…"
+          placeholder="Přidat odkaz na článek…"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
@@ -295,7 +296,7 @@ export default function ReviewPage() {
           onClick={addCustomUrl}
           disabled={!customUrlInput.trim() || mode === 'confirming'}
         >
-          Add
+          Přidat
         </Button>
       </div>
 
@@ -303,7 +304,7 @@ export default function ReviewPage() {
       {checkedCount > 0 && checkedCount < 5 && (
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <span>Triangulation may be limited with fewer than 5 sources.</span>
+          <span>Při méně než 5 zdrojích může být triangulace omezená.</span>
         </div>
       )}
 
@@ -312,7 +313,7 @@ export default function ReviewPage() {
       )}
 
       <Button className="mt-6" onClick={handleConfirm} disabled={checkedCount === 0 || mode === 'confirming'}>
-        {mode === 'confirming' ? 'Extracting article text…' : 'Confirm sources'}
+        {mode === 'confirming' ? 'Extrahování textu článků…' : 'Potvrdit zdroje'}
       </Button>
     </main>
   )

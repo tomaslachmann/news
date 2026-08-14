@@ -14,7 +14,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
   fastify.post('/api/analyses', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = PostAnalysisBodySchema.safeParse(request.body)
     if (!parsed.success) {
-      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid request body')
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
     }
 
     const response = await analysisService.createAnalysis(parsed.data.seedUrl)
@@ -28,7 +28,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
     async (request, reply) => {
       const parsed = PostDiscoverBodySchema.safeParse(request.body)
       if (!parsed.success) {
-        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid request body')
+        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
       }
 
       const candidates = await analysisService.discoverSources(
@@ -47,7 +47,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
     async (request, reply) => {
       const parsed = PatchCoveragesBodySchema.safeParse(request.body)
       if (!parsed.success) {
-        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid request body')
+        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
       }
 
       const response = await analysisService.confirmCoverages(request.params.id, parsed.data)

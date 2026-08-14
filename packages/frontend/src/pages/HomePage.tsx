@@ -34,13 +34,13 @@ function KeywordChip({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{ width: `${Math.max(4, value.length)}ch` }}
-        aria-label="Keyword"
+        aria-label="Klíčové slovo"
       />
       <button
         type="button"
         onClick={onDelete}
         className="text-muted-foreground hover:text-foreground"
-        aria-label="Remove keyword"
+        aria-label="Odebrat klíčové slovo"
       >
         <X size={12} />
       </button>
@@ -92,9 +92,9 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
 
   return (
     <section className="mt-8 max-w-2xl">
-      <h2 className="text-lg font-semibold mb-1">Search keywords</h2>
+      <h2 className="text-lg font-semibold mb-1">Klíčová slova pro vyhledávání</h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Edit, remove, or add keywords before searching for coverage.
+        Klíčová slova můžete před vyhledáváním pokrytí upravit, odebrat nebo přidat.
       </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -113,7 +113,7 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
           ref={addInputRef}
           value={newKeyword}
           onChange={(e) => setNewKeyword(e.target.value)}
-          placeholder="Add keyword…"
+          placeholder="Přidat klíčové slovo…"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
@@ -123,7 +123,7 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
           className="max-w-xs"
         />
         <Button type="button" variant="outline" onClick={addKeyword} disabled={!newKeyword.trim()}>
-          Add
+          Přidat
         </Button>
       </div>
 
@@ -133,7 +133,7 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
 
       {activeKeywords.length > 0 && (
         <Button onClick={() => discoverMutation.mutate()} disabled={discoverMutation.isPending}>
-          {discoverMutation.isPending ? 'Searching for coverage…' : 'Discover sources'}
+          {discoverMutation.isPending ? 'Vyhledávání pokrytí…' : 'Vyhledat zdroje'}
         </Button>
       )}
     </section>
@@ -161,7 +161,7 @@ export default function HomePage() {
     setUrlError(null)
 
     if (!isValidUrl(urlValue)) {
-      setUrlError('Please enter a valid URL (e.g. https://example.cz/article)')
+      setUrlError('Zadejte platnou URL adresu (např. https://example.cz/clanek)')
       return
     }
 
@@ -172,13 +172,13 @@ export default function HomePage() {
     <main className="container mx-auto py-10 max-w-3xl">
       <h1 className="text-3xl font-bold">News Triangulator</h1>
       <p className="mt-2 text-muted-foreground">
-        Paste a Czech news article URL to see how different outlets cover the same story.
+        Vložte odkaz na český zpravodajský článek a zjistěte, jak stejnou událost popisují různá média.
       </p>
 
       {user?.role === 'ADMIN' && state.step === 'input' && (
         <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-3 max-w-2xl">
           <label htmlFor="seed-url" className="text-sm font-medium">
-            Seed article URL
+            Odkaz na výchozí článek
           </label>
           <div className="flex gap-2">
             <Input
@@ -195,7 +195,7 @@ export default function HomePage() {
               className="flex-1"
             />
             <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Analysing…' : 'Analyse'}
+              {createMutation.isPending ? 'Analyzování…' : 'Analyzovat'}
             </Button>
           </div>
           {urlError && <p className="text-sm text-destructive">{urlError}</p>}

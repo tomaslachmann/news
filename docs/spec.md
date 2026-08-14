@@ -65,7 +65,7 @@ A locally-run web tool that accepts a single seed article URL, automatically dis
 
 ### Language & Attribution
 
-33. As a user, I want all analysis prose to be in English, so that I can understand the analysis without reading Czech.
+33. As a user, I want all analysis prose to be in Czech, so that I don't have to switch languages between the tool's synthesis and the Czech quotes it cites — the audience is Czech-speaking, and mixed-language paraphrase-plus-verbatim-quote was the actual friction, not a lack of English. See ADR 0016.
 34. As a user, I want original Czech quotes to appear verbatim, so that exact wording is preserved where it carries meaning.
 35. As a user, I want each claim to carry an outlet name badge, so that every assertion is traceable to its source.
 

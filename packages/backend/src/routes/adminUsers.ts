@@ -15,7 +15,7 @@ export function registerAdminUsersRoutes(fastify: FastifyInstance): void {
   fastify.post('/api/admin/users', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = CreateAdminUserBodySchema.safeParse(request.body)
     if (!parsed.success) {
-      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid request body')
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
     }
 
     const user = await userService.createUser(parsed.data)
@@ -29,7 +29,7 @@ export function registerAdminUsersRoutes(fastify: FastifyInstance): void {
     async (request, reply) => {
       const parsed = PatchAdminUserBodySchema.safeParse(request.body)
       if (!parsed.success) {
-        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid request body')
+        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
       }
 
       const requestingUserId = verifyAuthCookie(request)!.userId

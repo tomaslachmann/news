@@ -133,16 +133,16 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
 
 export async function approveDraft(analysisId: string): Promise<void> {
   const analysis = await analysisRepo.findAnalysisById(analysisId)
-  if (!analysis) throw new NotFoundError('Analysis not found')
-  if (analysis.status !== 'DRAFT') throw new ValidationError('Only draft analyses can be approved')
+  if (!analysis) throw new NotFoundError('Analýza nenalezena')
+  if (analysis.status !== 'DRAFT') throw new ValidationError('Schválit lze pouze koncepty')
 
   await analysisRepo.updateAnalysisStatus(analysisId, 'PENDING')
 }
 
 export async function rejectDraft(analysisId: string): Promise<void> {
   const analysis = await analysisRepo.findAnalysisById(analysisId)
-  if (!analysis) throw new NotFoundError('Analysis not found')
-  if (analysis.status !== 'DRAFT') throw new ValidationError('Only draft analyses can be rejected')
+  if (!analysis) throw new NotFoundError('Analýza nenalezena')
+  if (analysis.status !== 'DRAFT') throw new ValidationError('Zamítnout lze pouze koncepty')
 
   await analysisRepo.updateAnalysisStatus(analysisId, 'FAILED')
 }

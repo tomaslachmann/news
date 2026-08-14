@@ -100,7 +100,7 @@ export const PatchAdminUserBodySchema = z
     password: z.string().min(1).optional(),
   })
   .refine((data) => data.role !== undefined || data.password !== undefined, {
-    message: 'Provide a role or password to update',
+    message: 'Zadejte roli nebo heslo ke změně',
   })
 export type PatchAdminUserBody = z.infer<typeof PatchAdminUserBodySchema>
 

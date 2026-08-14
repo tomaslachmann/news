@@ -13,7 +13,7 @@ export async function listUsers(): Promise<AdminUserListItem[]> {
 
 export async function createUser(data: CreateAdminUserBody): Promise<AdminUserListItem> {
   const existing = await userRepo.findUserByEmail(data.email)
-  if (existing) throw new ConflictError('A user with this email already exists')
+  if (existing) throw new ConflictError('Uživatel s tímto e-mailem už existuje')
 
   const passwordHash = await bcrypt.hash(data.password, PASSWORD_HASH_ROUNDS)
   const user = await userRepo.createUser({ email: data.email, passwordHash, role: data.role })
@@ -26,11 +26,11 @@ export async function updateUser(
   data: PatchAdminUserBody
 ): Promise<AdminUserListItem> {
   if (data.role !== undefined && targetUserId === requestingUserId) {
-    throw new ValidationError('Cannot change your own role')
+    throw new ValidationError('Svou vlastní roli nemůžete změnit')
   }
 
   const existing = await userRepo.findUserById(targetUserId)
-  if (!existing) throw new NotFoundError('User not found')
+  if (!existing) throw new NotFoundError('Uživatel nenalezen')
 
   const passwordHash = data.password ? await bcrypt.hash(data.password, PASSWORD_HASH_ROUNDS) : undefined
   const updated = await userRepo.updateUser(targetUserId, { role: data.role, passwordHash })
@@ -39,11 +39,11 @@ export async function updateUser(
 
 export async function deleteUser(requestingUserId: string, targetUserId: string): Promise<void> {
   if (targetUserId === requestingUserId) {
-    throw new ValidationError('Cannot delete your own account')
+    throw new ValidationError('Svůj vlastní účet nemůžete smazat')
   }
 
   const existing = await userRepo.findUserById(targetUserId)
-  if (!existing) throw new NotFoundError('User not found')
+  if (!existing) throw new NotFoundError('Uživatel nenalezen')
 
   await userRepo.deleteUser(targetUserId)
 }
