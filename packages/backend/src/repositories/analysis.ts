@@ -26,19 +26,51 @@ export async function createAnalysis(data: { seedUrl: string; seedHeadline: stri
 export async function createDraftAnalysis(data: {
   seedUrl: string
   seedHeadline: string
+  embedding?: number[]
 }): Promise<Analysis> {
   return prisma.analysis.create({
     data: {
       seedUrl: data.seedUrl,
       seedHeadline: data.seedHeadline,
       status: 'DRAFT',
-      story: { create: { anchorHeadline: data.seedHeadline } },
+      story: { create: { anchorHeadline: data.seedHeadline, embedding: data.embedding ?? [] } },
     },
   })
 }
 
 export async function findAnalysisWithStory(id: string): Promise<AnalysisWithStory | null> {
   return prisma.analysis.findUnique({ where: { id }, include: { story: true } })
+}
+
+export interface RecentStoryCandidate {
+  storyId: string
+  analysisId: string
+  analysisStatus: AnalysisStatus
+  embedding: number[]
+  createdAt: Date
+}
+
+/** Every Story whose Analysis was created within `sinceHours`, with its embedding — the
+ *  candidate pool Ingestion's cheap matching scores a new RSS item against. Includes every
+ *  Analysis status (not just DRAFT/PENDING): a match against a COMPLETE Analysis still needs
+ *  surfacing as a possible addition, and a match against FAILED must still be recognized as
+ *  already-seen so it isn't recreated on the next poll. See ADR 0018. */
+export async function findRecentStoriesForMatching(sinceHours: number): Promise<RecentStoryCandidate[]> {
+  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000)
+  const rows = await prisma.story.findMany({
+    where: { analysis: { createdAt: { gte: since } } },
+    include: { analysis: { select: { id: true, status: true, createdAt: true } } },
+  })
+
+  return rows
+    .filter((r): r is typeof r & { analysis: NonNullable<(typeof r)['analysis']> } => r.analysis !== null)
+    .map((r) => ({
+      storyId: r.id,
+      analysisId: r.analysis.id,
+      analysisStatus: r.analysis.status,
+      embedding: r.embedding,
+      createdAt: r.analysis.createdAt,
+    }))
 }
 
 /** Every Seed Article URL ever recorded, across all Analyses — used by Ingestion alongside

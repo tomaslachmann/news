@@ -47,6 +47,11 @@ model Story {
   /// The seed/triggering article's title, fixed at creation — what every same-event
   /// verification call compares a candidate article's title against.
   anchorHeadline String
+  /// Embedding of anchorHeadline (+ excerpt where available), used by Ingestion's cheap
+  /// candidate matching in place of an LLM call. Empty for Stories created before this existed
+  /// or outside the Ingestion path — an empty vector never scores above the match threshold,
+  /// so such a Story is simply never matched, not a broken state. See ADR 0018.
+  embedding      Float[]   @default([])
   analysis       Analysis?
 }
 

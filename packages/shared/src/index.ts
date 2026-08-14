@@ -18,6 +18,9 @@ export interface CandidateArticle {
   title: string
   url: string
   publishedAt: string
+  /** Short excerpt/summary where the source provides one (e.g. RSS description) — used as
+   *  cheap embedding input for Ingestion's candidate matching, not populated by every source. */
+  excerpt?: string
 }
 
 // Synthesis pass output types

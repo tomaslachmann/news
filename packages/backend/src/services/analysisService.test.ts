@@ -88,7 +88,7 @@ describe('discoverSources', () => {
       seedHeadline: 'x',
       status: 'PENDING',
       createdAt: new Date(),
-      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x' },
+      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x', embedding: [] },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
       candidates: [
@@ -128,7 +128,7 @@ describe('discoverSources', () => {
       seedHeadline: 'x',
       status: 'PENDING',
       createdAt: new Date(),
-      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x' },
+      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x', embedding: [] },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
       candidates: [

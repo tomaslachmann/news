@@ -1,4 +1,4 @@
-import type { Coverage, CoverageStatus, AnalysisStatus, Prisma } from '@prisma/client'
+import type { Coverage, CoverageStatus, Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 
 export type { Coverage, CoverageStatus }
@@ -60,37 +60,4 @@ export async function includeCoverages(analysisId: string, ids: string[]): Promi
 export async function findAllArticleUrls(): Promise<string[]> {
   const rows = await prisma.coverage.findMany({ select: { articleUrl: true } })
   return rows.map((r) => r.articleUrl)
-}
-
-export interface RecentAnalysisMatch {
-  analysisId: string
-  status: AnalysisStatus
-  /** The matched Analysis's Story anchor headline — what a same-event verification call
-   *  compares the triggering article against before this match is trusted. See ADR 0017. */
-  anchorHeadline: string
-}
-
-/** The most recently created Analysis (within `sinceHours`) that already has a Coverage matching
- *  one of `urls`, or null if none — a candidate match for Ingestion's dedup check, still subject
- *  to same-event verification against `anchorHeadline` before it's trusted (ADR 0017). */
-export async function findRecentAnalysisMatchingUrls(
-  urls: string[],
-  sinceHours: number
-): Promise<RecentAnalysisMatch | null> {
-  if (urls.length === 0) return null
-
-  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000)
-  const match = await prisma.coverage.findFirst({
-    where: { articleUrl: { in: urls }, analysis: { createdAt: { gte: since } } },
-    orderBy: { analysis: { createdAt: 'desc' } },
-    select: { analysis: { select: { id: true, status: true, story: { select: { anchorHeadline: true } } } } },
-  })
-
-  return match
-    ? {
-        analysisId: match.analysis.id,
-        status: match.analysis.status,
-        anchorHeadline: match.analysis.story.anchorHeadline,
-      }
-    : null
 }
