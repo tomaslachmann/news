@@ -2,7 +2,7 @@
 
 **What to build:** Replace Ingestion's GDELT-keyword-search retrieval (via `discoverCoverage`/`extractKeywords`) with a cheap embedding-similarity comparison against recently-open Stories, deciding attach-to-existing-Story vs. create-new-Draft without any LLM call on the hot path. See ADR 0018.
 
-**Blocked by:** None — `Story` (ADR 0017) and `verifyCandidatesAgainstAnchor` already exist.
+**Blocked by:** None. `Story` and `verifyCandidatesAgainstAnchor` already exist, from the earlier same-event-matching work.
 
 **Status:** ready-for-agent
 
