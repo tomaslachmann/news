@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Discovery: GDELT + RSS; 04 — Review Step & Content Extraction; 16 — Automated Article Ingestion.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] New Prisma model `Story` (`id`, `createdAt`, `anchorHeadline`); migration adds `Analysis.storyId` (required, unique — one Story per Analysis)
 - [x] `analysisRepo.createAnalysis` (human flow) creates its Story in the same transaction, anchored to the scraped seed article's title
