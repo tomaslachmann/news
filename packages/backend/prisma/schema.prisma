@@ -36,8 +36,23 @@ model User {
   createdAt    DateTime @default(now())
 }
 
+/// The real-world event a cluster of Coverage is believed to be about — independent of and
+/// created alongside its Analysis, so same-event matching has a stable identity to compare
+/// against rather than being folded into Analysis's own DRAFT/PENDING/COMPLETE/FAILED lifecycle.
+/// See ADR 0017.
+model Story {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  /// The seed/triggering article's title, fixed at creation — what every same-event
+  /// verification call compares a candidate article's title against.
+  anchorHeadline String
+  analysis       Analysis?
+}
+
 model Analysis {
   id               String            @id @default(cuid())
+  storyId          String            @unique
+  story            Story             @relation(fields: [storyId], references: [id])
   seedUrl          String
   seedHeadline     String
   status           AnalysisStatus    @default(PENDING)

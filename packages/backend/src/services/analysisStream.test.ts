@@ -19,6 +19,7 @@ vi.mock('./synthesisPass.js')
 
 const ANALYSIS = {
   id: 'a1',
+  storyId: 's1',
   seedUrl: 'x',
   seedHeadline: 'x',
   status: 'PENDING' as const,

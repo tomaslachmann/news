@@ -4,6 +4,7 @@ import { queryRssFeeds } from './rss.js'
 import { discoverCoverage } from './discovery.js'
 import { scrapeArticle } from './articleScraper.js'
 import { extractKeywords } from './keywordExtractor.js'
+import { verifySameStoryLogged, verifyCandidatesAgainstAnchor } from './storyVerification.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
@@ -53,10 +54,23 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
     // as a starting candidate set for a genuinely new Draft, but too weak to trust as evidence that
     // two items are the same Story. Only match against candidates GDELT actually confirmed.
     const matchCandidateUrls = gdeltCount > 0 ? candidateUrls : []
-    const match = await coverageRepo.findRecentAnalysisMatchingUrls(matchCandidateUrls, DEDUP_WINDOW_HOURS)
+    const rawMatch = await coverageRepo.findRecentAnalysisMatchingUrls(matchCandidateUrls, DEDUP_WINDOW_HOURS)
+
+    // A URL-heuristic match is only a candidate — confirm it's genuinely the same event as the
+    // matched Story before trusting it. A rejected match (including a failed verification call,
+    // which degrades to rejection rather than throwing) falls through to the new-Draft path
+    // below exactly as a real no-match would. See ADR 0017.
+    let match: typeof rawMatch = null
+    if (rawMatch) {
+      const verdict = await verifySameStoryLogged(title, rawMatch.anchorHeadline, log)
+      if (verdict.sameEvent) match = rawMatch
+    }
 
     if (match) {
-      candidateUrls.forEach((u) => known.add(u))
+      // Only item.url (already tracked in `known` above) actually becomes Coverage here — the
+      // rest of `candidateUrls` were never verified against anything and must not be marked
+      // known, or a later item's own genuine candidate check for one of them would be silently
+      // filtered out despite nothing having actually been attached under that URL.
 
       if (match.status === 'PENDING' || match.status === 'DRAFT') {
         await coverageRepo.createCoverages([
@@ -86,9 +100,22 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
       continue
     }
 
+    // No verified match — this is a genuinely new Story. Verify Discovery's own candidates
+    // against the triggering article itself before seeding the new Draft's Coverage with them;
+    // this is the gap that previously let unrelated RSS-trending items become Coverage (ADR 0017).
+    //
+    // Excluding already-known URLs first also closes a narrower race within one poll: the dedup
+    // check above compares this item's own title against a matched Story's anchor, while this
+    // candidate check compares each candidate's title against this item's own title — two
+    // different comparisons that can legitimately disagree. Without this filter, a URL that an
+    // earlier item in the same poll already turned into real Coverage could pass this item's own
+    // candidate verification and get attached a second time, to a second Analysis.
+    const novelCandidates = candidates.filter((c) => !known.has(c.url))
+    const verifiedCandidates = await verifyCandidatesAgainstAnchor(novelCandidates, title, log)
+
     const draft = await analysisRepo.createDraftAnalysis({ seedUrl: item.url, seedHeadline: title })
     await coverageRepo.createCoverages(
-      candidates.map((c) => ({
+      verifiedCandidates.map((c) => ({
         analysisId: draft.id,
         outlet: c.outlet,
         title: c.title,
@@ -97,6 +124,7 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
         status: 'PENDING' as const,
       }))
     )
+    verifiedCandidates.forEach((c) => known.add(c.url))
     summary.created++
   }
 
