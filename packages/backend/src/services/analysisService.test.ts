@@ -532,7 +532,13 @@ describe('getAnalysisDetail', () => {
       status: 'COMPLETE',
       createdAt: new Date('2025-01-01T00:00:00Z'),
       coverages: [OK_COVERAGE],
-      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: null,
+        headline: null,
+      },
     })
     const segments = [
       {
@@ -562,7 +568,13 @@ describe('getAnalysisDetail', () => {
       status: 'COMPLETE',
       createdAt: new Date('2025-01-01T00:00:00Z'),
       coverages: [OK_COVERAGE],
-      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: null,
+        headline: null,
+      },
     })
     vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments: [] })
 
@@ -587,7 +599,13 @@ describe('getAnalysisDetail', () => {
       status: 'COMPLETE',
       createdAt: new Date('2025-01-01T00:00:00Z'),
       coverages: [OK_COVERAGE],
-      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: cachedSegments },
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: cachedSegments,
+        headline: null,
+      },
     })
 
     const result = await getAnalysisDetail('a1')
@@ -605,7 +623,13 @@ describe('getAnalysisDetail', () => {
       status: 'COMPLETE',
       createdAt: new Date('2025-01-01T00:00:00Z'),
       coverages: [OK_COVERAGE],
-      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: null,
+        headline: null,
+      },
     })
     vi.mocked(narrativePassModule.runNarrativePass).mockRejectedValue(new Error('LLM down'))
 
@@ -624,7 +648,13 @@ describe('getAnalysisDetail', () => {
       status: 'COMPLETE' as const,
       createdAt: new Date('2025-01-01T00:00:00Z'),
       coverages: [OK_COVERAGE],
-      synthesisResult: { id: 's1', analysisId: 'a1', dimensions: DIMENSIONS, narrative: null },
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: null,
+        headline: null,
+      },
     })
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockImplementation(() => Promise.resolve(freshAnalysis()))
     const segments = [

@@ -5,7 +5,8 @@ export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 /** Every module that calls callJsonModel, so a typo'd or future value can't silently fragment
  *  LlmCallLog's callSite column — see ADR 0020. Extend this when a new caller is added. */
-export type LlmCallSite = 'extraction' | 'synthesis' | 'narrative' | 'storyVerification' | 'keywordExtractor'
+export type LlmCallSite =
+  'extraction' | 'synthesis' | 'narrative' | 'storyVerification' | 'keywordExtractor' | 'headline'
 
 export async function callJsonModel(
   model: string,

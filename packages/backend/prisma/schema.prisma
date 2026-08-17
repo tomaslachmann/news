@@ -90,6 +90,13 @@ model SynthesisResult {
   analysis   Analysis @relation(fields: [analysisId], references: [id])
   dimensions Json
   narrative  Json?
+  /// Tool-authored, short Czech headline for the Article — generated once, eagerly, from only
+  /// the Agreement dimension, in the same transaction that marks the Analysis COMPLETE (see
+  /// ADR 0021). Distinct from Analysis.seedHeadline (the pre-completion working title, always
+  /// one source's original) and Story.anchorHeadline (the internal matching anchor) — neither of
+  /// those is touched by this field. Null if generation was skipped because Agreement was empty
+  /// at completion time, or for any Analysis completed before this feature existed.
+  headline   String?
 }
 
 /// A candidate Coverage that Ingestion found for an already-COMPLETE Analysis — surfaced for Admin

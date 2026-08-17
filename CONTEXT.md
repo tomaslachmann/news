@@ -67,6 +67,13 @@ _Avoid_: Combined article — collides with Coverage, which is also "an article"
 The reader-facing name for a completed Analysis, shown to anyone without a login — nav labels, page titles, the public listing page. Presentation only; the underlying domain entity, database table, and API are still called `Analysis`.
 _Avoid_: using "Article" for a Coverage — a Coverage is a single-source article; "Article" always refers to the full multi-source Analysis/Cross-Source Narrative.
 
+## Headline
+Three distinct concepts share the word "headline" and must not be conflated:
+- **`Story.anchorHeadline`** — the seed/triggering article's original title, fixed at Story creation, used only as the comparison anchor for same-event classification (see Story above). Never shown to a reader.
+- **`Analysis.seedHeadline`** — the working title shown while an Analysis is still DRAFT/PENDING, always one Source's original headline (whichever article seeded the Analysis). Stays a single source's phrasing because no tool-authored alternative exists yet at that stage.
+- **`SynthesisResult.headline`** — the tool-authored headline for a COMPLETE Analysis, generated once from only the Agreement dimension (never Contradiction/Unique Reporting/Framing, and never any Source's original wording) so it never states as settled fact something the Sources dispute. Generated eagerly, in the same transaction that flips an Analysis to COMPLETE — an Analysis is never COMPLETE without one, unlike the lazily-generated, cached Cross-Source Narrative. Null only when Agreement was empty at completion time (nothing safe to headline) or for an Analysis completed before this field existed. This is what a reader sees as the Article's title once triangulation is done — see ADR 0021.
+_Avoid_: showing any Source's original headline once an Analysis is COMPLETE — that is exactly the single-source framing this tool exists to move past.
+
 ## Extraction Model
 The AI model used for the per-Coverage Extraction pass. Configurable via the `EXTRACTION_MODEL` environment variable.
 

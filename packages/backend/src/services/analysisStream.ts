@@ -7,6 +7,7 @@ import * as synthesisRepo from '../repositories/synthesisResult.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { runExtractionPass, ExtractionResultSchema } from './extractionPass.js'
 import { runSynthesisPass, type SourceExtraction } from './synthesisPass.js'
+import { runHeadlinePass } from './headlinePass.js'
 import type { Coverage } from '../repositories/coverage.js'
 
 export interface RunAnalysisStreamOptions {
@@ -134,7 +135,11 @@ async function runExtractionAndSynthesis(
 
   try {
     const synthesis = await runSynthesisPass(sources, excludedCount, log)
-    await analysisRepo.completeAnalysisWithSynthesis(analysisId, synthesis)
+    // A failed headline generation is caught by this same try/catch — the Analysis must not
+    // reach COMPLETE without a headline, so this isn't allowed to degrade separately from
+    // Synthesis's own failure handling (see ADR 0021).
+    const headline = await runHeadlinePass(synthesis.agreement, log)
+    await analysisRepo.completeAnalysisWithSynthesis(analysisId, synthesis, headline)
     send({ type: 'synthesis-complete', dimensions: synthesis })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Syntéza se nezdařila'
