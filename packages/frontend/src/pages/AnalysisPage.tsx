@@ -4,6 +4,7 @@ import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { PageContainer } from '@/components/PageContainer'
+import { PageTitle } from '@/components/PageTitle'
 import {
   openAnalysisStream,
   type Attribution,
@@ -288,7 +289,7 @@ function ResultsTabs({
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <PageContainer>
+    <PageContainer width="default">
       <p className="text-destructive">{message}</p>
       <Link to="/" className="mt-4 inline-block text-sm text-primary underline">
         Zkusit znovu
@@ -378,8 +379,8 @@ function StreamingAnalysis({ id }: { id: string }) {
 
   if (dimensions) {
     return (
-      <PageContainer>
-        <h1 className="text-2xl font-bold">Analýza</h1>
+      <PageContainer width="default">
+        <PageTitle size="sm">Analýza</PageTitle>
         <ResultsTabs dimensions={dimensions} />
       </PageContainer>
     )
@@ -395,8 +396,8 @@ function StreamingAnalysis({ id }: { id: string }) {
   const isSynthesising = phase === 'synthesising'
 
   return (
-    <PageContainer>
-      <h1 className="text-2xl font-bold">{isSynthesising ? 'Syntéza analýzy…' : 'Extrakce zdrojů'}</h1>
+    <PageContainer width="default">
+      <PageTitle size="sm">{isSynthesising ? 'Syntéza analýzy…' : 'Extrakce zdrojů'}</PageTitle>
 
       {total > 0 && isExtracting && (
         <div className="mt-4">
@@ -456,7 +457,7 @@ export default function AnalysisPage() {
 
   if (isLoading) {
     return (
-      <PageContainer>
+      <PageContainer width="default">
         <p className="text-muted-foreground">Načítání analýzy…</p>
       </PageContainer>
     )
@@ -468,7 +469,7 @@ export default function AnalysisPage() {
 
   if (analysis.status === 'draft') {
     return (
-      <PageContainer>
+      <PageContainer width="default">
         <p className="text-muted-foreground">Tento článek se ještě posuzuje a zatím není dostupný.</p>
         {user?.role === 'ADMIN' && (
           <Link to="/admin/ingestion" className="mt-4 inline-block text-sm text-primary underline">
@@ -485,8 +486,8 @@ export default function AnalysisPage() {
 
   if (analysis.status === 'complete' && analysis.synthesisResult) {
     return (
-      <PageContainer>
-        <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
+      <PageContainer width="default">
+        <PageTitle size="sm">{analysis.seedHeadline}</PageTitle>
         <ResultsTabs dimensions={analysis.synthesisResult} narrative={analysis.narrative} />
       </PageContainer>
     )

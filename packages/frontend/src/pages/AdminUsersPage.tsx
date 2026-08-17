@@ -16,15 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { PageContainer } from '@/components/PageContainer'
+import { PageTitle } from '@/components/PageTitle'
 import { useAuth } from '@/context/AuthContext'
 import type { AdminUserListItem } from '@/services/users'
 import { useUsersList, useCreateUser, useUpdateUser, useDeleteUser } from '@/services/users/hooks'
-
-const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })
-
-function formatDate(iso: string): string {
-  return dateFormatter.format(new Date(iso))
-}
+import { formatDate } from '@/lib/formatDate'
 
 function RoleSelect({ value, onChange }: { value: UserRole; onChange: (role: UserRole) => void }) {
   return (
@@ -286,7 +282,7 @@ export default function AdminUsersPage() {
     <TooltipProvider>
       <PageContainer width="wide">
         <div className="flex items-center justify-between">
-          <h1 className="font-serif text-3xl font-bold">Uživatelé</h1>
+          <PageTitle>Uživatelé</PageTitle>
           <Button onClick={() => setCreateOpen(true)}>Vytvořit uživatele</Button>
         </div>
 

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { logout } from '@/services/auth'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import { formatDate } from '@/lib/formatDate'
 import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import AnalysisPage from './pages/AnalysisPage'
@@ -10,12 +11,6 @@ import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import IngestionReviewPage from './pages/IngestionReviewPage'
-
-const utilityDateFormatter = new Intl.DateTimeFormat('cs-CZ', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-})
 
 /** "Wire Feed" masthead (ticket 22, Variant A from the navbar+listing prototype round): a
  *  thin utility bar above a centered serif nameplate, nav links below. Deliberately not final
@@ -36,9 +31,9 @@ function NavBar() {
 
   return (
     <header className="border-b font-sans">
-      {user && (
-        <div className="flex items-center justify-between border-b bg-muted/30 px-6 py-1.5 text-xs text-muted-foreground">
-          <span>{utilityDateFormatter.format(new Date())}</span>
+      <div className="flex items-center justify-between border-b bg-muted/30 px-6 py-1.5 text-xs text-muted-foreground">
+        <span>{formatDate(new Date(), 'long')}</span>
+        {user && (
           <span className="flex items-center gap-3">
             {user.email}
             <button
@@ -49,8 +44,8 @@ function NavBar() {
               {logoutMutation.isPending ? 'Odhlašování…' : 'Odhlásit se'}
             </button>
           </span>
-        </div>
-      )}
+        )}
+      </div>
       <div className="px-6 py-4 text-center">
         <Link to="/" className="font-serif text-3xl font-bold tracking-tight text-foreground">
           News Triangulator

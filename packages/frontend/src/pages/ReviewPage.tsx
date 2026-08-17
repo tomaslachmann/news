@@ -5,19 +5,11 @@ import { ExternalLink, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageContainer } from '@/components/PageContainer'
+import { PageTitle } from '@/components/PageTitle'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
+import { formatDate } from '@/lib/formatDate'
 
 type PageMode = 'select' | 'confirming' | 'results'
-
-function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' }).format(
-      new Date(iso)
-    )
-  } catch {
-    return iso
-  }
-}
 
 function StatusBadge({ status }: { status: CoverageInfo['status'] }) {
   if (status === 'ok') {
@@ -132,7 +124,7 @@ export default function ReviewPage() {
 
     return (
       <PageContainer>
-        <h1 className="font-serif text-2xl font-bold">{analysis.seedHeadline}</h1>
+        <PageTitle size="sm">{analysis.seedHeadline}</PageTitle>
         <p className="text-sm text-muted-foreground mt-1">Extrakce dokončena</p>
 
         <ul className="mt-6 flex flex-col gap-3">
@@ -200,7 +192,7 @@ export default function ReviewPage() {
   // ── Select / confirming mode ─────────────────────────────────────────────────
   return (
     <PageContainer>
-      <h1 className="font-serif text-2xl font-bold">{analysis.seedHeadline}</h1>
+      <PageTitle size="sm">{analysis.seedHeadline}</PageTitle>
       <p className="text-sm text-muted-foreground mt-1">Vyberte zdroje, které chcete zahrnout do analýzy</p>
 
       {analysis.coverages.length === 0 && customUrls.length === 0 ? (
@@ -237,7 +229,9 @@ export default function ReviewPage() {
                     {coverage.title ?? coverage.articleUrl}
                   </p>
                   {coverage.publishedAt && (
-                    <span className="text-xs text-muted-foreground">{formatDate(coverage.publishedAt)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(coverage.publishedAt, 'long')}
+                    </span>
                   )}
                 </div>
                 <a
