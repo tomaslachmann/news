@@ -16,6 +16,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Ad hoc DB inspection, opt-in only — not started by a plain `docker compose up`
+  # (`docker compose --profile tools up adminer` to run it). Bound to localhost only, not
+  # 0.0.0.0: Adminer's own login is just the Postgres credentials, and this project's default
+  # POSTGRES_PASSWORD is a weak, publicly-documented value, so this must never be reachable
+  # from outside the host. `mise run studio` (Prisma Studio) is the everyday equivalent that
+  # needs no container at all — reach for this only when Adminer's SQL console specifically is
+  # what you need.
+  adminer:
+    image: adminer:4.8.1
+    restart: unless-stopped
+    profiles: ['tools']
+    ports:
+      - '127.0.0.1:8080:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+
   backend:
     build:
       context: .

@@ -164,6 +164,14 @@ Services:
 - **ingestion-cron** — polls `POST /api/ingestion/run` every 20 minutes; only starts doing anything once `INGESTION_SECRET` is set, since the endpoint rejects without it
 - **frontend** — nginx serving the Vite build on port 80; proxies `/api/*` to the backend
 
+**adminer** (ad hoc DB inspection) is not part of the default stack — it's opt-in, and bound to `localhost` only:
+
+```bash
+docker compose --profile tools up adminer
+```
+
+Then open [http://localhost:8080](http://localhost:8080) (only reachable from the host itself, never from outside). Log in with the same `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` from your `.env`, host `db`. For everyday local inspection, `mise run studio` (Prisma Studio) is usually simpler — reach for Adminer specifically when you want its raw SQL console.
+
 To stop and remove containers (data volume persists):
 
 ```bash
