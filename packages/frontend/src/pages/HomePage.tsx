@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PageContainer } from '@/components/PageContainer'
 import { useAuth } from '@/context/AuthContext'
 import { createAnalysis, discoverSources } from '@/services/analyses'
 
@@ -92,7 +93,7 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
 
   return (
     <section className="mt-8 max-w-2xl">
-      <h2 className="text-lg font-semibold mb-1">Klíčová slova pro vyhledávání</h2>
+      <h2 className="font-serif text-lg font-semibold mb-1">Klíčová slova pro vyhledávání</h2>
       <p className="text-sm text-muted-foreground mb-4">
         Klíčová slova můžete před vyhledáváním pokrytí upravit, odebrat nebo přidat.
       </p>
@@ -169,8 +170,8 @@ export default function HomePage() {
   }
 
   return (
-    <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-3xl font-bold">News Triangulator</h1>
+    <PageContainer>
+      <h1 className="font-serif text-3xl font-bold">News Triangulator</h1>
       <p className="mt-2 text-muted-foreground">
         Vložte odkaz na český zpravodajský článek a zjistěte, jak stejnou událost popisují různá média.
       </p>
@@ -205,6 +206,6 @@ export default function HomePage() {
       {state.step === 'keywords' && (
         <KeywordsStep analysisId={state.analysisId} initialKeywords={state.keywords} />
       )}
-    </main>
+    </PageContainer>
   )
 }

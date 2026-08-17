@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { PageContainer } from '@/components/PageContainer'
 import {
   usePendingAdditions,
   useVisibleDrafts,
@@ -21,7 +22,7 @@ function DraftsSection() {
 
   return (
     <section>
-      <h2 className="text-lg font-semibold">Koncepty čekající na schválení</h2>
+      <h2 className="font-serif text-lg font-semibold">Koncepty čekající na schválení</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Nalezeno automaticky sběrem článků. Zobrazují se až po nashromáždění dostatku zdrojů. Schválení vás
         přesměruje na obvyklý krok výběru zdrojů; nic se neanalyzuje, dokud to tam nepotvrdíte.
@@ -42,7 +43,7 @@ function DraftsSection() {
               className="rounded-lg border bg-card p-4 flex items-center justify-between gap-4"
             >
               <div className="min-w-0">
-                <p className="truncate font-medium">{draft.seedHeadline}</p>
+                <p className="truncate font-serif text-lg font-semibold">{draft.seedHeadline}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {formatDate(draft.createdAt)} · nalezeno zdrojů: {draft.coverageCount}
                 </p>
@@ -81,7 +82,7 @@ function PendingAdditionsSection() {
 
   return (
     <section className="mt-10">
-      <h2 className="text-lg font-semibold">Možná doplnění k dokončeným článkům</h2>
+      <h2 className="font-serif text-lg font-semibold">Možná doplnění k dokončeným článkům</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Sběr článků nalezl nové pokrytí události, která je již dokončená. Nic se automaticky nemění — projděte
         si původní článek a rozhodněte sami.
@@ -98,9 +99,7 @@ function PendingAdditionsSection() {
         <ul className="mt-4 flex flex-col gap-3">
           {additions.map((addition) => (
             <li key={addition.id} className="rounded-lg border bg-card p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {addition.outlet}
-              </p>
+              <p className="utility-label">{addition.outlet}</p>
               <p className="mt-1 text-sm font-medium leading-snug">{addition.title ?? addition.articleUrl}</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 Možné doplnění k{' '}
@@ -118,12 +117,12 @@ function PendingAdditionsSection() {
 
 export default function IngestionReviewPage() {
   return (
-    <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-3xl font-bold">Kontrola sběru článků</h1>
+    <PageContainer>
+      <h1 className="font-serif text-3xl font-bold">Kontrola sběru článků</h1>
       <div className="mt-8">
         <DraftsSection />
         <PendingAdditionsSection />
       </div>
-    </main>
+    </PageContainer>
   )
 }
