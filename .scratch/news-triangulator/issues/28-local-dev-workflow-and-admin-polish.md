@@ -9,7 +9,7 @@
 
 **Blocked by:** None.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `NavBar` (`App.tsx`) highlights the current route for every link — `react-router-dom`'s `NavLink` (or equivalent `useLocation` check), applied to all of Domů/Články/Historie/Uživatelé/Sběr článků, not just the admin-only links
 - [x] A new, separate, explicitly opt-in script polls `POST /api/ingestion/run` on an interval, mirroring `docker-compose.yml`'s `ingestion-cron` sidecar exactly (same endpoint, same `x-ingestion-secret` header, same ~20-minute interval) — **not** added to `npm run dev`, since every poll can spend real OpenAI money (embedding calls per ADR 0018, plus whatever an admin approves downstream). Warns and no-ops (does not crash the script or block anything else) if `INGESTION_SECRET` isn't set locally, matching the endpoint's own behavior
