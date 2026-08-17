@@ -116,6 +116,7 @@ describe('createAnalysis', () => {
         embedding: SEED_EMBEDDING,
         createdAt: new Date(),
         anchorHeadline: 'Existing headline',
+        headline: null,
       },
     ])
     vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue({
@@ -128,11 +129,39 @@ describe('createAnalysis', () => {
     expect(result).toEqual({
       outcome: 'matched',
       id: 'existing-1',
-      seedHeadline: 'Existing headline',
+      title: 'Existing headline',
       matchedStatus: 'pending',
     })
     expect(analysisRepo.createAnalysis).not.toHaveBeenCalled()
     expect(keywordExtractorModule.extractKeywords).not.toHaveBeenCalled()
+  })
+
+  it('returns the generated headline as the title when the matched Analysis is already COMPLETE', async () => {
+    stubScrapeAndEmbedding()
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 's1',
+        analysisId: 'existing-1',
+        analysisStatus: 'COMPLETE',
+        embedding: SEED_EMBEDDING,
+        createdAt: new Date(),
+        anchorHeadline: 'Existing headline',
+        headline: 'Generated headline',
+      },
+    ])
+    vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue({
+      sameEvent: true,
+      reasoning: 'Same event',
+    })
+
+    const result = await createAnalysis('https://example.cz/x')
+
+    expect(result).toEqual({
+      outcome: 'matched',
+      id: 'existing-1',
+      title: 'Generated headline',
+      matchedStatus: 'complete',
+    })
   })
 
   it('creates a new Analysis when the embedding match is rejected by the LLM confirmation', async () => {
@@ -145,6 +174,7 @@ describe('createAnalysis', () => {
         embedding: SEED_EMBEDDING,
         createdAt: new Date(),
         anchorHeadline: 'Unrelated headline',
+        headline: null,
       },
     ])
     vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue({
@@ -176,6 +206,7 @@ describe('createAnalysis', () => {
         embedding: SEED_EMBEDDING,
         createdAt: new Date(),
         anchorHeadline: 'A previously failed analysis',
+        headline: null,
       },
     ])
     vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword1'])
@@ -688,16 +719,49 @@ describe('getAnalysisDetail', () => {
 
     expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
   })
+
+  it('prefers the generated headline as title when present, falling back to the working title otherwise', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValueOnce({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Working title',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: null,
+        headline: 'Generated headline',
+      },
+    })
+    expect((await getAnalysisDetail('a1')).title).toBe('Generated headline')
+
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValueOnce({
+      id: 'a2',
+      storyId: 's2',
+      seedUrl: 'https://example.cz/y',
+      seedHeadline: 'Working title',
+      status: 'PENDING',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+    expect((await getAnalysisDetail('a2')).title).toBe('Working title')
+  })
 })
 
 describe('listAnalyses', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('maps each repository row to an AnalysisListItem', async () => {
+  it('maps each repository row to an AnalysisListItem, preferring the generated headline as title when present and falling back to the working title otherwise', async () => {
     vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([
       {
         id: 'a1',
         seedHeadline: 'Newer analysis',
+        headline: 'Generated headline',
         createdAt: new Date('2025-01-02T00:00:00Z'),
         status: 'COMPLETE',
         okCoverageCount: 3,
@@ -705,6 +769,7 @@ describe('listAnalyses', () => {
       {
         id: 'a2',
         seedHeadline: 'Older analysis',
+        headline: null,
         createdAt: new Date('2025-01-01T00:00:00Z'),
         status: 'PENDING',
         okCoverageCount: 0,
@@ -718,6 +783,7 @@ describe('listAnalyses', () => {
       {
         id: 'a1',
         seedHeadline: 'Newer analysis',
+        title: 'Generated headline',
         createdAt: '2025-01-02T00:00:00.000Z',
         coverageCount: 3,
         status: 'complete',
@@ -725,6 +791,7 @@ describe('listAnalyses', () => {
       {
         id: 'a2',
         seedHeadline: 'Older analysis',
+        title: 'Older analysis',
         createdAt: '2025-01-01T00:00:00.000Z',
         coverageCount: 0,
         status: 'pending',

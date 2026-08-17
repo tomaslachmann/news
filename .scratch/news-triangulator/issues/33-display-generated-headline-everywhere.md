@@ -6,13 +6,13 @@
 
 **Status:** ready-for-agent
 
-- [ ] A single shared helper/convention decides the display title for an Analysis: the generated headline when present, otherwise the working title — implemented once, reused by every surface below rather than reimplemented per call site
-- [ ] The Article page's title (`AnalysisPage`) uses this fallback
-- [ ] The public listing's rows (`HistoryPage`) use this fallback — `COMPLETE` Analyses show the generated headline; `DRAFT`/`PENDING`/`FAILED` rows keep showing the working title, exactly as today
-- [ ] The seed-submission dedup-match confirmation screen (`HomePage`, "this looks like the same story…") uses the generated headline when the matched Analysis is `COMPLETE`, and the working title otherwise
-- [ ] The Draft review queue (`IngestionReviewPage`), the Review Step (`ReviewPage`), and the initial seed-submission flow (`HomePage`'s own creation step, before any match/redirect) are explicitly unchanged — they continue showing only the working title, since no headline can exist yet at those stages
-- [ ] Tests cover the fallback logic once, at whatever layer this codebase already tests presentational/mapping logic, rather than duplicated across each of the three call sites that use it
-- [ ] Existing tests touching these pages/mappers continue passing, updated only for the new field where their fixtures need it — no behavioral assertions change for anything pre-`COMPLETE`
+- [x] A single shared helper/convention decides the display title for an Analysis: the generated headline when present, otherwise the working title — implemented once, reused by every surface below rather than reimplemented per call site
+- [x] The Article page's title (`AnalysisPage`) uses this fallback
+- [x] The public listing's rows (`HistoryPage`) use this fallback — `COMPLETE` Analyses show the generated headline; `DRAFT`/`PENDING`/`FAILED` rows keep showing the working title, exactly as today
+- [x] The seed-submission dedup-match confirmation screen (`HomePage`, "this looks like the same story…") uses the generated headline when the matched Analysis is `COMPLETE`, and the working title otherwise
+- [x] The Draft review queue (`IngestionReviewPage`), the Review Step (`ReviewPage`), and the initial seed-submission flow (`HomePage`'s own creation step, before any match/redirect) are explicitly unchanged — they continue showing only the working title, since no headline can exist yet at those stages
+- [x] Tests cover the fallback logic once, at whatever layer this codebase already tests presentational/mapping logic, rather than duplicated across each of the three call sites that use it
+- [x] Existing tests touching these pages/mappers continue passing, updated only for the new field where their fixtures need it — no behavioral assertions change for anything pre-`COMPLETE`
 
 ## Notes
 

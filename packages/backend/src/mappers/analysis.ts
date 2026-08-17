@@ -19,11 +19,22 @@ export const STATUS_MAP: Record<AnalysisStatus, AnalysisDetail['status']> = {
   FAILED: 'failed',
 }
 
+/** The single fallback rule for what title represents a finished Article: the tool-generated
+ *  headline when one exists, otherwise the working title carried over from the seed article.
+ *  `headline` is only ever non-null once an Analysis is COMPLETE (see ADR 0021), so this doubles
+ *  as the "not complete yet" case without needing a separate status check — every pre-COMPLETE
+ *  Analysis has no headline yet and so always resolves to its working title. See ticket 33 /
+ *  the Headline entry in CONTEXT.md. */
+export function resolveDisplayTitle(headline: string | null | undefined, seedHeadline: string): string {
+  return headline ?? seedHeadline
+}
+
 export function toAnalysisDetail(analysis: AnalysisWithDetails): AnalysisDetail {
   return {
     id: analysis.id,
     seedUrl: analysis.seedUrl,
     seedHeadline: analysis.seedHeadline,
+    title: resolveDisplayTitle(analysis.synthesisResult?.headline, analysis.seedHeadline),
     createdAt: analysis.createdAt.toISOString(),
     status: STATUS_MAP[analysis.status],
     coverages: analysis.coverages.map(toCoverageInfo),
@@ -40,6 +51,7 @@ export function toAnalysisListItem(row: AnalysisListRow): AnalysisListItem {
   return {
     id: row.id,
     seedHeadline: row.seedHeadline,
+    title: resolveDisplayTitle(row.headline, row.seedHeadline),
     createdAt: row.createdAt.toISOString(),
     coverageCount: row.okCoverageCount,
     status: STATUS_MAP[row.status],
@@ -54,6 +66,7 @@ export function toVisibleDraftListItem(row: DraftListRow): AnalysisListItem {
   return {
     id: row.id,
     seedHeadline: row.seedHeadline,
+    title: resolveDisplayTitle(row.headline, row.seedHeadline),
     createdAt: row.createdAt.toISOString(),
     coverageCount: row.coverageCount,
     status: STATUS_MAP.DRAFT,

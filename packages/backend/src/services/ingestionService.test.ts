@@ -130,6 +130,7 @@ describe('runIngestionPass', () => {
         analysisId: 'existing-1',
         analysisStatus: 'PENDING',
         anchorHeadline: 'Anchor headline',
+        headline: null,
         embedding: MATCHING_EMBEDDING,
         createdAt: new Date(),
       },
@@ -160,6 +161,7 @@ describe('runIngestionPass', () => {
         analysisId: 'completed-1',
         analysisStatus: 'COMPLETE',
         anchorHeadline: 'Anchor headline',
+        headline: null,
         embedding: MATCHING_EMBEDDING,
         createdAt: new Date(),
       },
@@ -187,6 +189,7 @@ describe('runIngestionPass', () => {
         analysisId: 'failed-1',
         analysisStatus: 'FAILED',
         anchorHeadline: 'Anchor headline',
+        headline: null,
         embedding: MATCHING_EMBEDDING,
         createdAt: new Date(),
       },
@@ -209,6 +212,7 @@ describe('runIngestionPass', () => {
         analysisId: 'unrelated-1',
         analysisStatus: 'PENDING',
         anchorHeadline: 'Anchor headline',
+        headline: null,
         embedding: UNRELATED_EMBEDDING,
         createdAt: new Date(),
       },
@@ -244,6 +248,7 @@ describe('runIngestionPass', () => {
         analysisId: 'stale-1',
         analysisStatus: 'PENDING',
         anchorHeadline: 'Anchor headline',
+        headline: null,
         embedding: MATCHING_EMBEDDING,
         createdAt: veryOld,
       },
@@ -489,6 +494,7 @@ describe('listVisibleDrafts', () => {
       {
         id: 'd1',
         seedHeadline: 'Single-source draft',
+        headline: null,
         createdAt: new Date('2026-01-01T00:00:00Z'),
         coverageCount: 1,
       },
@@ -504,6 +510,7 @@ describe('listVisibleDrafts', () => {
       {
         id: 'd1',
         seedHeadline: 'Corroborated draft',
+        headline: null,
         createdAt: new Date('2026-01-01T00:00:00Z'),
         coverageCount: 2,
       },
@@ -515,6 +522,7 @@ describe('listVisibleDrafts', () => {
       {
         id: 'd1',
         seedHeadline: 'Corroborated draft',
+        title: 'Corroborated draft',
         createdAt: '2026-01-01T00:00:00.000Z',
         coverageCount: 2,
         status: 'draft',
@@ -524,8 +532,8 @@ describe('listVisibleDrafts', () => {
 
   it('mixes visible and hidden Drafts correctly in the same response', async () => {
     vi.mocked(analysisRepo.findDraftsWithCoverageCount).mockResolvedValue([
-      { id: 'hidden', seedHeadline: 'Hidden', createdAt: new Date(), coverageCount: 1 },
-      { id: 'visible', seedHeadline: 'Visible', createdAt: new Date(), coverageCount: 3 },
+      { id: 'hidden', seedHeadline: 'Hidden', headline: null, createdAt: new Date(), coverageCount: 1 },
+      { id: 'visible', seedHeadline: 'Visible', headline: null, createdAt: new Date(), coverageCount: 3 },
     ])
 
     const result = await listVisibleDrafts()

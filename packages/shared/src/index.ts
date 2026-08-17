@@ -133,7 +133,10 @@ export interface CreateAnalysisCreated {
 export interface CreateAnalysisMatched {
   outcome: 'matched'
   id: string
-  seedHeadline: string
+  /** The matched Analysis's display title — the generated headline if it's already COMPLETE,
+   *  otherwise its working title. Same fallback rule as AnalysisDetail/AnalysisListItem's
+   *  `title` — see ticket 33. */
+  title: string
   matchedStatus: Exclude<AnalysisStatusLabel, 'failed'>
 }
 
@@ -142,6 +145,9 @@ export type CreateAnalysisResponse = CreateAnalysisCreated | CreateAnalysisMatch
 export interface AnalysisListItem {
   id: string
   seedHeadline: string
+  /** The display title: the generated headline once COMPLETE, otherwise `seedHeadline` — see
+   *  ticket 33. */
+  title: string
   createdAt: string
   /** For a non-draft status: successfully-extracted (OK) Coverage only. For a draft, every
    *  attached (non-excluded) Coverage regardless of status, since a Draft's Coverage is always
@@ -180,6 +186,9 @@ export interface AnalysisDetail {
   id: string
   seedUrl: string
   seedHeadline: string
+  /** The display title: the generated headline once COMPLETE, otherwise `seedHeadline` — see
+   *  ticket 33. */
+  title: string
   createdAt: string
   status: AnalysisStatusLabel
   coverages: CoverageInfo[]

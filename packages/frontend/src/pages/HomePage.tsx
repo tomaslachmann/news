@@ -21,7 +21,7 @@ type PageState =
       step: 'matched'
       analysisId: string
       seedUrl: string
-      seedHeadline: string
+      title: string
       matchedStatus: 'draft' | 'pending' | 'complete'
     }
   | { step: 'keywords'; analysisId: string; keywords: string[] }
@@ -165,13 +165,13 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
 function MatchedStep({
   analysisId,
   seedUrl,
-  seedHeadline,
+  title,
   matchedStatus,
   onCreateSeparately,
 }: {
   analysisId: string
   seedUrl: string
-  seedHeadline: string
+  title: string
   matchedStatus: 'draft' | 'pending' | 'complete'
   onCreateSeparately: () => void
 }) {
@@ -194,7 +194,7 @@ function MatchedStep({
     <section className="mt-8 max-w-2xl">
       <h2 className="font-serif text-lg font-semibold mb-1">Tato událost už se sleduje</h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Odkaz vypadá jako stejná událost jako existující analýza „{seedHeadline}“ (
+        Odkaz vypadá jako stejná událost jako existující analýza „{title}“ (
         {MATCHED_STATUS_LABELS[matchedStatus]}).
       </p>
 
@@ -228,7 +228,7 @@ export default function HomePage() {
           step: 'matched',
           analysisId: data.id,
           seedUrl: urlValue,
-          seedHeadline: data.seedHeadline,
+          title: data.title,
           matchedStatus: data.matchedStatus,
         })
         return
@@ -290,7 +290,7 @@ export default function HomePage() {
         <MatchedStep
           analysisId={state.analysisId}
           seedUrl={state.seedUrl}
-          seedHeadline={state.seedHeadline}
+          title={state.title}
           matchedStatus={state.matchedStatus}
           onCreateSeparately={() => createMutation.mutate({ force: true })}
         />

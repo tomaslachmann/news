@@ -23,7 +23,7 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
-import { toAnalysisDetail, toAnalysisListItem, STATUS_MAP } from '../mappers/analysis.js'
+import { toAnalysisDetail, toAnalysisListItem, resolveDisplayTitle, STATUS_MAP } from '../mappers/analysis.js'
 
 /** Submits a seed URL. Ticket 27/ADR 0019: before creating a new Analysis, checks whether the
  *  seed already matches an open Story within the dedup window — the same embedding-match +
@@ -78,7 +78,7 @@ export async function createAnalysis(
         return {
           outcome: 'matched',
           id: match.analysisId,
-          seedHeadline: match.anchorHeadline,
+          title: resolveDisplayTitle(match.headline, match.anchorHeadline),
           matchedStatus: STATUS_MAP[status] as CreateAnalysisMatched['matchedStatus'],
         }
       }
