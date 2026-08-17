@@ -4,7 +4,7 @@
 
 **Blocked by:** 29 — Unify Keyword Extraction Onto the Shared LLM Client (needs every chat-completion call routed through one function before instrumenting that one function actually means "every call")
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A new persisted entity records: which module made the call (a `callSite` label), the model name, the request (system prompt + user content), the response (raw content) or the thrown error, and a timestamp
 - [x] A repository function creates one record per call. No relation to `Analysis`/`Coverage`/`Story` — several call sites (e.g. keyword extraction on a brand-new submission) run before those exist yet; deliberately deferred, not an oversight
