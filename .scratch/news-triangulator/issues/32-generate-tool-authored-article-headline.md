@@ -4,22 +4,22 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A new pass module exports a function that takes an Analysis's Agreement-dimension items and calls the shared `callJsonModel` LLM client, returning a short Czech headline string
-- [ ] `llmClient.ts`'s `LlmCallSite` union gains a new value for this pass, so its calls are automatically covered by the existing durable LLM-call logging (ADR 0020) — no separate wiring
-- [ ] Headline-generation input is structurally restricted to Agreement-dimension items only — no Contradiction/Unique Reporting/Framing content is ever included in what's sent to the model — and the prompt explicitly instructs the same constraint as a second layer of defense
-- [ ] No quote-verification step is applied to the generated headline — it's an authored short phrase, not a claimed verbatim quote, so the existing `verifyAndRepair`/`isVerbatimQuote` machinery (built for `czechQuote` fields) does not apply here
-- [ ] `SynthesisResult` gains a nullable `headline` column (schema + migration), alongside the existing `dimensions`/`narrative` fields
-- [ ] Headline generation runs in the SSE stream handler's Extraction→Synthesis sequence, after Synthesis succeeds and before the Analysis is marked `COMPLETE`
-- [ ] The repository function that persists `dimensions` and flips `Analysis.status` to `COMPLETE` is widened to also persist the headline in that same transaction — there is never a window where an Analysis is `COMPLETE` without a headline
-- [ ] If headline generation fails, the Analysis does not transition to `COMPLETE` — it surfaces as a Synthesis-stage failure the same way any other failure in that sequence already does today, not a new failure mode
-- [ ] If the Agreement dimension is empty at completion time, headline generation is skipped and `headline` stays null, rather than blocking completion indefinitely (the spec's recommended default for this edge case)
-- [ ] `Story.anchorHeadline` and `Analysis.seedHeadline` receive no new writes and no new reads — completely untouched by this ticket
-- [ ] No backfill for the one pre-existing `COMPLETE` Analysis
-- [ ] The new pass is unit-tested by mocking `llmClient.js`'s `callJsonModel`, matching `extractionPass.test.ts`/`synthesisPass.test.ts`/`narrativePass.test.ts`'s existing pattern: given a set of Agreement-dimension items, assert the input sent contains only that content, and the returned headline is passed through unmodified
-- [ ] The widened completion repository function is integration-tested against a real, ephemeral Postgres instance (testcontainers), following `test/integration/analysis.test.ts`'s pattern — complete an Analysis with a headline, read it back, confirm it round-trips alongside `dimensions` and the `COMPLETE` status change within the one transaction
-- [ ] The SSE stream handler's existing test coverage for its Extraction→Synthesis sequence is updated to include the new step in the mocked call sequence, without changing its existing assertions about Extraction/Synthesis's own success/failure behavior
+- [x] A new pass module exports a function that takes an Analysis's Agreement-dimension items and calls the shared `callJsonModel` LLM client, returning a short Czech headline string
+- [x] `llmClient.ts`'s `LlmCallSite` union gains a new value for this pass, so its calls are automatically covered by the existing durable LLM-call logging (ADR 0020) — no separate wiring
+- [x] Headline-generation input is structurally restricted to Agreement-dimension items only — no Contradiction/Unique Reporting/Framing content is ever included in what's sent to the model — and the prompt explicitly instructs the same constraint as a second layer of defense
+- [x] No quote-verification step is applied to the generated headline — it's an authored short phrase, not a claimed verbatim quote, so the existing `verifyAndRepair`/`isVerbatimQuote` machinery (built for `czechQuote` fields) does not apply here
+- [x] `SynthesisResult` gains a nullable `headline` column (schema + migration), alongside the existing `dimensions`/`narrative` fields
+- [x] Headline generation runs in the SSE stream handler's Extraction→Synthesis sequence, after Synthesis succeeds and before the Analysis is marked `COMPLETE`
+- [x] The repository function that persists `dimensions` and flips `Analysis.status` to `COMPLETE` is widened to also persist the headline in that same transaction — there is never a window where an Analysis is `COMPLETE` without a headline
+- [x] If headline generation fails, the Analysis does not transition to `COMPLETE` — it surfaces as a Synthesis-stage failure the same way any other failure in that sequence already does today, not a new failure mode
+- [x] If the Agreement dimension is empty at completion time, headline generation is skipped and `headline` stays null, rather than blocking completion indefinitely (the spec's recommended default for this edge case)
+- [x] `Story.anchorHeadline` and `Analysis.seedHeadline` receive no new writes and no new reads — completely untouched by this ticket
+- [x] No backfill for the one pre-existing `COMPLETE` Analysis
+- [x] The new pass is unit-tested by mocking `llmClient.js`'s `callJsonModel`, matching `extractionPass.test.ts`/`synthesisPass.test.ts`/`narrativePass.test.ts`'s existing pattern: given a set of Agreement-dimension items, assert the input sent contains only that content, and the returned headline is passed through unmodified
+- [x] The widened completion repository function is integration-tested against a real, ephemeral Postgres instance (testcontainers), following `test/integration/analysis.test.ts`'s pattern — complete an Analysis with a headline, read it back, confirm it round-trips alongside `dimensions` and the `COMPLETE` status change within the one transaction
+- [x] The SSE stream handler's existing test coverage for its Extraction→Synthesis sequence is updated to include the new step in the mocked call sequence, without changing its existing assertions about Extraction/Synthesis's own success/failure behavior
 
 ## Notes
 

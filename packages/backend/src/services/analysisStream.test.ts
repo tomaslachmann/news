@@ -4,6 +4,7 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisRepo from '../repositories/synthesisResult.js'
 import * as extractionPassModule from './extractionPass.js'
 import * as synthesisPassModule from './synthesisPass.js'
+import * as headlinePassModule from './headlinePass.js'
 import { runAnalysisStream } from './analysisStream.js'
 import { NotFoundError } from '../errors.js'
 import type { SseEvent } from '@news-triangulator/shared'
@@ -16,6 +17,7 @@ vi.mock('./extractionPass.js', async (importOriginal) => {
   return { ...actual, runExtractionPass: vi.fn() }
 })
 vi.mock('./synthesisPass.js')
+vi.mock('./headlinePass.js')
 
 const ANALYSIS = {
   id: 'a1',
@@ -71,12 +73,14 @@ describe('runAnalysisStream', () => {
     )
     vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
     vi.mocked(extractionPassModule.runExtractionPass).mockResolvedValue(VALID_EXTRACTION)
-    vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue({
-      agreement: [],
+    const synthesis = {
+      agreement: [{ prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] }],
       contradiction: [],
       uniqueReporting: [],
       framing: [],
-    })
+    }
+    vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue(synthesis)
+    vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue('Vláda schválila rozpočet')
 
     const onReady = vi.fn()
     const events: SseEvent['type'][] = []
@@ -91,12 +95,72 @@ describe('runAnalysisStream', () => {
       'extraction-settled',
       'synthesis-complete',
     ])
-    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith('a1', {
+    expect(headlinePassModule.runHeadlinePass).toHaveBeenCalledWith(synthesis.agreement, undefined)
+    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith(
+      'a1',
+      synthesis,
+      'Vláda schválila rozpočet'
+    )
+  })
+
+  it('completes the Analysis with a null headline when the Agreement dimension is empty', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockImplementation((_id, opts) =>
+      Promise.resolve(
+        opts?.onlyStatus === 'OK'
+          ? [{ ...BASE_COVERAGE, extractionResult: VALID_EXTRACTION }]
+          : [{ ...BASE_COVERAGE, extractionResult: null }]
+      )
+    )
+    vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
+    vi.mocked(extractionPassModule.runExtractionPass).mockResolvedValue(VALID_EXTRACTION)
+    vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue({
       agreement: [],
       contradiction: [],
       uniqueReporting: [],
       framing: [],
     })
+    vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue(null)
+
+    const send = vi.fn()
+    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {} })
+
+    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith('a1', expect.anything(), null)
+  })
+
+  it('does not complete the Analysis when headline generation fails, same as any other Synthesis-stage failure', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockImplementation((_id, opts) =>
+      Promise.resolve(
+        opts?.onlyStatus === 'OK'
+          ? [{ ...BASE_COVERAGE, extractionResult: VALID_EXTRACTION }]
+          : [{ ...BASE_COVERAGE, extractionResult: null }]
+      )
+    )
+    vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
+    vi.mocked(extractionPassModule.runExtractionPass).mockResolvedValue(VALID_EXTRACTION)
+    vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue({
+      agreement: [{ prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] }],
+      contradiction: [],
+      uniqueReporting: [],
+      framing: [],
+    })
+    vi.mocked(headlinePassModule.runHeadlinePass).mockRejectedValue(new Error('headline LLM down'))
+    vi.mocked(analysisRepo.updateAnalysisStatus).mockResolvedValue(undefined)
+
+    const events: SseEvent['type'][] = []
+    const send = vi.fn((event: SseEvent) => events.push(event.type))
+
+    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {} })
+
+    expect(events).toEqual([
+      'sources-confirmed',
+      'extraction-complete',
+      'extraction-settled',
+      'synthesis-error',
+    ])
+    expect(analysisRepo.completeAnalysisWithSynthesis).not.toHaveBeenCalled()
+    expect(analysisRepo.updateAnalysisStatus).toHaveBeenCalledWith('a1', 'FAILED')
   })
 
   it('emits synthesis-error and marks the Analysis failed when no coverage extracted successfully', async () => {

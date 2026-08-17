@@ -190,15 +190,20 @@ export async function disconnect(): Promise<void> {
   await prisma.$disconnect()
 }
 
+/** Persists the Synthesis result and the tool-authored headline (see ADR 0021) and flips the
+ *  Analysis to COMPLETE, all in one transaction — there is never a window where an Analysis is
+ *  COMPLETE without its headline already having been generated. `headline` is null when
+ *  generation was skipped because the Agreement dimension was empty. */
 export async function completeAnalysisWithSynthesis(
   analysisId: string,
-  dimensions: Prisma.InputJsonValue
+  dimensions: Prisma.InputJsonValue,
+  headline: string | null
 ): Promise<void> {
   await prisma.$transaction([
     prisma.synthesisResult.upsert({
       where: { analysisId },
-      create: { analysisId, dimensions },
-      update: { dimensions },
+      create: { analysisId, dimensions, headline },
+      update: { dimensions, headline },
     }),
     prisma.analysis.update({ where: { id: analysisId }, data: { status: 'COMPLETE' } }),
   ])

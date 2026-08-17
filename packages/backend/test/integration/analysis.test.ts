@@ -4,6 +4,7 @@ import {
   findAnalysisWithDetails,
   findAllAnalyses,
   updateAnalysisStatus,
+  completeAnalysisWithSynthesis,
   disconnect,
 } from '../../src/repositories/analysis.js'
 import {
@@ -87,5 +88,30 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
 
     expect(ids).toContain(complete.id)
     expect(ids).not.toContain(pending.id)
+  })
+
+  it('persists the headline alongside dimensions and flips the Analysis to COMPLETE, all in one transaction', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/f', seedHeadline: 'Working title' })
+    const dimensions = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
+
+    await completeAnalysisWithSynthesis(analysis.id, dimensions, 'Vláda schválila rozpočet')
+
+    const found = await findAnalysisWithDetails(analysis.id)
+
+    expect(found?.status).toBe('COMPLETE')
+    expect(found?.synthesisResult?.headline).toBe('Vláda schválila rozpočet')
+    expect(found?.synthesisResult?.dimensions).toEqual(dimensions)
+  })
+
+  it('persists a null headline when generation was skipped', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/g', seedHeadline: 'Working title' })
+    const dimensions = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
+
+    await completeAnalysisWithSynthesis(analysis.id, dimensions, null)
+
+    const found = await findAnalysisWithDetails(analysis.id)
+
+    expect(found?.status).toBe('COMPLETE')
+    expect(found?.synthesisResult?.headline).toBeNull()
   })
 })
