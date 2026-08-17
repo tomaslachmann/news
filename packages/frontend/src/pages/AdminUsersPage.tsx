@@ -3,7 +3,6 @@ import type { UserRole } from '@news-triangulator/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -244,9 +243,7 @@ function UserRow({
     <TableRow>
       <TableCell>{user.email}</TableCell>
       <TableCell>
-        <Badge variant={user.role === 'ADMIN' ? 'default' : 'secondary'}>
-          {user.role === 'ADMIN' ? 'Admin' : 'Pouze pro čtení'}
-        </Badge>
+        <span className="utility-label">{user.role === 'ADMIN' ? 'Admin' : 'Pouze pro čtení'}</span>
       </TableCell>
       <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
       <TableCell>

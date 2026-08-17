@@ -1,5 +1,9 @@
 import { cn } from '@/lib/utils'
 
+/** The horizontal-padding/centering mechanism every page and site-wide chrome element (Footer)
+ *  shares, kept as one constant so they can't drift apart the way a hand-typed `px-6` once did. */
+export const CONTAINER_CLASS = 'container mx-auto'
+
 const WIDTHS = {
   measure: 'max-w-measure',
   wide: 'max-w-4xl',
@@ -21,5 +25,5 @@ interface PageContainerProps {
  *  `container mx-auto py-10` padding/centering, differing only in max-width, so
  *  navigating between pages doesn't feel like the margins are shifting underneath you. */
 export function PageContainer({ children, width = 'measure', className }: PageContainerProps) {
-  return <main className={cn('container mx-auto py-10', WIDTHS[width], className)}>{children}</main>
+  return <main className={cn(CONTAINER_CLASS, 'py-10', WIDTHS[width], className)}>{children}</main>
 }
