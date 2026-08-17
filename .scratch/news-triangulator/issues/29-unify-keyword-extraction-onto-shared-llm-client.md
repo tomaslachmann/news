@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `callJsonModel` (`llmClient.ts`) accepts a `temperature` parameter instead of a hardcoded `0`, defaulting to `0` so every existing caller's behavior is unchanged unless it explicitly passes a different value
 - [x] `keywordExtractor.ts`'s `extractKeywords` calls `callJsonModel` (passing `temperature: 0.2`, its existing value) instead of constructing its own `OpenAI` client and calling `chat.completions.create` directly
