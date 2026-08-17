@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageContainer } from '@/components/PageContainer'
+import { PageTitle } from '@/components/PageTitle'
 import { useAuth } from '@/context/AuthContext'
 import { createAnalysis, discoverSources } from '@/services/analyses'
 
@@ -171,7 +172,7 @@ export default function HomePage() {
 
   return (
     <PageContainer>
-      <h1 className="font-serif text-3xl font-bold">News Triangulator</h1>
+      <PageTitle>News Triangulator</PageTitle>
       <p className="mt-2 text-muted-foreground">
         Vložte odkaz na český zpravodajský článek a zjistěte, jak stejnou událost popisují různá média.
       </p>

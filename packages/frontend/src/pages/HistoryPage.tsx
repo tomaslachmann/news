@@ -3,12 +3,8 @@ import type { AnalysisListItem } from '@/services/analyses'
 import { useAnalysesList } from '@/services/analyses/hooks'
 import { PageContainer } from '@/components/PageContainer'
 import { useAuth } from '@/context/AuthContext'
-
-const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })
-
-function formatDate(iso: string): string {
-  return dateFormatter.format(new Date(iso))
-}
+import { formatDate } from '@/lib/formatDate'
+import { cn } from '@/lib/utils'
 
 const STATUS_LABELS: Record<AnalysisListItem['status'], string> = {
   draft: 'Koncept',
@@ -19,7 +15,7 @@ const STATUS_LABELS: Record<AnalysisListItem['status'], string> = {
 
 function StatusLabel({ status }: { status: AnalysisListItem['status'] }) {
   return (
-    <span className={`utility-label shrink-0 ${status === 'failed' ? 'text-destructive' : ''}`}>
+    <span className={cn('utility-label shrink-0', status === 'failed' && 'text-destructive')}>
       {STATUS_LABELS[status]}
     </span>
   )

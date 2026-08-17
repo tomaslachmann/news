@@ -1,18 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { PageContainer } from '@/components/PageContainer'
+import { PageTitle } from '@/components/PageTitle'
 import {
   usePendingAdditions,
   useVisibleDrafts,
   useApproveDraft,
   useRejectDraft,
 } from '@/services/ingestion/hooks'
-
-const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })
-
-function formatDate(iso: string): string {
-  return dateFormatter.format(new Date(iso))
-}
+import { formatDate } from '@/lib/formatDate'
 
 function DraftsSection() {
   const { data: drafts, isLoading, isError } = useVisibleDrafts()
@@ -118,7 +114,7 @@ function PendingAdditionsSection() {
 export default function IngestionReviewPage() {
   return (
     <PageContainer>
-      <h1 className="font-serif text-3xl font-bold">Kontrola sběru článků</h1>
+      <PageTitle>Kontrola sběru článků</PageTitle>
       <div className="mt-8">
         <DraftsSection />
         <PendingAdditionsSection />

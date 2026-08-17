@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageContainer } from '@/components/PageContainer'
+import { PageTitle } from '@/components/PageTitle'
 import { login, type LoginBody } from '@/services/auth'
 
 export default function LoginPage() {
@@ -29,7 +30,9 @@ export default function LoginPage() {
 
   return (
     <PageContainer width="narrow">
-      <h1 className="font-serif text-2xl font-bold mb-6">Přihlášení</h1>
+      <PageTitle size="sm" className="mb-6">
+        Přihlášení
+      </PageTitle>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="email" className="text-sm font-medium">
