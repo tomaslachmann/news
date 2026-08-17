@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A new pass module exports a function that takes an Analysis's Agreement-dimension items and calls the shared `callJsonModel` LLM client, returning a short Czech headline string
 - [x] `llmClient.ts`'s `LlmCallSite` union gains a new value for this pass, so its calls are automatically covered by the existing durable LLM-call logging (ADR 0020) — no separate wiring
