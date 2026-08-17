@@ -28,7 +28,11 @@ function DraftsSection() {
       {isError && <p className="mt-4 text-sm text-destructive">Nepodařilo se načíst koncepty.</p>}
 
       {drafts && drafts.length === 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">Momentálně žádné koncepty.</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Momentálně žádné koncepty. Sběr článků běží jen když je spuštěný jeho cron — v lokálním vývoji ho{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">npm run dev</code> samo o sobě nespouští, viz
+          README, sekce Automated Ingestion.
+        </p>
       )}
 
       {drafts && drafts.length > 0 && (
@@ -88,7 +92,9 @@ function PendingAdditionsSection() {
       {isError && <p className="mt-4 text-sm text-destructive">Nepodařilo se načíst čekající doplnění.</p>}
 
       {additions && additions.length === 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">Momentálně žádná.</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Momentálně žádná. (Vyžaduje běžící sběr článků — viz vysvětlení výše.)
+        </p>
       )}
 
       {additions && additions.length > 0 && (
