@@ -41,4 +41,12 @@ describe('callJsonModel', () => {
 
     expect(result).toEqual({})
   })
+
+  it('passes a caller-supplied temperature through instead of the default', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: '{}' } }] })
+
+    await callJsonModel('gpt-4o', 'system', 'user', 0.2)
+
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ temperature: 0.2 }))
+  })
 })
