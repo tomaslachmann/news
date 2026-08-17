@@ -86,9 +86,11 @@ docker compose down -v
 | `OPENAI_API_KEY` | Yes | — | OpenAI API key for extraction and synthesis passes |
 | `EXTRACTION_MODEL` | No | `gpt-4o` | Model used for the per-article extraction pass |
 | `SYNTHESIS_MODEL` | No | `gpt-4o` | Model used for the cross-source synthesis pass |
+| `EMBEDDING_MODEL` | No | `text-embedding-3-small` | Model used to embed incoming RSS items for Ingestion's cheap candidate matching (ADR 0018) |
 | `JWT_SECRET` | Yes | — | Secret for signing JWT tokens (used by auth, ticket 10) |
 | `ADMIN_EMAIL` | Yes | — | Email address of the initial admin account |
 | `ADMIN_PASSWORD` | Yes | — | Password of the initial admin account |
+| `INGESTION_SECRET` | No | — | Shared secret the Ingestion cron sidecar sends to `POST /api/ingestion/run`; unset disables the endpoint entirely (ADR 0018) |
 | `POSTGRES_USER` | No | `news` | Postgres username (Docker Compose only) |
 | `POSTGRES_PASSWORD` | No | `news` | Postgres password (Docker Compose only) |
 | `POSTGRES_DB` | No | `news` | Postgres database name (Docker Compose only) |
