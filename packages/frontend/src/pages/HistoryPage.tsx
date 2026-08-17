@@ -29,7 +29,7 @@ function HistoryEntry({ item }: { item: AnalysisListItem }) {
         className="flex items-center justify-between gap-4 py-4 hover:bg-muted/30"
       >
         <div className="min-w-0">
-          <p className="truncate font-serif text-lg font-semibold">{item.seedHeadline}</p>
+          <p className="truncate font-serif text-lg font-semibold">{item.title}</p>
           <p className="mt-1 font-sans text-xs text-muted-foreground">
             {formatDate(item.createdAt)} · zdrojů: {item.coverageCount}
           </p>

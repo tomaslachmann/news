@@ -54,6 +54,11 @@ export interface StoryCandidate {
    *  (ticket 27's human-seeded dedup check). Carried here rather than fetched separately since
    *  findRecentStoriesForMatching already has it for free. */
   anchorHeadline: string
+  /** The candidate Analysis's generated headline, if it's already COMPLETE — otherwise null.
+   *  Same rationale as anchorHeadline: needed by human-seeded submission's dedup-match response
+   *  (ticket 33), carried here for free rather than fetched separately. Ignored by Ingestion's
+   *  own embedding-only matching. */
+  headline: string | null
 }
 
 /** Scores `itemEmbedding` against every candidate (cosine similarity combined with a time-decay

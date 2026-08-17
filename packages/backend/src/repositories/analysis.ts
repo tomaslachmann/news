@@ -56,6 +56,7 @@ export interface RecentStoryCandidate {
   embedding: number[]
   createdAt: Date
   anchorHeadline: string
+  headline: string | null
 }
 
 /** Every Story whose Analysis was created within `sinceHours`, with its embedding — the
@@ -68,7 +69,11 @@ export async function findRecentStoriesForMatching(sinceHours: number): Promise<
   const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000)
   const rows = await prisma.story.findMany({
     where: { analysis: { createdAt: { gte: since } } },
-    include: { analysis: { select: { id: true, status: true, createdAt: true } } },
+    include: {
+      analysis: {
+        select: { id: true, status: true, createdAt: true, synthesisResult: { select: { headline: true } } },
+      },
+    },
   })
 
   return rows
@@ -80,6 +85,7 @@ export async function findRecentStoriesForMatching(sinceHours: number): Promise<
       embedding: r.embedding,
       createdAt: r.analysis.createdAt,
       anchorHeadline: r.anchorHeadline,
+      headline: r.analysis.synthesisResult?.headline ?? null,
     }))
 }
 
@@ -114,13 +120,17 @@ async function findAnalysesWithCoverageCount(
   return prisma.analysis.findMany({
     where: analysisWhere,
     orderBy: { createdAt: 'desc' },
-    include: { _count: { select: { coverages: { where: coverageWhere } } } },
+    include: {
+      _count: { select: { coverages: { where: coverageWhere } } },
+      synthesisResult: { select: { headline: true } },
+    },
   })
 }
 
 export interface AnalysisListRow {
   id: string
   seedHeadline: string
+  headline: string | null
   createdAt: Date
   status: AnalysisStatus
   okCoverageCount: number
@@ -135,6 +145,7 @@ export async function findAllAnalyses(includeAllStatuses: boolean): Promise<Anal
   return rows.map((r) => ({
     id: r.id,
     seedHeadline: r.seedHeadline,
+    headline: r.synthesisResult?.headline ?? null,
     createdAt: r.createdAt,
     status: r.status,
     okCoverageCount: r._count.coverages,
@@ -144,6 +155,7 @@ export async function findAllAnalyses(includeAllStatuses: boolean): Promise<Anal
 export interface DraftListRow {
   id: string
   seedHeadline: string
+  headline: string | null
   createdAt: Date
   coverageCount: number
 }
@@ -160,6 +172,7 @@ export async function findDraftsWithCoverageCount(): Promise<DraftListRow[]> {
   return rows.map((r) => ({
     id: r.id,
     seedHeadline: r.seedHeadline,
+    headline: r.synthesisResult?.headline ?? null,
     createdAt: r.createdAt,
     coverageCount: r._count.coverages,
   }))

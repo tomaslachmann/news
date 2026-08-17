@@ -98,6 +98,7 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
       embedding: itemEmbedding,
       createdAt: draft.createdAt,
       anchorHeadline: item.title,
+      headline: null,
     })
     await coverageRepo.createCoverages([
       {

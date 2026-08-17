@@ -487,7 +487,7 @@ export default function AnalysisPage() {
   if (analysis.status === 'complete' && analysis.synthesisResult) {
     return (
       <PageContainer width="default">
-        <PageTitle size="sm">{analysis.seedHeadline}</PageTitle>
+        <PageTitle size="sm">{analysis.title}</PageTitle>
         <ResultsTabs dimensions={analysis.synthesisResult} narrative={analysis.narrative} />
       </PageContainer>
     )
