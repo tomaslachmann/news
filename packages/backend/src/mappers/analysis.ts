@@ -4,7 +4,12 @@ import type {
   AnalysisListItem,
   DimensionItem,
 } from '@news-triangulator/shared'
-import type { AnalysisWithDetails, AnalysisListRow, AnalysisStatus } from '../repositories/analysis.js'
+import type {
+  AnalysisWithDetails,
+  AnalysisListRow,
+  AnalysisStatus,
+  DraftListRow,
+} from '../repositories/analysis.js'
 import { toCoverageInfo } from './coverage.js'
 
 const STATUS_MAP: Record<AnalysisStatus, AnalysisDetail['status']> = {
@@ -38,5 +43,19 @@ export function toAnalysisListItem(row: AnalysisListRow): AnalysisListItem {
     createdAt: row.createdAt.toISOString(),
     coverageCount: row.okCoverageCount,
     status: STATUS_MAP[row.status],
+  }
+}
+
+/** Same target shape as toAnalysisListItem, for the Ingestion review queue's Draft rows — whose
+ *  coverageCount counts every non-excluded Coverage (always PENDING pre-approval), not just
+ *  status:'OK' ones, so it's kept as a distinct source field rather than forced into
+ *  okCoverageCount's narrower meaning. Reuses STATUS_MAP so both mappers can't drift apart. */
+export function toVisibleDraftListItem(row: DraftListRow): AnalysisListItem {
+  return {
+    id: row.id,
+    seedHeadline: row.seedHeadline,
+    createdAt: row.createdAt.toISOString(),
+    coverageCount: row.coverageCount,
+    status: STATUS_MAP.DRAFT,
   }
 }

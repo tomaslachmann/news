@@ -5,7 +5,13 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as rssModule from './rss.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as storyVerificationModule from './storyVerification.js'
-import { runIngestionPass, approveDraft, rejectDraft, listPendingAdditions } from './ingestionService.js'
+import {
+  runIngestionPass,
+  approveDraft,
+  rejectDraft,
+  listPendingAdditions,
+  listVisibleDrafts,
+} from './ingestionService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/analysis.js')
@@ -467,5 +473,58 @@ describe('listPendingAdditions', () => {
         createdAt: '2026-01-02T00:00:00.000Z',
       },
     ])
+  })
+})
+
+describe('listVisibleDrafts', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('excludes a Draft below the minimum source count', async () => {
+    vi.mocked(analysisRepo.findDraftsWithCoverageCount).mockResolvedValue([
+      {
+        id: 'd1',
+        seedHeadline: 'Single-source draft',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        coverageCount: 1,
+      },
+    ])
+
+    const result = await listVisibleDrafts()
+
+    expect(result).toEqual([])
+  })
+
+  it('includes a Draft that has crossed the minimum source count', async () => {
+    vi.mocked(analysisRepo.findDraftsWithCoverageCount).mockResolvedValue([
+      {
+        id: 'd1',
+        seedHeadline: 'Corroborated draft',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        coverageCount: 2,
+      },
+    ])
+
+    const result = await listVisibleDrafts()
+
+    expect(result).toEqual([
+      {
+        id: 'd1',
+        seedHeadline: 'Corroborated draft',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        coverageCount: 2,
+        status: 'draft',
+      },
+    ])
+  })
+
+  it('mixes visible and hidden Drafts correctly in the same response', async () => {
+    vi.mocked(analysisRepo.findDraftsWithCoverageCount).mockResolvedValue([
+      { id: 'hidden', seedHeadline: 'Hidden', createdAt: new Date(), coverageCount: 1 },
+      { id: 'visible', seedHeadline: 'Visible', createdAt: new Date(), coverageCount: 3 },
+    ])
+
+    const result = await listVisibleDrafts()
+
+    expect(result.map((d) => d.id)).toEqual(['visible'])
   })
 })
