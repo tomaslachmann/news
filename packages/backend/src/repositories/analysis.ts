@@ -94,6 +94,20 @@ export async function findAnalysisWithDetails(id: string): Promise<AnalysisWithD
   })
 }
 
+/** Shared by findAllAnalyses and findDraftsWithCoverageCount — both need "Analyses matching X,
+ *  each with a Coverage count matching Y", differing only in which rows and which Coverage rows
+ *  count. */
+async function findAnalysesWithCoverageCount(
+  analysisWhere: Prisma.AnalysisWhereInput | undefined,
+  coverageWhere: Prisma.CoverageWhereInput
+) {
+  return prisma.analysis.findMany({
+    where: analysisWhere,
+    orderBy: { createdAt: 'desc' },
+    include: { _count: { select: { coverages: { where: coverageWhere } } } },
+  })
+}
+
 export interface AnalysisListRow {
   id: string
   seedHeadline: string
@@ -103,12 +117,9 @@ export interface AnalysisListRow {
 }
 
 export async function findAllAnalyses(includeAllStatuses: boolean): Promise<AnalysisListRow[]> {
-  const rows = await prisma.analysis.findMany({
-    where: includeAllStatuses ? undefined : { status: 'COMPLETE' },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },
-    },
+  const rows = await findAnalysesWithCoverageCount(includeAllStatuses ? undefined : { status: 'COMPLETE' }, {
+    status: 'OK',
+    excluded: false,
   })
 
   return rows.map((r) => ({
@@ -117,6 +128,30 @@ export async function findAllAnalyses(includeAllStatuses: boolean): Promise<Anal
     createdAt: r.createdAt,
     status: r.status,
     okCoverageCount: r._count.coverages,
+  }))
+}
+
+export interface DraftListRow {
+  id: string
+  seedHeadline: string
+  createdAt: Date
+  coverageCount: number
+}
+
+/** Every DRAFT Analysis with its attached (non-excluded) Coverage count — deliberately every
+ *  status, not just `OK` like `findAllAnalyses`'s `okCoverageCount`: a Draft's Coverage is
+ *  always `PENDING` (nothing is scraped until Review Step confirmation after approval), so an
+ *  OK-only count would always read zero here. Unfiltered by any visibility threshold — that's
+ *  the caller's job (see `ingestionService.listVisibleDrafts`), so an Admin's full History audit
+ *  can still see every Draft regardless of source count. */
+export async function findDraftsWithCoverageCount(): Promise<DraftListRow[]> {
+  const rows = await findAnalysesWithCoverageCount({ status: 'DRAFT' }, { excluded: false })
+
+  return rows.map((r) => ({
+    id: r.id,
+    seedHeadline: r.seedHeadline,
+    createdAt: r.createdAt,
+    coverageCount: r._count.coverages,
   }))
 }
 

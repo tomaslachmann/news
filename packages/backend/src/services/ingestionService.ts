@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify'
-import type { IngestionRunSummary, PendingAdditionItem } from '@news-triangulator/shared'
+import type { IngestionRunSummary, PendingAdditionItem, AnalysisListItem } from '@news-triangulator/shared'
 import { queryRssFeeds } from './rss.js'
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput } from './storyMatching.js'
@@ -9,8 +9,14 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
+import { toVisibleDraftListItem } from '../mappers/analysis.js'
 
 const DEDUP_WINDOW_HOURS = 48
+
+// A Draft below this many attached sources stays hidden from the review queue — decluttering
+// single-source noise without changing the approval gate itself. Tunable, like the other
+// thresholds in this pipeline (MATCH_THRESHOLD, GDELT_MIN_THRESHOLD). See ADR 0018.
+const MIN_VISIBLE_SOURCE_COUNT = 2
 
 export async function runIngestionPass(log?: FastifyBaseLogger): Promise<IngestionRunSummary> {
   const summary: IngestionRunSummary = { checked: 0, created: 0, attached: 0, flagged: 0, skipped: 0 }
@@ -164,4 +170,15 @@ export async function rejectDraft(analysisId: string): Promise<void> {
 export async function listPendingAdditions(): Promise<PendingAdditionItem[]> {
   const rows = await pendingAdditionRepo.findAllPendingAdditions()
   return rows.map(toPendingAdditionItem)
+}
+
+/** Drafts visible in the Ingestion review queue — a live filter on attached-source count, not a
+ *  separate "promote to visible" step, so a Draft appears the moment a later poll pushes it over
+ *  MIN_VISIBLE_SOURCE_COUNT. Ingestion keeps attaching Coverage to below-threshold Drafts in the
+ *  background regardless; this only changes what's visible here. Distinct from the general
+ *  `/api/analyses` listing (unfiltered, still shows every Draft for a full Admin History audit)
+ *  — see ADR 0018. */
+export async function listVisibleDrafts(): Promise<AnalysisListItem[]> {
+  const drafts = await analysisRepo.findDraftsWithCoverageCount()
+  return drafts.filter((d) => d.coverageCount >= MIN_VISIBLE_SOURCE_COUNT).map(toVisibleDraftListItem)
 }

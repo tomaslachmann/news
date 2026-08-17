@@ -20,6 +20,12 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     }
   )
 
+  // GET /api/admin/ingestion/drafts — Drafts that have crossed the visibility threshold (ADR 0018)
+  fastify.get('/api/admin/ingestion/drafts', { preHandler: requireAdmin }, async (_request, reply) => {
+    const items = await ingestionService.listVisibleDrafts()
+    return reply.code(200).send(items)
+  })
+
   // PATCH /api/admin/ingestion/drafts/:id/approve — DRAFT → PENDING, proceeds through the existing Review Step
   fastify.patch<{ Params: { id: string } }>(
     '/api/admin/ingestion/drafts/:id/approve',

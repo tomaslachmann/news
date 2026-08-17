@@ -121,6 +121,9 @@ export interface AnalysisListItem {
   id: string
   seedHeadline: string
   createdAt: string
+  /** For a non-draft status: successfully-extracted (OK) Coverage only. For a draft, every
+   *  attached (non-excluded) Coverage regardless of status, since a Draft's Coverage is always
+   *  PENDING until after Review Step confirmation — an OK-only count would always read zero. */
   coverageCount: number
   status: AnalysisStatusLabel
 }

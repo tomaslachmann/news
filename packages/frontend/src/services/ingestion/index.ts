@@ -1,6 +1,6 @@
-import type { PendingAdditionItem } from '@news-triangulator/shared'
+import type { PendingAdditionItem, AnalysisListItem } from '@news-triangulator/shared'
 
-export type { PendingAdditionItem }
+export type { PendingAdditionItem, AnalysisListItem }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as { error?: string }
@@ -13,6 +13,14 @@ export async function fetchPendingAdditions(): Promise<PendingAdditionItem[]> {
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst čekající doplnění')
 
   return res.json() as Promise<PendingAdditionItem[]>
+}
+
+export async function fetchVisibleDrafts(): Promise<AnalysisListItem[]> {
+  const res = await fetch('/api/admin/ingestion/drafts', { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst koncepty')
+
+  return res.json() as Promise<AnalysisListItem[]>
 }
 
 export async function approveDraft(analysisId: string): Promise<void> {

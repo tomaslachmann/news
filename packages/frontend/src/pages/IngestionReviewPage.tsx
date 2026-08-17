@@ -1,7 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { useAnalysesList } from '@/services/analyses/hooks'
-import { usePendingAdditions, useApproveDraft, useRejectDraft } from '@/services/ingestion/hooks'
+import {
+  usePendingAdditions,
+  useVisibleDrafts,
+  useApproveDraft,
+  useRejectDraft,
+} from '@/services/ingestion/hooks'
 
 const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -10,29 +14,27 @@ function formatDate(iso: string): string {
 }
 
 function DraftsSection() {
-  const { data: analyses, isLoading, isError } = useAnalysesList()
+  const { data: drafts, isLoading, isError } = useVisibleDrafts()
   const navigate = useNavigate()
   const approveMutation = useApproveDraft()
   const rejectMutation = useRejectDraft()
-
-  const drafts = analyses?.filter((a) => a.status === 'draft') ?? []
 
   return (
     <section>
       <h2 className="text-lg font-semibold">Koncepty čekající na schválení</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Nalezeno automaticky sběrem článků. Schválení vás přesměruje na obvyklý krok výběru zdrojů; nic se
-        neanalyzuje, dokud to tam nepotvrdíte.
+        Nalezeno automaticky sběrem článků. Zobrazují se až po nashromáždění dostatku zdrojů. Schválení vás
+        přesměruje na obvyklý krok výběru zdrojů; nic se neanalyzuje, dokud to tam nepotvrdíte.
       </p>
 
       {isLoading && <p className="mt-4 text-sm text-muted-foreground">Načítání…</p>}
       {isError && <p className="mt-4 text-sm text-destructive">Nepodařilo se načíst koncepty.</p>}
 
-      {analyses && drafts.length === 0 && (
+      {drafts && drafts.length === 0 && (
         <p className="mt-4 text-sm text-muted-foreground">Momentálně žádné koncepty.</p>
       )}
 
-      {drafts.length > 0 && (
+      {drafts && drafts.length > 0 && (
         <ul className="mt-4 flex flex-col gap-3">
           {drafts.map((draft) => (
             <li
