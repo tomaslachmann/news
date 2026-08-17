@@ -29,17 +29,33 @@ async function throwApiError(res: Response, fallback: string): Promise<never> {
   throw new Error(body.error ?? fallback)
 }
 
-export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisResponse> {
+export async function createAnalysis(
+  seedUrl: string,
+  opts: { force?: boolean } = {}
+): Promise<CreateAnalysisResponse> {
   const res = await fetch('/api/analyses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ seedUrl, force: opts.force }),
+  })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se vytvořit analýzu')
+
+  return res.json() as Promise<CreateAnalysisResponse>
+}
+
+/** The "continue with this match" action (ticket 27) — attaches the seed as Coverage to an
+ *  already-open Analysis instead of creating a duplicate. */
+export async function attachSeedToMatch(analysisId: string, seedUrl: string): Promise<void> {
+  const res = await fetch(`/api/analyses/${analysisId}/attach-seed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ seedUrl }),
   })
 
-  if (!res.ok) return throwApiError(res, 'Nepodařilo se vytvořit analýzu')
-
-  return res.json() as Promise<CreateAnalysisResponse>
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se připojit zdroj k analýze')
 }
 
 export async function discoverSources(analysisId: string, keywords: string[]): Promise<CandidateArticle[]> {

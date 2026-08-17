@@ -7,14 +7,17 @@ import * as keywordExtractorModule from './keywordExtractor.js'
 import * as discoveryModule from './discovery.js'
 import * as narrativePassModule from './narrativePass.js'
 import * as storyVerificationModule from './storyVerification.js'
+import * as embeddingClientModule from './embeddingClient.js'
+import * as ingestionServiceModule from './ingestionService.js'
 import {
   createAnalysis,
+  attachSeedToMatch,
   discoverSources,
   confirmCoverages,
   getAnalysisDetail,
   listAnalyses,
 } from './analysisService.js'
-import { ExternalServiceError, NotFoundError } from '../errors.js'
+import { ExternalServiceError, NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/analysis.js')
 vi.mock('../repositories/coverage.js')
@@ -24,16 +27,23 @@ vi.mock('./keywordExtractor.js')
 vi.mock('./discovery.js')
 vi.mock('./narrativePass.js')
 vi.mock('./storyVerification.js')
+vi.mock('./embeddingClient.js')
+vi.mock('./ingestionService.js')
+
+const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
+const SEED_EMBEDDING = [1, 0, 0]
+
+function stubScrapeAndEmbedding() {
+  vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
+  vi.mocked(embeddingClientModule.generateEmbedding).mockResolvedValue(SEED_EMBEDDING)
+  vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([])
+}
 
 describe('createAnalysis', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('scrapes the seed article, extracts keywords, and creates the Analysis', async () => {
-    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
-      title: 'Headline',
-      excerpt: 'excerpt',
-      fullText: 'full text',
-    })
+  it('scrapes the seed article, extracts keywords, and creates the Analysis with its embedding when nothing matches', async () => {
+    stubScrapeAndEmbedding()
     vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword1', 'keyword2'])
     vi.mocked(analysisRepo.createAnalysis).mockResolvedValue({
       id: 'a1',
@@ -46,10 +56,16 @@ describe('createAnalysis', () => {
 
     const result = await createAnalysis('https://example.cz/x')
 
-    expect(result).toEqual({ id: 'a1', seedHeadline: 'Headline', keywords: ['keyword1', 'keyword2'] })
+    expect(result).toEqual({
+      outcome: 'created',
+      id: 'a1',
+      seedHeadline: 'Headline',
+      keywords: ['keyword1', 'keyword2'],
+    })
     expect(analysisRepo.createAnalysis).toHaveBeenCalledWith({
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
+      embedding: SEED_EMBEDDING,
     })
   })
 
@@ -60,14 +76,267 @@ describe('createAnalysis', () => {
   })
 
   it('throws ExternalServiceError when keyword extraction fails', async () => {
-    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
-      title: 'Headline',
-      excerpt: 'excerpt',
-      fullText: 'full text',
-    })
+    stubScrapeAndEmbedding()
     vi.mocked(keywordExtractorModule.extractKeywords).mockRejectedValue(new Error('LLM down'))
 
     await expect(createAnalysis('https://example.cz/x')).rejects.toThrow(ExternalServiceError)
+  })
+
+  it('degrades gracefully and skips the dedup check when embedding generation fails, instead of blocking submission', async () => {
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
+    vi.mocked(embeddingClientModule.generateEmbedding).mockRejectedValue(new Error('embeddings API down'))
+    vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword1'])
+    vi.mocked(analysisRepo.createAnalysis).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date(),
+    })
+
+    const result = await createAnalysis('https://example.cz/x')
+
+    expect(result.outcome).toBe('created')
+    expect(analysisRepo.findRecentStoriesForMatching).not.toHaveBeenCalled()
+    expect(analysisRepo.createAnalysis).toHaveBeenCalledWith({
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      embedding: [],
+    })
+  })
+
+  it('returns a matched outcome instead of creating a new Analysis when a same-event match is confirmed', async () => {
+    stubScrapeAndEmbedding()
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 's1',
+        analysisId: 'existing-1',
+        analysisStatus: 'PENDING',
+        embedding: SEED_EMBEDDING,
+        createdAt: new Date(),
+        anchorHeadline: 'Existing headline',
+      },
+    ])
+    vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue({
+      sameEvent: true,
+      reasoning: 'Same event',
+    })
+
+    const result = await createAnalysis('https://example.cz/x')
+
+    expect(result).toEqual({
+      outcome: 'matched',
+      id: 'existing-1',
+      seedHeadline: 'Existing headline',
+      matchedStatus: 'pending',
+    })
+    expect(analysisRepo.createAnalysis).not.toHaveBeenCalled()
+    expect(keywordExtractorModule.extractKeywords).not.toHaveBeenCalled()
+  })
+
+  it('creates a new Analysis when the embedding match is rejected by the LLM confirmation', async () => {
+    stubScrapeAndEmbedding()
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 's1',
+        analysisId: 'existing-1',
+        analysisStatus: 'PENDING',
+        embedding: SEED_EMBEDDING,
+        createdAt: new Date(),
+        anchorHeadline: 'Unrelated headline',
+      },
+    ])
+    vi.mocked(storyVerificationModule.verifySameStoryLogged).mockResolvedValue({
+      sameEvent: false,
+      reasoning: 'Different event',
+    })
+    vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword1'])
+    vi.mocked(analysisRepo.createAnalysis).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date(),
+    })
+
+    const result = await createAnalysis('https://example.cz/x')
+
+    expect(result.outcome).toBe('created')
+  })
+
+  it('treats a FAILED match as no match at all, rather than skipping submission', async () => {
+    stubScrapeAndEmbedding()
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 's1',
+        analysisId: 'existing-1',
+        analysisStatus: 'FAILED',
+        embedding: SEED_EMBEDDING,
+        createdAt: new Date(),
+        anchorHeadline: 'A previously failed analysis',
+      },
+    ])
+    vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword1'])
+    vi.mocked(analysisRepo.createAnalysis).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date(),
+    })
+
+    const result = await createAnalysis('https://example.cz/x')
+
+    expect(result.outcome).toBe('created')
+    expect(storyVerificationModule.verifySameStoryLogged).not.toHaveBeenCalled()
+  })
+
+  it('skips the dedup check entirely when force is true, even if a match would have been found', async () => {
+    stubScrapeAndEmbedding()
+    vi.mocked(keywordExtractorModule.extractKeywords).mockResolvedValue(['keyword1'])
+    vi.mocked(analysisRepo.createAnalysis).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date(),
+    })
+
+    const result = await createAnalysis('https://example.cz/x', { force: true })
+
+    expect(result.outcome).toBe('created')
+    expect(analysisRepo.findRecentStoriesForMatching).not.toHaveBeenCalled()
+    expect(storyVerificationModule.verifySameStoryLogged).not.toHaveBeenCalled()
+  })
+})
+
+describe('attachSeedToMatch', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('throws NotFoundError when the Analysis does not exist', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(null)
+
+    await expect(attachSeedToMatch('missing', 'https://example.cz/x')).rejects.toThrow(NotFoundError)
+  })
+
+  it('throws ValidationError for an Analysis that is not DRAFT or PENDING', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'x',
+      seedHeadline: 'x',
+      status: 'COMPLETE',
+      createdAt: new Date(),
+    })
+
+    await expect(attachSeedToMatch('a1', 'https://example.cz/x')).rejects.toThrow(ValidationError)
+  })
+
+  it('attaches the seed as Coverage to a PENDING Analysis without approving anything', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'x',
+      seedHeadline: 'x',
+      status: 'PENDING',
+      createdAt: new Date(),
+    })
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
+    vi.mocked(discoveryModule.extractDomain).mockReturnValue('example.cz')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
+
+    await attachSeedToMatch('a1', 'https://example.cz/x')
+
+    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
+      {
+        analysisId: 'a1',
+        outlet: 'example.cz',
+        title: 'Headline',
+        articleUrl: 'https://example.cz/x',
+        status: 'PENDING',
+      },
+    ])
+    expect(ingestionServiceModule.approveDraft).not.toHaveBeenCalled()
+  })
+
+  it('attaches the seed as Coverage and runs the approve flow for a DRAFT Analysis', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'x',
+      seedHeadline: 'x',
+      status: 'DRAFT',
+      createdAt: new Date(),
+    })
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
+    vi.mocked(discoveryModule.extractDomain).mockReturnValue('example.cz')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
+
+    await attachSeedToMatch('a1', 'https://example.cz/x')
+
+    expect(coverageRepo.createCoverages).toHaveBeenCalled()
+    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', undefined)
+  })
+
+  it('skips creating a duplicate Coverage when the outlet is already attached, but still approves a DRAFT', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'x',
+      seedHeadline: 'x',
+      status: 'DRAFT',
+      createdAt: new Date(),
+    })
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
+    vi.mocked(discoveryModule.extractDomain).mockReturnValue('example.cz')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([
+      {
+        id: 'c1',
+        analysisId: 'a1',
+        outlet: 'example.cz',
+        title: null,
+        articleUrl: 'https://example.cz/already-there',
+        publishedAt: null,
+        extractedText: null,
+        extractionResult: null,
+        status: 'PENDING',
+        excluded: false,
+      },
+    ])
+
+    await attachSeedToMatch('a1', 'https://example.cz/x')
+
+    expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
+    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', undefined)
+  })
+
+  it('throws ValidationError if the Analysis status changed between the entry check and the post-scrape re-check', async () => {
+    vi.mocked(analysisRepo.findAnalysisById)
+      .mockResolvedValueOnce({
+        id: 'a1',
+        storyId: 's1',
+        seedUrl: 'x',
+        seedHeadline: 'x',
+        status: 'DRAFT',
+        createdAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        id: 'a1',
+        storyId: 's1',
+        seedUrl: 'x',
+        seedHeadline: 'x',
+        status: 'FAILED',
+        createdAt: new Date(),
+      })
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
+
+    await expect(attachSeedToMatch('a1', 'https://example.cz/x')).rejects.toThrow(ValidationError)
+    expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
+    expect(ingestionServiceModule.approveDraft).not.toHaveBeenCalled()
   })
 })
 

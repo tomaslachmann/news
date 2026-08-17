@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import {
   PostAnalysisBodySchema,
+  PostAttachSeedBodySchema,
   PostDiscoverBodySchema,
   PatchCoveragesBodySchema,
 } from '@news-triangulator/shared'
@@ -17,9 +18,30 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
       throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
     }
 
-    const response = await analysisService.createAnalysis(parsed.data.seedUrl)
-    return reply.code(201).send(response)
+    const response = await analysisService.createAnalysis(
+      parsed.data.seedUrl,
+      { force: parsed.data.force },
+      fastify.log
+    )
+    // 'matched' creates nothing — 200, not 201, since no new resource exists.
+    return reply.code(response.outcome === 'created' ? 201 : 200).send(response)
   })
+
+  // POST /api/analyses/:id/attach-seed — "continue with this match" from a dedup match on
+  // submission (ticket 27): attaches the seed as Coverage instead of creating a duplicate
+  fastify.post<{ Params: { id: string } }>(
+    '/api/analyses/:id/attach-seed',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const parsed = PostAttachSeedBodySchema.safeParse(request.body)
+      if (!parsed.success) {
+        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
+      }
+
+      await analysisService.attachSeedToMatch(request.params.id, parsed.data.seedUrl, fastify.log)
+      return reply.code(204).send()
+    }
+  )
 
   // POST /api/analyses/:id/discover — run discovery and create Coverage rows
   fastify.post<{ Params: { id: string } }>(

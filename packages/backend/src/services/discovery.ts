@@ -6,7 +6,7 @@ import { queryRssFeeds } from './rss.js'
 const MAX_CANDIDATES = 10
 const GDELT_MIN_THRESHOLD = 5
 
-function extractDomain(url: string): string {
+export function extractDomain(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
   } catch {
