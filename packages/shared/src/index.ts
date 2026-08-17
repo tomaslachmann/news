@@ -67,8 +67,16 @@ export type SseEvent =
 
 export const PostAnalysisBodySchema = z.object({
   seedUrl: z.url(),
+  // Ticket 27 — skips the dedup-against-open-Stories check, creating a new Analysis even if one
+  // looks like a match. The override for a false-positive same-event confirmation.
+  force: z.boolean().optional(),
 })
 export type PostAnalysisBody = z.infer<typeof PostAnalysisBodySchema>
+
+export const PostAttachSeedBodySchema = z.object({
+  seedUrl: z.url(),
+})
+export type PostAttachSeedBody = z.infer<typeof PostAttachSeedBodySchema>
 
 export const PostDiscoverBodySchema = z.object({
   keywords: z.array(z.string()).min(1),
@@ -109,13 +117,27 @@ export type PatchAdminUserBody = z.infer<typeof PatchAdminUserBodySchema>
 
 // API response types
 
-export interface CreateAnalysisResponse {
+export type AnalysisStatusLabel = 'draft' | 'pending' | 'complete' | 'failed'
+
+// Ticket 27 — submitting a seed URL either creates a new Analysis, or finds it already matches
+// an open Story within the dedup window (confirmed via the same-event LLM check) and returns
+// that match instead of creating a duplicate. 'failed' never appears here — a FAILED match is
+// treated as no match at all, per ADR 0019.
+export interface CreateAnalysisCreated {
+  outcome: 'created'
   id: string
   seedHeadline: string
   keywords: string[]
 }
 
-export type AnalysisStatusLabel = 'draft' | 'pending' | 'complete' | 'failed'
+export interface CreateAnalysisMatched {
+  outcome: 'matched'
+  id: string
+  seedHeadline: string
+  matchedStatus: Exclude<AnalysisStatusLabel, 'failed'>
+}
+
+export type CreateAnalysisResponse = CreateAnalysisCreated | CreateAnalysisMatched
 
 export interface AnalysisListItem {
   id: string

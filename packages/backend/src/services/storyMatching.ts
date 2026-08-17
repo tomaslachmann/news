@@ -19,7 +19,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB))
 }
 
-// Candidates come from a 48h window (DEDUP_WINDOW_HOURS in ingestionService.ts). A flat decay
+// Candidates come from a 48h window (DEDUP_WINDOW_HOURS, defined in this file). A flat decay
 // with no grace period would gut most of that window — even a perfect-similarity match would
 // stop clearing MATCH_THRESHOLD after roughly 10 hours, well before two outlets' morning vs.
 // evening editions of the same event would both have published. Full strength for the first
@@ -38,12 +38,22 @@ export function timeDecayFactor(ageHours: number): number {
 
 export const MATCH_THRESHOLD = 0.75
 
+// How far back a Story stays eligible for matching — shared by Ingestion's own per-item
+// matching and human-seeded submission's dedup check (ticket 27), so both paths agree on what
+// "recent" means. Was previously duplicated as a private constant in ingestionService.ts.
+export const DEDUP_WINDOW_HOURS = 48
+
 export interface StoryCandidate {
   storyId: string
   analysisId: string
   analysisStatus: string
   embedding: number[]
   createdAt: Date
+  /** The Story's own anchor headline — not used by Ingestion's embedding-only matching, but
+   *  needed by any caller that follows up an embedding match with an LLM same-event confirmation
+   *  (ticket 27's human-seeded dedup check). Carried here rather than fetched separately since
+   *  findRecentStoriesForMatching already has it for free. */
+  anchorHeadline: string
 }
 
 /** Scores `itemEmbedding` against every candidate (cosine similarity combined with a time-decay

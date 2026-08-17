@@ -57,6 +57,7 @@ describe('findBestMatch', () => {
       storyId: 's1',
       analysisId: 'a1',
       analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
       embedding: [1, 0, 0],
       createdAt: now,
     }
@@ -69,6 +70,7 @@ describe('findBestMatch', () => {
       storyId: 's1',
       analysisId: 'a1',
       analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
       embedding: [0, 1, 0],
       createdAt: now,
     }
@@ -88,6 +90,7 @@ describe('findBestMatch', () => {
       storyId: 's1',
       analysisId: 'a1',
       analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
       embedding: [1, 0, 0],
       createdAt: new Date(now.getTime() - 18 * 60 * 60 * 1000),
     }
@@ -100,6 +103,7 @@ describe('findBestMatch', () => {
       storyId: 's1',
       analysisId: 'a1',
       analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
       embedding: [1, 0, 0],
       createdAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
     }
@@ -112,6 +116,7 @@ describe('findBestMatch', () => {
       storyId: 's-weak',
       analysisId: 'a-weak',
       analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
       embedding: [0.8, 0.2, 0],
       createdAt: now,
     }
@@ -119,6 +124,7 @@ describe('findBestMatch', () => {
       storyId: 's-strong',
       analysisId: 'a-strong',
       analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
       embedding: [1, 0, 0],
       createdAt: now,
     }

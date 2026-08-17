@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import type { IngestionRunSummary, PendingAdditionItem, AnalysisListItem } from '@news-triangulator/shared'
 import { queryRssFeeds } from './rss.js'
 import { generateEmbedding } from './embeddingClient.js'
-import { findBestMatch, buildEmbeddingInput } from './storyMatching.js'
+import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
@@ -10,8 +10,6 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
-
-const DEDUP_WINDOW_HOURS = 48
 
 // A Draft below this many attached sources stays hidden from the review queue — decluttering
 // single-source noise without changing the approval gate itself. Tunable, like the other
@@ -99,6 +97,7 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
       analysisStatus: draft.status,
       embedding: itemEmbedding,
       createdAt: draft.createdAt,
+      anchorHeadline: item.title,
     })
     await coverageRepo.createCoverages([
       {

@@ -96,12 +96,39 @@ Two admin-only pages, both behind `ProtectedRoute` (redirects to `/login` if you
 
 ## Discovery vs. Ingestion — two ways an Analysis starts today
 
-There are currently two independent ways a `Story`/`Analysis` gets created, and that's intentional, not a bug:
+There are two independent ways a `Story`/`Analysis` gets created, and that's intentional, not a bug — they solve genuinely different problems:
 
 - **Discovery** — a human submits a Seed Article URL on the homepage; an LLM extracts keywords, then GDELT + RSS search finds candidate Coverage, each verified against the seed before being attached. Real-time, higher-quality, and the only way to investigate a specific story on demand (an outlet Ingestion doesn't monitor, or something that happened before Ingestion caught it).
-- **Ingestion** — an automated, scheduled background process that finds brand-new Stories across monitored outlets with no LLM on its hot path (cheap embedding-similarity matching instead — see ADR 0018), creating a Draft Analysis for review in `/admin/ingestion`.
+- **Ingestion** — an automated, scheduled background process that finds brand-new Stories across monitored outlets, creating a Draft Analysis for review in `/admin/ingestion`.
 
-These two paths use genuinely different retrieval mechanisms under the hood today. Ticket 27 tracks unifying them into one shared mechanism (keeping both entry points) — it's `blocked` pending a design decision on the mechanism itself, not yet built.
+What *is* shared between them (ADR 0019) is the **same-event classification step** — "does this candidate describe the same real event as an anchor headline?" — at different cost budgets for each caller. Both start from a cheap embedding-similarity comparison against recently-open Stories (no LLM call). Ingestion's own per-item attach decision stops there, deferring LLM confirmation to a bulk pass at Draft approval, since it runs on a frequent, unattended hot path (ADR 0018). Human-seeded submission affords one more step — an LLM confirmation of the embedding match — since it's a rare, real-time, human-waited call instead.
+
+Submitting a seed URL that matches an already-open Story (from Ingestion, or another earlier submission) doesn't silently create a duplicate: the Admin sees a "this looks like the same story" prompt with the option to continue with the existing Analysis or create a separate one anyway.
+
+```mermaid
+flowchart TD
+    subgraph Discovery["Discovery — human submits a Seed URL"]
+        A[POST /api/analyses] --> B[Scrape + embed seed]
+    end
+    subgraph Ingestion["Ingestion — scheduled RSS poll"]
+        C[RSS item] --> D[Embed item]
+    end
+
+    B --> E{{"Same-event classification<br/>(shared, ADR 0019)"}}
+    D --> E
+
+    E -->|embedding match| F{LLM confirm?}
+    F -->|"Discovery: yes<br/>(real-time, affordable)"| G[LLM verifySameStory]
+    F -->|"Ingestion: no<br/>(deferred to Draft approval)"| H[Attach as Coverage / flag]
+    G -->|confirmed| I["'matched' — Admin<br/>confirms or overrides"]
+    G -->|rejected| J[Create new Analysis + Story]
+    E -->|no match| J
+
+    I -->|continue| H
+    I -->|create separate| J
+```
+
+Ticket 27/ADR 0019 built this; ADR 0018 (Ingestion's original embedding-based mechanism) and the older per-candidate-only Discovery approach are both still the right primary sourcing mechanisms for their respective entry points — sourcing itself was deliberately left unmerged.
 
 ---
 

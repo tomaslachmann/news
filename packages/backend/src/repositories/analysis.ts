@@ -11,14 +11,21 @@ export type AnalysisWithDetails = Analysis & {
 export type AnalysisWithStory = Analysis & { story: Story }
 
 /** Creates the Analysis and its Story together — a Story is always created alongside its
- *  Analysis, anchored to the same seed headline, per ADR 0017. */
-export async function createAnalysis(data: { seedUrl: string; seedHeadline: string }): Promise<Analysis> {
+ *  Analysis, anchored to the same seed headline, per ADR 0017. Accepts an optional embedding
+ *  (ticket 27) so a human-seeded Story can participate in the same matching pool Ingestion's
+ *  own Stories already do — before ticket 27 this was always omitted, which is why Ingestion
+ *  could never recognize a human had already started investigating an event (ADR 0019). */
+export async function createAnalysis(data: {
+  seedUrl: string
+  seedHeadline: string
+  embedding?: number[]
+}): Promise<Analysis> {
   return prisma.analysis.create({
     data: {
       seedUrl: data.seedUrl,
       seedHeadline: data.seedHeadline,
       status: 'PENDING',
-      story: { create: { anchorHeadline: data.seedHeadline } },
+      story: { create: { anchorHeadline: data.seedHeadline, embedding: data.embedding ?? [] } },
     },
   })
 }
@@ -48,10 +55,12 @@ export interface RecentStoryCandidate {
   analysisStatus: AnalysisStatus
   embedding: number[]
   createdAt: Date
+  anchorHeadline: string
 }
 
 /** Every Story whose Analysis was created within `sinceHours`, with its embedding — the
- *  candidate pool Ingestion's cheap matching scores a new RSS item against. Includes every
+ *  candidate pool Ingestion's cheap matching scores a new RSS item against, and (ticket 27)
+ *  human-seeded submission's own dedup check scores a new seed against. Includes every
  *  Analysis status (not just DRAFT/PENDING): a match against a COMPLETE Analysis still needs
  *  surfacing as a possible addition, and a match against FAILED must still be recognized as
  *  already-seen so it isn't recreated on the next poll. See ADR 0018. */
@@ -70,6 +79,7 @@ export async function findRecentStoriesForMatching(sinceHours: number): Promise<
       analysisStatus: r.analysis.status,
       embedding: r.embedding,
       createdAt: r.analysis.createdAt,
+      anchorHeadline: r.anchorHeadline,
     }))
 }
 

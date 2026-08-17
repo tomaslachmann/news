@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import type {
   CandidateArticle,
   CreateAnalysisResponse,
+  CreateAnalysisMatched,
   AnalysisDetail,
   AnalysisListItem,
   CoverageInfo,
@@ -9,19 +10,31 @@ import type {
 } from '@news-triangulator/shared'
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from './articleScraper.js'
 import { extractKeywords } from './keywordExtractor.js'
-import { discoverCoverage } from './discovery.js'
+import { discoverCoverage, extractDomain } from './discovery.js'
 import { isBlockedContent } from './blockedContent.js'
-import { verifyCandidatesAgainstAnchor } from './storyVerification.js'
+import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVerification.js'
+import { generateEmbedding } from './embeddingClient.js'
+import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
+import { approveDraft } from './ingestionService.js'
 import { runNarrativePass, type NarrativeSource, type NarrativeResult } from './narrativePass.js'
 import type { SynthesisResult as SynthesisDimensions } from './synthesisPass.js'
-import { NotFoundError, ExternalServiceError } from '../errors.js'
+import { NotFoundError, ValidationError, ExternalServiceError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
-import { toAnalysisDetail, toAnalysisListItem } from '../mappers/analysis.js'
+import { toAnalysisDetail, toAnalysisListItem, STATUS_MAP } from '../mappers/analysis.js'
 
-export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisResponse> {
+/** Submits a seed URL. Ticket 27/ADR 0019: before creating a new Analysis, checks whether the
+ *  seed already matches an open Story within the dedup window — the same embedding-match +
+ *  LLM-confirmation pipeline Ingestion's own attach decision now shares (unlike Ingestion's
+ *  hot path, a one-off human submission can afford the LLM confirmation step). `force` skips
+ *  the check entirely — the override for a confirmed-but-wrong match. */
+export async function createAnalysis(
+  seedUrl: string,
+  opts: { force?: boolean } = {},
+  log?: FastifyBaseLogger
+): Promise<CreateAnalysisResponse> {
   let scraped: ScrapedArticle
   try {
     scraped = await scrapeArticle(seedUrl)
@@ -31,6 +44,46 @@ export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisRes
     )
   }
 
+  // Every human-seeded Story gets an embedding, so it can join the same matching pool
+  // Ingestion's own Stories already do — before this, Ingestion could never recognize a human
+  // had already started investigating an event. A failure here degrades gracefully (no
+  // embedding, dedup check skipped) rather than blocking submission: unlike Ingestion's
+  // per-item retry-next-poll safety net, there's no "next poll" for a one-off human action to
+  // fall back on, and a Story without an embedding is no worse off than every human-seeded
+  // Story was before this ticket.
+  let embedding: number[] = []
+  try {
+    embedding = await generateEmbedding(
+      buildEmbeddingInput({ title: scraped.title, excerpt: scraped.excerpt })
+    )
+  } catch (err) {
+    log?.warn({ seedUrl, err }, 'Could not generate embedding for seed article; skipping dedup check')
+  }
+
+  if (!opts.force && embedding.length > 0) {
+    const candidates = await analysisRepo.findRecentStoriesForMatching(DEDUP_WINDOW_HOURS)
+    const match = findBestMatch(embedding, candidates, new Date())
+    // A FAILED match is treated as no match at all — unlike Ingestion's own "already seen,
+    // don't recreate" handling of a FAILED match, a human explicitly submitting a URL deserves
+    // a fresh attempt, not a silent no-op.
+    if (match && match.analysisStatus !== 'FAILED') {
+      const verdict = await verifySameStoryLogged(scraped.title, match.anchorHeadline, log)
+      if (verdict.sameEvent) {
+        // findRecentStoriesForMatching only ever produces Prisma's AnalysisStatus enum values;
+        // findBestMatch's StoryCandidate type widens analysisStatus to `string` since it's
+        // shared with Ingestion's use, which doesn't need the narrower type. The `!== 'FAILED'`
+        // guard above already rules out STATUS_MAP ever producing 'failed' here.
+        const status = match.analysisStatus as analysisRepo.AnalysisStatus
+        return {
+          outcome: 'matched',
+          id: match.analysisId,
+          seedHeadline: match.anchorHeadline,
+          matchedStatus: STATUS_MAP[status] as CreateAnalysisMatched['matchedStatus'],
+        }
+      }
+    }
+  }
+
   let keywords: string[]
   try {
     keywords = await extractKeywords(scraped.title, scraped.excerpt)
@@ -38,9 +91,65 @@ export async function createAnalysis(seedUrl: string): Promise<CreateAnalysisRes
     throw new ExternalServiceError('Nepodařilo se extrahovat klíčová slova z článku')
   }
 
-  const analysis = await analysisRepo.createAnalysis({ seedUrl, seedHeadline: scraped.title })
+  const analysis = await analysisRepo.createAnalysis({ seedUrl, seedHeadline: scraped.title, embedding })
 
-  return { id: analysis.id, seedHeadline: analysis.seedHeadline, keywords }
+  return { outcome: 'created', id: analysis.id, seedHeadline: analysis.seedHeadline, keywords }
+}
+
+/** The "continue with this match" action from HomePage's dedup-match screen (ticket 27):
+ *  attaches the seed as Coverage on the already-open Analysis instead of creating a duplicate.
+ *  A DRAFT match also runs through the normal approve flow inline — an Admin explicitly seeking
+ *  this story out is a stronger, more deliberate signal than Ingestion finding it passively, so
+ *  it shouldn't then sit in the Ingestion queue waiting for a second approval action from the
+ *  same person. */
+export async function attachSeedToMatch(
+  analysisId: string,
+  seedUrl: string,
+  log?: FastifyBaseLogger
+): Promise<void> {
+  const analysis = await analysisRepo.findAnalysisById(analysisId)
+  if (!analysis) throw new NotFoundError('Analýza nenalezena')
+  if (analysis.status !== 'DRAFT' && analysis.status !== 'PENDING') {
+    throw new ValidationError('Lze připojit pouze ke konceptu nebo probíhající analýze')
+  }
+
+  let scraped: ScrapedArticle
+  try {
+    scraped = await scrapeArticle(seedUrl)
+  } catch (err) {
+    throw new ExternalServiceError(
+      err instanceof ScrapeError ? err.message : 'Nepodařilo se načíst zdrojový článek'
+    )
+  }
+
+  // Re-check status right before writing, not the check from before the scrape above — scraping
+  // is a network call that can take a while, long enough for a concurrent approve/reject via the
+  // Ingestion review queue to have changed the status underneath this request.
+  const fresh = await analysisRepo.findAnalysisById(analysisId)
+  if (!fresh || (fresh.status !== 'DRAFT' && fresh.status !== 'PENDING')) {
+    throw new ValidationError('Analýza mezitím změnila stav; zkuste to prosím znovu')
+  }
+
+  // Each Source contributes at most one Coverage per Analysis (CONTEXT.md) — skip rather than
+  // duplicate if this outlet is already attached (e.g. Ingestion attached it between the seed's
+  // dedup match and this confirm click).
+  const outlet = extractDomain(seedUrl)
+  const existingCoverages = await coverageRepo.findCoveragesForAnalysis(analysisId)
+  if (!existingCoverages.some((c) => c.outlet === outlet)) {
+    await coverageRepo.createCoverages([
+      {
+        analysisId,
+        outlet,
+        title: scraped.title,
+        articleUrl: seedUrl,
+        status: 'PENDING',
+      },
+    ])
+  }
+
+  if (fresh.status === 'DRAFT') {
+    await approveDraft(analysisId, log)
+  }
 }
 
 export async function discoverSources(
@@ -108,7 +217,7 @@ export async function confirmCoverages(
     await coverageRepo.createCoverages(
       newUrls.map((u) => ({
         analysisId,
-        outlet: new URL(u).hostname.replace(/^www\./, ''),
+        outlet: extractDomain(u),
         articleUrl: u,
         status: 'PENDING',
       }))

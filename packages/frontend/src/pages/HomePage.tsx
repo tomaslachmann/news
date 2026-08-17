@@ -7,9 +7,24 @@ import { Input } from '@/components/ui/input'
 import { PageContainer } from '@/components/PageContainer'
 import { PageTitle } from '@/components/PageTitle'
 import { useAuth } from '@/context/AuthContext'
-import { createAnalysis, discoverSources } from '@/services/analyses'
+import { createAnalysis, discoverSources, attachSeedToMatch } from '@/services/analyses'
 
-type PageState = { step: 'input' } | { step: 'keywords'; analysisId: string; keywords: string[] }
+const MATCHED_STATUS_LABELS: Record<'draft' | 'pending' | 'complete', string> = {
+  draft: 'Koncept',
+  pending: 'Zpracovává se',
+  complete: 'Dokončeno',
+}
+
+type PageState =
+  | { step: 'input' }
+  | {
+      step: 'matched'
+      analysisId: string
+      seedUrl: string
+      seedHeadline: string
+      matchedStatus: 'draft' | 'pending' | 'complete'
+    }
+  | { step: 'keywords'; analysisId: string; keywords: string[] }
 
 function isValidUrl(value: string): boolean {
   try {
@@ -142,6 +157,63 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
   )
 }
 
+/** Shown when submitting a seed URL matches an already-open Story (ticket 27) instead of
+ *  silently creating a duplicate Analysis. "Pokračovat" attaches the seed to the match (going
+ *  straight to the existing Analysis for a COMPLETE match, since re-adding coverage to one that
+ *  already finished isn't this ticket's job); "Vytvořit samostatně" is the override for a
+ *  false-positive match, falling through to the normal keyword-extraction flow. */
+function MatchedStep({
+  analysisId,
+  seedUrl,
+  seedHeadline,
+  matchedStatus,
+  onCreateSeparately,
+}: {
+  analysisId: string
+  seedUrl: string
+  seedHeadline: string
+  matchedStatus: 'draft' | 'pending' | 'complete'
+  onCreateSeparately: () => void
+}) {
+  const navigate = useNavigate()
+
+  const attachMutation = useMutation({
+    mutationFn: () => attachSeedToMatch(analysisId, seedUrl),
+    onSuccess: () => navigate(`/review/${analysisId}`),
+  })
+
+  const handleContinue = () => {
+    if (matchedStatus === 'complete') {
+      void navigate(`/analysis/${analysisId}`)
+      return
+    }
+    attachMutation.mutate()
+  }
+
+  return (
+    <section className="mt-8 max-w-2xl">
+      <h2 className="font-serif text-lg font-semibold mb-1">Tato událost už se sleduje</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Odkaz vypadá jako stejná událost jako existující analýza „{seedHeadline}“ (
+        {MATCHED_STATUS_LABELS[matchedStatus]}).
+      </p>
+
+      {attachMutation.isError && (
+        <p className="text-sm text-destructive mb-4">{attachMutation.error.message}</p>
+      )}
+
+      <div className="flex gap-2">
+        <Button onClick={handleContinue} disabled={attachMutation.isPending}>
+          {attachMutation.isPending ? 'Připojování…' : 'Pokračovat'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onCreateSeparately}>
+          Vytvořit samostatně
+        </Button>
+      </div>
+    </section>
+  )
+}
+
 export default function HomePage() {
   const { user } = useAuth()
   const [state, setState] = useState<PageState>({ step: 'input' })
@@ -149,8 +221,18 @@ export default function HomePage() {
   const [urlError, setUrlError] = useState<string | null>(null)
 
   const createMutation = useMutation({
-    mutationFn: createAnalysis,
+    mutationFn: (opts: { force?: boolean } = {}) => createAnalysis(urlValue, opts),
     onSuccess: (data) => {
+      if (data.outcome === 'matched') {
+        setState({
+          step: 'matched',
+          analysisId: data.id,
+          seedUrl: urlValue,
+          seedHeadline: data.seedHeadline,
+          matchedStatus: data.matchedStatus,
+        })
+        return
+      }
       setState({ step: 'keywords', analysisId: data.id, keywords: data.keywords })
     },
     onError: (err) => {
@@ -167,7 +249,7 @@ export default function HomePage() {
       return
     }
 
-    createMutation.mutate(urlValue)
+    createMutation.mutate({})
   }
 
   return (
@@ -202,6 +284,16 @@ export default function HomePage() {
           </div>
           {urlError && <p className="text-sm text-destructive">{urlError}</p>}
         </form>
+      )}
+
+      {state.step === 'matched' && (
+        <MatchedStep
+          analysisId={state.analysisId}
+          seedUrl={state.seedUrl}
+          seedHeadline={state.seedHeadline}
+          matchedStatus={state.matchedStatus}
+          onCreateSeparately={() => createMutation.mutate({ force: true })}
+        />
       )}
 
       {state.step === 'keywords' && (
