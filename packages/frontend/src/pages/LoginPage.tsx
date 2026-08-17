@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PageContainer } from '@/components/PageContainer'
 import { login, type LoginBody } from '@/services/auth'
 
 export default function LoginPage() {
@@ -27,8 +28,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="container mx-auto py-10 max-w-sm">
-      <h1 className="text-2xl font-bold mb-6">Přihlášení</h1>
+    <PageContainer width="narrow">
+      <h1 className="font-serif text-2xl font-bold mb-6">Přihlášení</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="email" className="text-sm font-medium">
@@ -65,6 +66,6 @@ export default function LoginPage() {
           {mutation.isPending ? 'Přihlašování…' : 'Přihlásit se'}
         </Button>
       </form>
-    </main>
+    </PageContainer>
   )
 }

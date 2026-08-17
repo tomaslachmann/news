@@ -15,6 +15,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { PageContainer } from '@/components/PageContainer'
 import { useAuth } from '@/context/AuthContext'
 import type { AdminUserListItem } from '@/services/users'
 import { useUsersList, useCreateUser, useUpdateUser, useDeleteUser } from '@/services/users/hooks'
@@ -283,9 +284,9 @@ export default function AdminUsersPage() {
 
   return (
     <TooltipProvider>
-      <main className="container mx-auto py-10 max-w-4xl">
+      <PageContainer width="wide">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Uživatelé</h1>
+          <h1 className="font-serif text-3xl font-bold">Uživatelé</h1>
           <Button onClick={() => setCreateOpen(true)}>Vytvořit uživatele</Button>
         </div>
 
@@ -323,7 +324,7 @@ export default function AdminUsersPage() {
         {deletingUser && (
           <DeleteUserDialog user={deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)} />
         )}
-      </main>
+      </PageContainer>
     </TooltipProvider>
   )
 }

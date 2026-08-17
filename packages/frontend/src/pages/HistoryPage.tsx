@@ -1,19 +1,13 @@
 import { Link } from 'react-router-dom'
 import type { AnalysisListItem } from '@/services/analyses'
 import { useAnalysesList } from '@/services/analyses/hooks'
+import { PageContainer } from '@/components/PageContainer'
 import { useAuth } from '@/context/AuthContext'
 
 const dateFormatter = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
 function formatDate(iso: string): string {
   return dateFormatter.format(new Date(iso))
-}
-
-const STATUS_STYLES: Record<AnalysisListItem['status'], string> = {
-  draft: 'bg-blue-100 text-blue-800',
-  complete: 'bg-green-100 text-green-800',
-  failed: 'bg-destructive/10 text-destructive',
-  pending: 'bg-muted text-muted-foreground',
 }
 
 const STATUS_LABELS: Record<AnalysisListItem['status'], string> = {
@@ -23,11 +17,9 @@ const STATUS_LABELS: Record<AnalysisListItem['status'], string> = {
   pending: 'Zpracovává se',
 }
 
-function StatusBadge({ status }: { status: AnalysisListItem['status'] }) {
+function StatusLabel({ status }: { status: AnalysisListItem['status'] }) {
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
-    >
+    <span className={`utility-label shrink-0 ${status === 'failed' ? 'text-destructive' : ''}`}>
       {STATUS_LABELS[status]}
     </span>
   )
@@ -38,15 +30,15 @@ function HistoryEntry({ item }: { item: AnalysisListItem }) {
     <li>
       <Link
         to={`/analysis/${item.id}`}
-        className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4 hover:bg-secondary/50"
+        className="flex items-center justify-between gap-4 py-4 hover:bg-muted/30"
       >
         <div className="min-w-0">
-          <p className="truncate font-medium">{item.seedHeadline}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="truncate font-serif text-lg font-semibold">{item.seedHeadline}</p>
+          <p className="mt-1 font-sans text-xs text-muted-foreground">
             {formatDate(item.createdAt)} · zdrojů: {item.coverageCount}
           </p>
         </div>
-        <StatusBadge status={item.status} />
+        <StatusLabel status={item.status} />
       </Link>
     </li>
   )
@@ -58,18 +50,18 @@ export default function HistoryPage() {
   const { data: analyses, isLoading, isError } = useAnalysesList()
 
   return (
-    <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-3xl font-bold">{isAdmin ? 'Historie' : 'Články'}</h1>
-      <p className="mt-2 text-muted-foreground">
+    <PageContainer className="font-serif">
+      <h1 className="utility-label">{isAdmin ? 'Historie' : 'Články'}</h1>
+      <p className="mt-2 font-sans text-muted-foreground">
         {isAdmin ? 'Procházejte své předchozí analýzy.' : 'Procházejte starší články.'}
       </p>
 
-      {isLoading && <p className="mt-8 text-muted-foreground">Načítání…</p>}
+      {isLoading && <p className="mt-8 font-sans text-muted-foreground">Načítání…</p>}
 
-      {isError && <p className="mt-8 text-destructive">Nepodařilo se načíst data.</p>}
+      {isError && <p className="mt-8 font-sans text-destructive">Nepodařilo se načíst data.</p>}
 
       {analyses && analyses.length === 0 && (
-        <div className="mt-8 rounded-lg border bg-card p-8 text-center">
+        <div className="mt-8 border p-8 text-center font-sans">
           {isAdmin ? (
             <>
               <p className="text-muted-foreground">Zatím žádné analýzy.</p>
@@ -84,12 +76,12 @@ export default function HistoryPage() {
       )}
 
       {analyses && analyses.length > 0 && (
-        <ul className="mt-8 flex flex-col gap-3">
+        <ul className="mt-4 divide-y border-b border-t">
           {analyses.map((item) => (
             <HistoryEntry key={item.id} item={item} />
           ))}
         </ul>
       )}
-    </main>
+    </PageContainer>
   )
 }

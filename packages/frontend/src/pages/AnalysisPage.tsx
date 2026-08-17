@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { PageContainer } from '@/components/PageContainer'
 import {
   openAnalysisStream,
   type Attribution,
@@ -287,12 +288,12 @@ function ResultsTabs({
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <main className="container mx-auto py-10 max-w-3xl">
+    <PageContainer>
       <p className="text-destructive">{message}</p>
       <Link to="/" className="mt-4 inline-block text-sm text-primary underline">
         Zkusit znovu
       </Link>
-    </main>
+    </PageContainer>
   )
 }
 
@@ -377,10 +378,10 @@ function StreamingAnalysis({ id }: { id: string }) {
 
   if (dimensions) {
     return (
-      <main className="container mx-auto py-10 max-w-3xl">
+      <PageContainer>
         <h1 className="text-2xl font-bold">Analýza</h1>
         <ResultsTabs dimensions={dimensions} />
-      </main>
+      </PageContainer>
     )
   }
 
@@ -394,7 +395,7 @@ function StreamingAnalysis({ id }: { id: string }) {
   const isSynthesising = phase === 'synthesising'
 
   return (
-    <main className="container mx-auto py-10 max-w-3xl">
+    <PageContainer>
       <h1 className="text-2xl font-bold">{isSynthesising ? 'Syntéza analýzy…' : 'Extrakce zdrojů'}</h1>
 
       {total > 0 && isExtracting && (
@@ -430,9 +431,7 @@ function StreamingAnalysis({ id }: { id: string }) {
         {rows.map((row) => (
           <li key={row.coverageId} className="rounded-lg border bg-card p-4 flex flex-col gap-1">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {row.outlet}
-              </span>
+              <span className="utility-label">{row.outlet}</span>
               <a
                 href={row.articleUrl}
                 target="_blank"
@@ -446,7 +445,7 @@ function StreamingAnalysis({ id }: { id: string }) {
           </li>
         ))}
       </ul>
-    </main>
+    </PageContainer>
   )
 }
 
@@ -457,9 +456,9 @@ export default function AnalysisPage() {
 
   if (isLoading) {
     return (
-      <main className="container mx-auto py-10 max-w-3xl">
+      <PageContainer>
         <p className="text-muted-foreground">Načítání analýzy…</p>
-      </main>
+      </PageContainer>
     )
   }
 
@@ -469,14 +468,14 @@ export default function AnalysisPage() {
 
   if (analysis.status === 'draft') {
     return (
-      <main className="container mx-auto py-10 max-w-3xl">
+      <PageContainer>
         <p className="text-muted-foreground">Tento článek se ještě posuzuje a zatím není dostupný.</p>
         {user?.role === 'ADMIN' && (
           <Link to="/admin/ingestion" className="mt-4 inline-block text-sm text-primary underline">
             Přejít do fronty ke schválení
           </Link>
         )}
-      </main>
+      </PageContainer>
     )
   }
 
@@ -486,10 +485,10 @@ export default function AnalysisPage() {
 
   if (analysis.status === 'complete' && analysis.synthesisResult) {
     return (
-      <main className="container mx-auto py-10 max-w-3xl">
+      <PageContainer>
         <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
         <ResultsTabs dimensions={analysis.synthesisResult} narrative={analysis.narrative} />
-      </main>
+      </PageContainer>
     )
   }
 

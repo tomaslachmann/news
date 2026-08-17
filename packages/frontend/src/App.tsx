@@ -11,6 +11,15 @@ import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import IngestionReviewPage from './pages/IngestionReviewPage'
 
+const utilityDateFormatter = new Intl.DateTimeFormat('cs-CZ', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+/** "Wire Feed" masthead (ticket 22, Variant A from the navbar+listing prototype round): a
+ *  thin utility bar above a centered serif nameplate, nav links below. Deliberately not final
+ *  — see ticket 26 for the dedicated masthead research/prototype pass this defers to. */
 function NavBar() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
@@ -26,42 +35,43 @@ function NavBar() {
   })
 
   return (
-    <nav className="border-b bg-background px-6 py-3 flex gap-6 items-center">
-      <Link to="/" className="font-semibold text-foreground hover:text-primary">
-        News Triangulator
-      </Link>
-      <Link to="/history" className="text-muted-foreground hover:text-foreground">
-        {isAdmin ? 'Historie' : 'Články'}
-      </Link>
-      {isAdmin && (
-        <>
-          <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
-            Uživatelé
-          </Link>
-          <Link to="/admin/ingestion" className="text-muted-foreground hover:text-foreground">
-            Sběr článků
-          </Link>
-        </>
-      )}
-      <div className="ml-auto flex items-center gap-4">
-        {user ? (
-          <>
-            <span className="text-sm text-muted-foreground">{user.email}</span>
+    <header className="border-b font-sans">
+      {user && (
+        <div className="flex items-center justify-between border-b bg-muted/30 px-6 py-1.5 text-xs text-muted-foreground">
+          <span>{utilityDateFormatter.format(new Date())}</span>
+          <span className="flex items-center gap-3">
+            {user.email}
             <button
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
-              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+              className="hover:text-foreground disabled:opacity-50"
             >
               {logoutMutation.isPending ? 'Odhlašování…' : 'Odhlásit se'}
             </button>
-          </>
-        ) : (
-          <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
-            Přihlásit se
-          </Link>
-        )}
+          </span>
+        </div>
+      )}
+      <div className="px-6 py-4 text-center">
+        <Link to="/" className="font-serif text-3xl font-bold tracking-tight text-foreground">
+          News Triangulator
+        </Link>
       </div>
-    </nav>
+      <nav className="flex justify-center gap-6 border-t px-6 py-2 text-sm">
+        <Link to="/history" className="font-medium text-foreground hover:text-primary">
+          {isAdmin ? 'Historie' : 'Články'}
+        </Link>
+        {isAdmin && (
+          <>
+            <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
+              Uživatelé
+            </Link>
+            <Link to="/admin/ingestion" className="text-muted-foreground hover:text-foreground">
+              Sběr článků
+            </Link>
+          </>
+        )}
+      </nav>
+    </header>
   )
 }
 

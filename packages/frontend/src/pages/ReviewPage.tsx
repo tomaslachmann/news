@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PageContainer } from '@/components/PageContainer'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
 
 type PageMode = 'select' | 'confirming' | 'results'
@@ -111,17 +112,17 @@ export default function ReviewPage() {
 
   if (isLoading) {
     return (
-      <main className="container mx-auto py-10">
+      <PageContainer>
         <p className="text-muted-foreground">Načítání zdrojů…</p>
-      </main>
+      </PageContainer>
     )
   }
 
   if (isError || !analysis) {
     return (
-      <main className="container mx-auto py-10">
+      <PageContainer>
         <p className="text-destructive">Nepodařilo se načíst analýzu. Vraťte se zpět a zkuste to znovu.</p>
-      </main>
+      </PageContainer>
     )
   }
 
@@ -130,8 +131,8 @@ export default function ReviewPage() {
     const failedIds = results.filter((c) => c.status === 'extraction-failed').map((c) => c.id)
 
     return (
-      <main className="container mx-auto py-10 max-w-3xl">
-        <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
+      <PageContainer>
+        <h1 className="font-serif text-2xl font-bold">{analysis.seedHeadline}</h1>
         <p className="text-sm text-muted-foreground mt-1">Extrakce dokončena</p>
 
         <ul className="mt-6 flex flex-col gap-3">
@@ -139,9 +140,7 @@ export default function ReviewPage() {
             <li key={coverage.id} className="rounded-lg border bg-card p-4 flex flex-col gap-2">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {coverage.outlet}
-                  </span>
+                  <span className="utility-label">{coverage.outlet}</span>
                   <p className="text-sm font-medium leading-snug line-clamp-2">
                     {coverage.title ?? coverage.articleUrl}
                   </p>
@@ -194,14 +193,14 @@ export default function ReviewPage() {
         >
           {proceedMutation.isPending ? 'Ukládání…' : 'Pokračovat k analýze'}
         </Button>
-      </main>
+      </PageContainer>
     )
   }
 
   // ── Select / confirming mode ─────────────────────────────────────────────────
   return (
-    <main className="container mx-auto py-10 max-w-3xl">
-      <h1 className="text-2xl font-bold">{analysis.seedHeadline}</h1>
+    <PageContainer>
+      <h1 className="font-serif text-2xl font-bold">{analysis.seedHeadline}</h1>
       <p className="text-sm text-muted-foreground mt-1">Vyberte zdroje, které chcete zahrnout do analýzy</p>
 
       {analysis.coverages.length === 0 && customUrls.length === 0 ? (
@@ -233,9 +232,7 @@ export default function ReviewPage() {
               />
               <div className="flex flex-1 items-start justify-between gap-4 min-w-0">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {coverage.outlet}
-                  </span>
+                  <span className="utility-label">{coverage.outlet}</span>
                   <p className="text-sm font-medium leading-snug line-clamp-2">
                     {coverage.title ?? coverage.articleUrl}
                   </p>
@@ -265,9 +262,7 @@ export default function ReviewPage() {
                 onChange={() => setCustomUrls((prev) => prev.filter((u) => u !== url))}
               />
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Vlastní URL
-                </span>
+                <span className="utility-label">Vlastní URL</span>
                 <p className="text-sm text-muted-foreground truncate">{url}</p>
               </div>
             </li>
@@ -315,6 +310,6 @@ export default function ReviewPage() {
       <Button className="mt-6" onClick={handleConfirm} disabled={checkedCount === 0 || mode === 'confirming'}>
         {mode === 'confirming' ? 'Extrahování textu článků…' : 'Potvrdit zdroje'}
       </Button>
-    </main>
+    </PageContainer>
   )
 }
