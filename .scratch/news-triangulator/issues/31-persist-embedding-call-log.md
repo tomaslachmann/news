@@ -4,7 +4,7 @@
 
 **Blocked by:** 30 — Persist a Call Record for Every LLM Chat-Completion Call (reuses the table/repository function it introduces)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `generateEmbedding` records both a successful call and a failed one using the same repository function ticket 30 introduced, tagged with a `callSite` label identifying its caller
 - [x] The request (input text) and the response (the embedding) or the thrown error are recorded in full — no truncation
