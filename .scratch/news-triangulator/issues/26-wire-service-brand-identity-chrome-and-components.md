@@ -8,7 +8,7 @@ See `docs/research/2026-news-portal-visual-design.md` (masthead/nameplate, foote
 
 **Blocked by:** 22 — Wire Service Style, Applied Site-Wide (this ticket refines and extends what 22 ships as a working baseline; needs that rollout in place first).
 
-**Status:** done — research in progress, not yet ready for an implementing agent to pick up
+**Status:** done
 
 - [x] Prototype round (same throwaway-branch, multiple-variant approach used for ticket 20/22's navbar+listing round): variants covering masthead/header, footer, login page, and core UI primitives (buttons, inputs, form/validation states, badges/status pills) — presented for the project owner to pick, not decided unilaterally
 - [x] Masthead/header treatment finalized, superseding ticket 22's "working baseline, not final" navbar
