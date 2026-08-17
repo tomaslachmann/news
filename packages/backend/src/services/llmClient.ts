@@ -1,17 +1,7 @@
 import OpenAI from 'openai'
-import { recordLlmCall } from '../repositories/llmCallLog.js'
+import { recordLlmCallSafe } from '../repositories/llmCallLog.js'
 
 export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-/** recordLlmCall, but a logging failure must never break the actual LLM call it's recording —
- *  see ADR 0020. */
-async function recordLlmCallSafe(data: Parameters<typeof recordLlmCall>[0]): Promise<void> {
-  try {
-    await recordLlmCall(data)
-  } catch (err) {
-    console.error('Failed to record LLM call log', err)
-  }
-}
 
 /** Every module that calls callJsonModel, so a typo'd or future value can't silently fragment
  *  LlmCallLog's callSite column — see ADR 0020. Extend this when a new caller is added. */

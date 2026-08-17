@@ -45,7 +45,7 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
     // enough to embed and match cheaply. See ADR 0018.
     let itemEmbedding: number[]
     try {
-      itemEmbedding = await generateEmbedding(buildEmbeddingInput(item))
+      itemEmbedding = await generateEmbedding(buildEmbeddingInput(item), 'ingestion')
     } catch (err) {
       log?.warn({ url: item.url, err }, 'Ingestion: could not generate embedding, skipping this item')
       summary.skipped++

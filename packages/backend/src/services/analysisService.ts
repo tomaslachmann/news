@@ -54,7 +54,8 @@ export async function createAnalysis(
   let embedding: number[] = []
   try {
     embedding = await generateEmbedding(
-      buildEmbeddingInput({ title: scraped.title, excerpt: scraped.excerpt })
+      buildEmbeddingInput({ title: scraped.title, excerpt: scraped.excerpt }),
+      'submissionDedup'
     )
   } catch (err) {
     log?.warn({ seedUrl, err }, 'Could not generate embedding for seed article; skipping dedup check')

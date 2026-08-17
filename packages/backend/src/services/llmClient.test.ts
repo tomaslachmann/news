@@ -12,21 +12,10 @@ vi.mock('../repositories/llmCallLog.js')
 
 import { callJsonModel } from './llmClient.js'
 
-const RECORDED_LOG = {
-  id: 'log1',
-  callSite: 'extraction',
-  model: 'gpt-4o',
-  systemPrompt: '',
-  userContent: '',
-  responseContent: null,
-  error: null,
-  createdAt: new Date(),
-}
-
 describe('callJsonModel', () => {
   beforeEach(() => {
     mockCreate.mockReset()
-    vi.mocked(llmCallLogRepo.recordLlmCall).mockReset().mockResolvedValue(RECORDED_LOG)
+    vi.mocked(llmCallLogRepo.recordLlmCallSafe).mockReset().mockResolvedValue(undefined)
   })
 
   it('sends the system/user messages and parses the JSON content of the first choice', async () => {
@@ -69,7 +58,7 @@ describe('callJsonModel', () => {
 
     await callJsonModel('gpt-4o', 'system prompt', 'user content', 'synthesis')
 
-    expect(llmCallLogRepo.recordLlmCall).toHaveBeenCalledWith({
+    expect(llmCallLogRepo.recordLlmCallSafe).toHaveBeenCalledWith({
       callSite: 'synthesis',
       model: 'gpt-4o',
       systemPrompt: 'system prompt',
@@ -84,7 +73,7 @@ describe('callJsonModel', () => {
 
     await expect(callJsonModel('gpt-4o', 'system', 'user', 'narrative')).rejects.toThrow('API down')
 
-    expect(llmCallLogRepo.recordLlmCall).toHaveBeenCalledWith({
+    expect(llmCallLogRepo.recordLlmCallSafe).toHaveBeenCalledWith({
       callSite: 'narrative',
       model: 'gpt-4o',
       systemPrompt: 'system',
@@ -99,19 +88,10 @@ describe('callJsonModel', () => {
 
     await expect(callJsonModel('gpt-4o', 'system', 'user', 'storyVerification')).rejects.toThrow()
 
-    expect(llmCallLogRepo.recordLlmCall).toHaveBeenCalledWith(
+    expect(llmCallLogRepo.recordLlmCallSafe).toHaveBeenCalledWith(
       expect.objectContaining({ callSite: 'storyVerification', responseContent: 'not json' })
     )
-    const [recordedCall] = vi.mocked(llmCallLogRepo.recordLlmCall).mock.calls[0] ?? []
+    const [recordedCall] = vi.mocked(llmCallLogRepo.recordLlmCallSafe).mock.calls[0] ?? []
     expect(typeof recordedCall?.error).toBe('string')
-  })
-
-  it('does not let a logging failure break a successful call', async () => {
-    mockCreate.mockResolvedValue({ choices: [{ message: { content: '{"foo":"bar"}' } }] })
-    vi.mocked(llmCallLogRepo.recordLlmCall).mockRejectedValue(new Error('DB down'))
-
-    const result = await callJsonModel('gpt-4o', 'system', 'user', 'extraction')
-
-    expect(result).toEqual({ foo: 'bar' })
   })
 })
