@@ -26,7 +26,7 @@ export async function verifySameStory(
 ): Promise<VerifySameStoryResult> {
   const model = process.env.EXTRACTION_MODEL ?? 'gpt-4o'
   const userContent = `Anchor headline: ${anchorHeadline}\nCandidate headline: ${candidateTitle}`
-  const parsed = await callJsonModel(model, SYSTEM_PROMPT, userContent)
+  const parsed = await callJsonModel(model, SYSTEM_PROMPT, userContent, 'storyVerification')
   return VerifySameStoryResultSchema.parse(parsed)
 }
 

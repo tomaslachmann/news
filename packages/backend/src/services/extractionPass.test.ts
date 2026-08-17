@@ -21,7 +21,12 @@ describe('runExtractionPass', () => {
 
     expect(result.factualClaims).toHaveLength(1)
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(1)
-    expect(llmClientModule.callJsonModel).toHaveBeenCalledWith('gpt-4o', expect.any(String), ARTICLE_TEXT)
+    expect(llmClientModule.callJsonModel).toHaveBeenCalledWith(
+      'gpt-4o',
+      expect.any(String),
+      ARTICLE_TEXT,
+      'extraction'
+    )
   })
 
   it('retries once and keeps the claim when a quote fails verification then passes', async () => {

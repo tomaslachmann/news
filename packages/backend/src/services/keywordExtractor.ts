@@ -8,7 +8,9 @@ Vrať pouze JSON objekt: {"keywords": ["klíčové slovo 1", "klíčové slovo 2
 export async function extractKeywords(title: string, excerpt: string): Promise<string[]> {
   const model = process.env.EXTRACTION_MODEL ?? 'gpt-4o'
   const userContent = `Titulek: ${title}\n\n${excerpt}`
-  const parsed = (await callJsonModel(model, SYSTEM_PROMPT, userContent, 0.2)) as { keywords?: unknown }
+  const parsed = (await callJsonModel(model, SYSTEM_PROMPT, userContent, 'keywordExtractor', 0.2)) as {
+    keywords?: unknown
+  }
 
   if (!Array.isArray(parsed.keywords)) {
     throw new Error('Unexpected response shape from keyword extraction model')

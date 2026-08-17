@@ -38,7 +38,8 @@ describe('runNarrativePass', () => {
     expect(llmClientModule.callJsonModel).toHaveBeenCalledWith(
       'gpt-4o',
       expect.any(String),
-      JSON.stringify({ sources: SOURCES, dimensions: EMPTY_DIMENSIONS })
+      JSON.stringify({ sources: SOURCES, dimensions: EMPTY_DIMENSIONS }),
+      'narrative'
     )
   })
 

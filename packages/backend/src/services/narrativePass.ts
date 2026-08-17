@@ -59,7 +59,9 @@ export async function runNarrativePass(
 ): Promise<NarrativeResult> {
   const model = process.env.SYNTHESIS_MODEL ?? 'gpt-4o'
   const userContent = JSON.stringify({ sources, dimensions })
-  const parsed = NarrativeResultSchema.parse(await callJsonModel(model, SYSTEM_PROMPT, userContent))
+  const parsed = NarrativeResultSchema.parse(
+    await callJsonModel(model, SYSTEM_PROMPT, userContent, 'narrative')
+  )
 
   const sourceTextByUrl = buildSourceTextMap(sources)
 
@@ -71,6 +73,6 @@ export async function runNarrativePass(
     passName: 'narrative',
     log,
     repair: (failures) =>
-      callJsonModel(model, SYSTEM_PROMPT, buildRepairPrompt(userContent, parsed, failures)),
+      callJsonModel(model, SYSTEM_PROMPT, buildRepairPrompt(userContent, parsed, failures), 'narrative'),
   })
 }

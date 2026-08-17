@@ -19,6 +19,7 @@ describe('extractKeywords', () => {
       expect.any(String),
       expect.stringContaining('novinářský asistent'),
       'Titulek: Vláda schválila rozpočet\n\nVláda dnes schválila státní rozpočet.',
+      'keywordExtractor',
       0.2
     )
   })

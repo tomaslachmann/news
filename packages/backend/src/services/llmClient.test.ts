@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import * as llmCallLogRepo from '../repositories/llmCallLog.js'
 
 const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }))
 
@@ -7,12 +8,25 @@ vi.mock('openai', () => ({
     chat = { completions: { create: mockCreate } }
   },
 }))
+vi.mock('../repositories/llmCallLog.js')
 
 import { callJsonModel } from './llmClient.js'
+
+const RECORDED_LOG = {
+  id: 'log1',
+  callSite: 'extraction',
+  model: 'gpt-4o',
+  systemPrompt: '',
+  userContent: '',
+  responseContent: null,
+  error: null,
+  createdAt: new Date(),
+}
 
 describe('callJsonModel', () => {
   beforeEach(() => {
     mockCreate.mockReset()
+    vi.mocked(llmCallLogRepo.recordLlmCall).mockReset().mockResolvedValue(RECORDED_LOG)
   })
 
   it('sends the system/user messages and parses the JSON content of the first choice', async () => {
@@ -20,7 +34,7 @@ describe('callJsonModel', () => {
       choices: [{ message: { content: '{"foo":"bar"}' } }],
     })
 
-    const result = await callJsonModel('gpt-4o', 'system prompt', 'user content')
+    const result = await callJsonModel('gpt-4o', 'system prompt', 'user content', 'extraction')
 
     expect(result).toEqual({ foo: 'bar' })
     expect(mockCreate).toHaveBeenCalledWith({
@@ -37,7 +51,7 @@ describe('callJsonModel', () => {
   it('returns an empty object when the response has no message content', async () => {
     mockCreate.mockResolvedValue({ choices: [{ message: {} }] })
 
-    const result = await callJsonModel('gpt-4o', 'system', 'user')
+    const result = await callJsonModel('gpt-4o', 'system', 'user', 'extraction')
 
     expect(result).toEqual({})
   })
@@ -45,8 +59,59 @@ describe('callJsonModel', () => {
   it('passes a caller-supplied temperature through instead of the default', async () => {
     mockCreate.mockResolvedValue({ choices: [{ message: { content: '{}' } }] })
 
-    await callJsonModel('gpt-4o', 'system', 'user', 0.2)
+    await callJsonModel('gpt-4o', 'system', 'user', 'keywordExtractor', 0.2)
 
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ temperature: 0.2 }))
+  })
+
+  it('records a successful call with the request, response, and callSite', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: '{"foo":"bar"}' } }] })
+
+    await callJsonModel('gpt-4o', 'system prompt', 'user content', 'synthesis')
+
+    expect(llmCallLogRepo.recordLlmCall).toHaveBeenCalledWith({
+      callSite: 'synthesis',
+      model: 'gpt-4o',
+      systemPrompt: 'system prompt',
+      userContent: 'user content',
+      responseContent: '{"foo":"bar"}',
+      error: null,
+    })
+  })
+
+  it('records a failed call and still rethrows when the API call itself throws', async () => {
+    mockCreate.mockRejectedValue(new Error('API down'))
+
+    await expect(callJsonModel('gpt-4o', 'system', 'user', 'narrative')).rejects.toThrow('API down')
+
+    expect(llmCallLogRepo.recordLlmCall).toHaveBeenCalledWith({
+      callSite: 'narrative',
+      model: 'gpt-4o',
+      systemPrompt: 'system',
+      userContent: 'user',
+      responseContent: null,
+      error: 'API down',
+    })
+  })
+
+  it('records the malformed content and still rethrows when the response is not valid JSON', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: 'not json' } }] })
+
+    await expect(callJsonModel('gpt-4o', 'system', 'user', 'storyVerification')).rejects.toThrow()
+
+    expect(llmCallLogRepo.recordLlmCall).toHaveBeenCalledWith(
+      expect.objectContaining({ callSite: 'storyVerification', responseContent: 'not json' })
+    )
+    const [recordedCall] = vi.mocked(llmCallLogRepo.recordLlmCall).mock.calls[0] ?? []
+    expect(typeof recordedCall?.error).toBe('string')
+  })
+
+  it('does not let a logging failure break a successful call', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: '{"foo":"bar"}' } }] })
+    vi.mocked(llmCallLogRepo.recordLlmCall).mockRejectedValue(new Error('DB down'))
+
+    const result = await callJsonModel('gpt-4o', 'system', 'user', 'extraction')
+
+    expect(result).toEqual({ foo: 'bar' })
   })
 })
