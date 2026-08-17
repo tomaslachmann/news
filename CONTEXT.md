@@ -83,3 +83,6 @@ An enum on User. Two values:
 
 ## Auth Boundary
 The line between operations that require authentication and those that do not. Reading completed Analyses and history requires no authentication. All mutating operations (creating an Analysis, triggering Discovery, confirming coverages, streaming results) require a valid JWT and Admin role.
+
+## LLM Call Log
+A durable, queryable record of one LLM call — what was sent (model, system prompt, user content), what came back (the raw response) or the error thrown, which part of the pipeline made it, and when. Recorded for debugging, not for any product-facing purpose — a maintainer's tool for investigating why a pass failed or behaved unexpectedly, inspected via Prisma Studio rather than surfaced anywhere in the app itself. Not linked to any Analysis/Coverage/Story; not pruned. See ADR 0020.

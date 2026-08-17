@@ -104,3 +104,30 @@ model PendingAddition {
   publishedAt String?
   createdAt   DateTime @default(now())
 }
+
+/// Every LLM chat-completion call the backend makes (extraction/synthesis/narrative/story
+/// verification/keyword extraction — see ADR 0020), recorded for debugging: what was sent, what
+/// came back or the error thrown, and which pass made the call. Deliberately unrelated to
+/// Analysis/Coverage/Story — several call sites (e.g. keyword extraction on a brand-new
+/// submission) run before those exist yet. No pruning/retention is implemented (ADR 0020) — this
+/// table grows without bound by design, for now.
+model LlmCallLog {
+  id              String   @id @default(cuid())
+  /// Which module made the call: 'extraction' | 'synthesis' | 'narrative' | 'storyVerification'
+  /// | 'keywordExtractor' today; ticket 31 adds an 'embedding'-shaped caller onto this same table.
+  callSite        String
+  model           String
+  /// Nullable, not because a chat-completion call ever omits them (callJsonModel always sets
+  /// both), but so ticket 31's differently-shaped embedding calls (no system/user prompt split)
+  /// can share this table without a second migration to loosen these columns after the fact.
+  systemPrompt    String?
+  userContent     String?
+  /// The raw response content on success, or the malformed content that failed to parse — null
+  /// only when the call itself never returned (the API call/network failed before any content
+  /// was received).
+  responseContent String?
+  /// Null on success. Set for any failure: the OpenAI API call throwing, or its response failing
+  /// to parse as JSON.
+  error           String?
+  createdAt       DateTime @default(now())
+}

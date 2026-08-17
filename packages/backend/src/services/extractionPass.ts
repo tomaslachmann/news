@@ -92,7 +92,9 @@ export async function runExtractionPass(
   log?: FastifyBaseLogger
 ): Promise<ExtractionResult> {
   const model = process.env.EXTRACTION_MODEL ?? 'gpt-4o'
-  const parsed = ExtractionResultSchema.parse(await callJsonModel(model, SYSTEM_PROMPT, articleText))
+  const parsed = ExtractionResultSchema.parse(
+    await callJsonModel(model, SYSTEM_PROMPT, articleText, 'extraction')
+  )
 
   return verifyAndRepair({
     result: parsed,
@@ -102,6 +104,6 @@ export async function runExtractionPass(
     passName: 'extraction',
     log,
     repair: (failures) =>
-      callJsonModel(model, SYSTEM_PROMPT, buildRepairPrompt(articleText, parsed, failures)),
+      callJsonModel(model, SYSTEM_PROMPT, buildRepairPrompt(articleText, parsed, failures), 'extraction'),
   })
 }

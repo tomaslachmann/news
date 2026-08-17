@@ -96,7 +96,9 @@ export async function runSynthesisPass(
   // verify attributions afterwards (Synthesis never receives raw source text itself, per ADR 0014).
   const modelInput = sources.map(({ outlet, articleUrl, extraction }) => ({ outlet, articleUrl, extraction }))
   const userContent = note + JSON.stringify(modelInput)
-  const parsed = SynthesisResultSchema.parse(await callJsonModel(model, SYSTEM_PROMPT, userContent))
+  const parsed = SynthesisResultSchema.parse(
+    await callJsonModel(model, SYSTEM_PROMPT, userContent, 'synthesis')
+  )
 
   const sourceTextByUrl = buildSourceTextMap(sources)
 
@@ -108,6 +110,6 @@ export async function runSynthesisPass(
     passName: 'synthesis',
     log,
     repair: (failures) =>
-      callJsonModel(model, SYSTEM_PROMPT, buildRepairPrompt(userContent, parsed, failures)),
+      callJsonModel(model, SYSTEM_PROMPT, buildRepairPrompt(userContent, parsed, failures), 'synthesis'),
   })
 }
