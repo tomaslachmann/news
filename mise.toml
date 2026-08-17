@@ -16,6 +16,10 @@ run = "docker compose up -d db"
 description = "Stop the Postgres container"
 run = "docker compose stop db"
 
+[tasks."ingestion-cron"]
+description = "Opt-in local Ingestion poller (not part of `dev` — every poll can spend real OpenAI money)"
+run = "npm run ingestion:cron"
+
 # ── Type checking & building ──────────────────────────────────────────────────
 
 [tasks.typecheck]

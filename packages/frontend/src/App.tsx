@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, NavLink, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { logout } from '@/services/auth'
@@ -12,6 +12,12 @@ import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import IngestionReviewPage from './pages/IngestionReviewPage'
+
+/** Ticket 28 — active-route highlighting, shared by every link in the nav band below so the
+ *  current page is never ambiguous (most noticeable under Admin, with three links to tell apart). */
+function navLinkClassName({ isActive }: { isActive: boolean }) {
+  return isActive ? 'font-semibold text-foreground' : 'text-muted-foreground hover:text-foreground'
+}
 
 /** "Wire Feed" masthead: a thin utility bar above a centered serif nameplate, nav links below.
  *  Introduced as a working baseline in ticket 22, finalized unchanged in ticket 26's dedicated
@@ -54,17 +60,17 @@ function NavBar() {
         </Link>
       </div>
       <nav className="flex justify-center gap-6 border-t px-6 py-2 text-sm">
-        <Link to="/history" className="font-medium text-foreground hover:text-primary">
+        <NavLink to="/history" className={navLinkClassName}>
           {isAdmin ? 'Historie' : 'Články'}
-        </Link>
+        </NavLink>
         {isAdmin && (
           <>
-            <Link to="/admin/users" className="text-muted-foreground hover:text-foreground">
+            <NavLink to="/admin/users" className={navLinkClassName}>
               Uživatelé
-            </Link>
-            <Link to="/admin/ingestion" className="text-muted-foreground hover:text-foreground">
+            </NavLink>
+            <NavLink to="/admin/ingestion" className={navLinkClassName}>
               Sběr článků
-            </Link>
+            </NavLink>
           </>
         )}
       </nav>
