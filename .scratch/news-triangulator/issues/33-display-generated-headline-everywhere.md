@@ -4,7 +4,7 @@
 
 **Blocked by:** 32 — Generate and Store a Tool-Authored Headline Before an Analysis Completes (needs a real `headline` to display)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A single shared helper/convention decides the display title for an Analysis: the generated headline when present, otherwise the working title — implemented once, reused by every surface below rather than reimplemented per call site
 - [x] The Article page's title (`AnalysisPage`) uses this fallback
