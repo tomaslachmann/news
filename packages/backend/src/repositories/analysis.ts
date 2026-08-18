@@ -92,24 +92,6 @@ export async function findRecentStoriesForMatching(sinceHours: number): Promise<
     }))
 }
 
-/** Persists a Story's extracted entities/entityRelations (ticket 34) — best-effort evidence for
- *  later relation-candidate scoring (ticket 35), never required for anything else to function.
- *  Accepts plain objects rather than `Prisma.InputJsonValue` so callers outside repositories/
- *  never need to import `@prisma/client` themselves (ADR 0010) — the cast happens here. */
-export async function updateStoryEntities(
-  storyId: string,
-  entities: unknown,
-  entityRelations: unknown
-): Promise<void> {
-  await prisma.story.update({
-    where: { id: storyId },
-    data: {
-      entities: entities as Prisma.InputJsonValue,
-      entityRelations: entityRelations as Prisma.InputJsonValue,
-    },
-  })
-}
-
 /** Every Seed Article URL from the last `sinceHours` — used by Ingestion alongside
  *  findAllArticleUrls to skip RSS items it has already turned into an Analysis. Bounded, not
  *  the whole table's history: a URL genuinely re-published weeks ago realistically never

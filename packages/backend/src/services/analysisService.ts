@@ -29,6 +29,7 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
+import * as entityRepo from '../repositories/entity.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { toAnalysisDetail, toAnalysisListItem, resolveDisplayTitle, STATUS_MAP } from '../mappers/analysis.js'
 import { toRelatedEvents } from '../mappers/storyRelation.js'
@@ -294,7 +295,9 @@ export async function confirmCoverages(
     okTexts,
     analysis.story,
     {
-      updateStoryEntities: analysisRepo.updateStoryEntities,
+      replaceStoryEntities: entityRepo.replaceStoryEntities,
+      findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
+      countStories: entityRepo.countStories,
       findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
       createStoryRelation: storyRelationRepo.createStoryRelation,
     },

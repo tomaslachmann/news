@@ -19,6 +19,7 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
+import * as entityRepo from '../repositories/entity.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
 import { toPendingStoryRelationItem } from '../mappers/storyRelation.js'
@@ -209,7 +210,9 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
     titles,
     analysis.story,
     {
-      updateStoryEntities: analysisRepo.updateStoryEntities,
+      replaceStoryEntities: entityRepo.replaceStoryEntities,
+      findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
+      countStories: entityRepo.countStories,
       findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
       createStoryRelation: storyRelationRepo.createStoryRelation,
     },

@@ -12,6 +12,7 @@ import * as embeddingClientModule from './embeddingClient.js'
 import * as ingestionServiceModule from './ingestionService.js'
 import * as storyRelationPassModule from './storyRelationPass.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
+import * as entityRepo from '../repositories/entity.js'
 import {
   createAnalysis,
   attachSeedToMatch,
@@ -35,6 +36,7 @@ vi.mock('./embeddingClient.js')
 vi.mock('./ingestionService.js')
 vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
+vi.mock('../repositories/entity.js')
 
 const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
 const SEED_EMBEDDING = [1, 0, 0]
@@ -427,8 +429,6 @@ describe('discoverSources', () => {
         createdAt: new Date(),
         anchorHeadline: 'x',
         embedding: [],
-        entities: [],
-        entityRelations: [],
       },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
@@ -505,8 +505,6 @@ describe('discoverSources', () => {
         createdAt: new Date(),
         anchorHeadline: 'x',
         embedding: [],
-        entities: [],
-        entityRelations: [],
       },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
@@ -549,8 +547,6 @@ describe('confirmCoverages', () => {
       createdAt: new Date(),
       anchorHeadline: 'Anchor headline',
       embedding: [1, 0, 0],
-      entities: [],
-      entityRelations: [],
     },
   }
 
@@ -655,7 +651,9 @@ describe('confirmCoverages', () => {
       [fullText],
       ANALYSIS.story,
       {
-        updateStoryEntities: analysisRepo.updateStoryEntities,
+        replaceStoryEntities: entityRepo.replaceStoryEntities,
+        findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
+        countStories: entityRepo.countStories,
         findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
         createStoryRelation: storyRelationRepo.createStoryRelation,
       },
