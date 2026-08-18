@@ -167,6 +167,24 @@ export interface PendingAdditionItem {
   createdAt: string
 }
 
+/** RELATED/FOLLOW_UP only — never a causal type, see ADR 0012/0022. */
+export type StoryRelationTypeLabel = 'RELATED' | 'FOLLOW_UP'
+
+/** A `PENDING_REVIEW` StoryRelation (ticket 35) awaiting Admin confirm/reject (ticket 36) — the
+ *  same display-title fallback (`resolveDisplayTitle`) used everywhere else applies to both
+ *  sides, so a since-changed Analysis status on either end degrades gracefully rather than
+ *  erroring. */
+export interface PendingStoryRelationItem {
+  id: string
+  fromAnalysisId: string
+  fromTitle: string
+  toAnalysisId: string
+  toTitle: string
+  type: StoryRelationTypeLabel
+  reasoning: string
+  createdAt: string
+}
+
 export interface IngestionRunSummary {
   checked: number
   created: number

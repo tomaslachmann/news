@@ -45,4 +45,34 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
       return reply.code(200).send({ ok: true })
     }
   )
+
+  // GET /api/admin/ingestion/story-relations — LOW-confidence StoryRelations awaiting review
+  fastify.get(
+    '/api/admin/ingestion/story-relations',
+    { preHandler: requireAdmin },
+    async (_request, reply) => {
+      const items = await ingestionService.listPendingStoryRelations()
+      return reply.code(200).send(items)
+    }
+  )
+
+  // PATCH /api/admin/ingestion/story-relations/:id/approve — PENDING_REVIEW → PUBLISHED
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/admin/ingestion/story-relations/:id/approve',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      await ingestionService.approveStoryRelation(request.params.id)
+      return reply.code(200).send({ ok: true })
+    }
+  )
+
+  // PATCH /api/admin/ingestion/story-relations/:id/reject — PENDING_REVIEW → REJECTED, permanent
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/admin/ingestion/story-relations/:id/reject',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      await ingestionService.rejectStoryRelation(request.params.id)
+      return reply.code(200).send({ ok: true })
+    }
+  )
 }

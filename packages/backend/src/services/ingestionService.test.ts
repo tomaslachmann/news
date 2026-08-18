@@ -13,6 +13,9 @@ import {
   rejectDraft,
   listPendingAdditions,
   listVisibleDrafts,
+  listPendingStoryRelations,
+  approveStoryRelation,
+  rejectStoryRelation,
 } from './ingestionService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
@@ -573,5 +576,143 @@ describe('listVisibleDrafts', () => {
     const result = await listVisibleDrafts()
 
     expect(result.map((d) => d.id)).toEqual(['visible'])
+  })
+})
+
+describe('listPendingStoryRelations', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('maps repository rows to PendingStoryRelationItems, using the generated headline when present and falling back to the working title otherwise', async () => {
+    vi.mocked(storyRelationRepo.findPendingReviewRelations).mockResolvedValue([
+      {
+        id: 'r1',
+        fromAnalysisId: 'a-from',
+        fromSeedHeadline: 'From working title',
+        fromHeadline: 'From generated headline',
+        toAnalysisId: 'a-to',
+        toSeedHeadline: 'To working title',
+        toHeadline: null,
+        type: 'FOLLOW_UP',
+        reasoning: 'A continues B.',
+        createdAt: new Date('2026-01-02T00:00:00Z'),
+      },
+    ])
+
+    const result = await listPendingStoryRelations()
+
+    expect(result).toEqual([
+      {
+        id: 'r1',
+        fromAnalysisId: 'a-from',
+        fromTitle: 'From generated headline',
+        toAnalysisId: 'a-to',
+        toTitle: 'To working title',
+        type: 'FOLLOW_UP',
+        reasoning: 'A continues B.',
+        createdAt: '2026-01-02T00:00:00.000Z',
+      },
+    ])
+  })
+})
+
+describe('approveStoryRelation', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  const PENDING_RELATION = {
+    id: 'r1',
+    fromStoryId: 's-from',
+    toStoryId: 's-to',
+    type: 'FOLLOW_UP' as const,
+    confidenceTier: 'LOW' as const,
+    reasoning: 'x',
+    status: 'PENDING_REVIEW' as const,
+    createdAt: new Date(),
+  }
+
+  it('transitions a pending relation to PUBLISHED', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
+    vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
+
+    await approveStoryRelation('r1')
+
+    expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).toHaveBeenCalledWith(
+      'r1',
+      'PENDING_REVIEW',
+      'PUBLISHED'
+    )
+  })
+
+  it('throws NotFoundError when the relation does not exist', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(null)
+
+    await expect(approveStoryRelation('missing')).rejects.toThrow(NotFoundError)
+  })
+
+  it('throws ValidationError when the relation is not PENDING_REVIEW', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue({
+      ...PENDING_RELATION,
+      status: 'PUBLISHED',
+    })
+
+    await expect(approveStoryRelation('r1')).rejects.toThrow(ValidationError)
+    expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).not.toHaveBeenCalled()
+  })
+
+  it('throws ValidationError when the status changed concurrently between the check and the write', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
+    vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(false)
+
+    await expect(approveStoryRelation('r1')).rejects.toThrow(ValidationError)
+  })
+})
+
+describe('rejectStoryRelation', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  const PENDING_RELATION = {
+    id: 'r1',
+    fromStoryId: 's-from',
+    toStoryId: 's-to',
+    type: 'RELATED' as const,
+    confidenceTier: 'LOW' as const,
+    reasoning: 'x',
+    status: 'PENDING_REVIEW' as const,
+    createdAt: new Date(),
+  }
+
+  it('transitions a pending relation to REJECTED, permanently', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
+    vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
+
+    await rejectStoryRelation('r1')
+
+    expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).toHaveBeenCalledWith(
+      'r1',
+      'PENDING_REVIEW',
+      'REJECTED'
+    )
+  })
+
+  it('throws NotFoundError when the relation does not exist', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(null)
+
+    await expect(rejectStoryRelation('missing')).rejects.toThrow(NotFoundError)
+  })
+
+  it('throws ValidationError when the relation is not PENDING_REVIEW', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue({
+      ...PENDING_RELATION,
+      status: 'REJECTED',
+    })
+
+    await expect(rejectStoryRelation('r1')).rejects.toThrow(ValidationError)
+    expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).not.toHaveBeenCalled()
+  })
+
+  it('throws ValidationError when the status changed concurrently between the check and the write', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
+    vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(false)
+
+    await expect(rejectStoryRelation('r1')).rejects.toThrow(ValidationError)
   })
 })
