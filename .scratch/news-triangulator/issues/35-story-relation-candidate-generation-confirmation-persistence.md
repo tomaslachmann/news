@@ -4,7 +4,7 @@
 
 **Blocked by:** 34 — Entity & Entity-Relation Extraction (candidate scoring needs `Story.entities`/`entityRelations` to compute overlap)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A new `StoryRelation` Prisma model: `id`, `fromStoryId`/`toStoryId` (FKs to `Story`), `type` (enum: `RELATED` | `FOLLOW_UP`), `confidenceTier` (enum: `HIGH` | `LOW`), `reasoning` (String), `status` (enum: `PUBLISHED` | `PENDING_REVIEW` | `REJECTED`), `createdAt`, with `@@unique([fromStoryId, toStoryId])`
 - [x] A new deterministic scoring function ranks a widened pool of recent Stories (own time window, distinct from `DEDUP_WINDOW_HOURS`; own threshold, distinct from `MATCH_THRESHOLD` — both implementation-time tunable constants) by a combination of embedding similarity, entity-key overlap, entity-relation overlap, and time proximity, returning the top ~20. The candidate pool includes Stories of any `Analysis` status — cheap to compute regardless of whether a candidate is finished yet
