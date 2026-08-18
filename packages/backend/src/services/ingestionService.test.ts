@@ -7,6 +7,7 @@ import * as embeddingClientModule from './embeddingClient.js'
 import * as storyVerificationModule from './storyVerification.js'
 import * as storyRelationPassModule from './storyRelationPass.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
+import * as entityRepo from '../repositories/entity.js'
 import {
   runIngestionPass,
   approveDraft,
@@ -27,6 +28,7 @@ vi.mock('./embeddingClient.js')
 vi.mock('./storyVerification.js')
 vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
+vi.mock('../repositories/entity.js')
 
 const RSS_ITEM = {
   sourceId: 'src-idnes',
@@ -376,8 +378,6 @@ const DRAFT_WITH_STORY = {
     createdAt: new Date(),
     anchorHeadline: 'Anchor headline',
     embedding: [],
-    entities: [],
-    entityRelations: [],
   },
 }
 
@@ -509,7 +509,9 @@ describe('approveDraft', () => {
       ['Anchor headline', 'Related to the anchor'],
       DRAFT_WITH_STORY.story,
       {
-        updateStoryEntities: analysisRepo.updateStoryEntities,
+        replaceStoryEntities: entityRepo.replaceStoryEntities,
+        findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
+        countStories: entityRepo.countStories,
         findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
         createStoryRelation: storyRelationRepo.createStoryRelation,
       },

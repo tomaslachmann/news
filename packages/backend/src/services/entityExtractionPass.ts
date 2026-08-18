@@ -99,6 +99,13 @@ export async function runEntityExtractionPass(
       log?.warn({ relation: r }, 'Dropping entityRelation referencing an unknown or ambiguous entity name')
       continue
     }
+    // A self-relation (from and to resolving to the same entity) violates
+    // StoryEntityRelation's no_self_relation CHECK constraint — dropped here, before
+    // persistence, rather than letting the DB reject it and roll back the whole extraction.
+    if (from === to) {
+      log?.warn({ relation: r }, 'Dropping entityRelation whose from/to resolve to the same entity')
+      continue
+    }
     entityRelations.push({ from, to, type: r.type, confidence: r.confidence })
   }
 
@@ -108,7 +115,7 @@ export async function runEntityExtractionPass(
 /** Extracts entities/entityRelations for a Story and persists them, degrading gracefully on any
  *  failure (LLM error, or nothing extracted) rather than throwing or clobbering prior data.
  *  Shared by both pipeline trigger points (approveDraft, confirmCoverages — ticket 34) so the
- *  try/catch and empty-result guard live in exactly one place. Takes `updateStoryEntities` as a
+ *  try/catch and empty-result guard live in exactly one place. Takes `replaceStoryEntities` as a
  *  dependency rather than importing the repository directly, keeping this pass module decoupled
  *  from persistence and easy to unit-test without mocking the repository layer.
  *
@@ -118,7 +125,11 @@ export async function runEntityExtractionPass(
 export async function extractAndPersistStoryEntities(
   storyId: string,
   sourceTexts: string[],
-  updateStoryEntities: (storyId: string, entities: unknown, entityRelations: unknown) => Promise<void>,
+  replaceStoryEntities: (
+    storyId: string,
+    entities: ExtractedEntity[],
+    entityRelations: ExtractedEntityRelation[]
+  ) => Promise<void>,
   log?: FastifyBaseLogger
 ): Promise<EntityExtractionResult | null> {
   try {
@@ -127,10 +138,10 @@ export async function extractAndPersistStoryEntities(
     // confirmation call that ends up with no OK Coverage this round must not wipe out a Story's
     // previously-extracted entities from an earlier, more successful pass.
     if (extraction.entities.length === 0) return null
-    await updateStoryEntities(storyId, extraction.entities, extraction.entityRelations)
+    await replaceStoryEntities(storyId, extraction.entities, extraction.entityRelations)
     return extraction
   } catch (err) {
-    log?.warn({ storyId, err }, 'Entity extraction failed; leaving Story.entities/entityRelations unchanged')
+    log?.warn({ storyId, err }, "Entity extraction failed; leaving this Story's entities unchanged")
     return null
   }
 }

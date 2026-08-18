@@ -1,6 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { createAnalysis, disconnect } from '../../src/repositories/analysis.js'
 import { createStoryRelation, findRelationCandidateStories } from '../../src/repositories/storyRelation.js'
+import { replaceStoryEntities } from '../../src/repositories/entity.js'
 
 describe('StoryRelation repository against a real Postgres instance', () => {
   afterAll(async () => {
@@ -69,9 +70,14 @@ describe('StoryRelation repository against a real Postgres instance', () => {
     expect(second.status).toBe('PUBLISHED')
   })
 
-  it('findRelationCandidateStories finds an older Story, excludes itself, and returns entities/entityRelations raw for the caller to parse', async () => {
+  it('findRelationCandidateStories finds an older Story, excludes itself, and returns its entities/entityRelations already shaped for scoring', async () => {
     const older = await createAnalysis({ seedUrl: 'https://example.cz/older', seedHeadline: 'Older' })
     const newer = await createAnalysis({ seedUrl: 'https://example.cz/newer', seedHeadline: 'Newer' })
+    await replaceStoryEntities(
+      older.storyId,
+      [{ key: 'country:story-relation-test', name: 'Poland', type: 'COUNTRY', confidence: 0.9 }],
+      []
+    )
 
     const results = await findRelationCandidateStories(newer.storyId, newer.createdAt, 24 * 14)
 
@@ -79,9 +85,20 @@ describe('StoryRelation repository against a real Postgres instance', () => {
     expect(ids).not.toContain(newer.storyId)
     expect(ids).toContain(older.storyId)
     const found = results.find((r) => r.storyId === older.storyId)
-    expect(found?.entities).toEqual([])
+    expect(found?.entities).toEqual([{ key: 'country:story-relation-test', storyCount: 1 }])
     expect(found?.entityRelations).toEqual([])
     expect(found?.anchorHeadline).toBe('Older')
+  })
+
+  it('findRelationCandidateStories returns empty entities/entityRelations for a Story with none', async () => {
+    const older = await createAnalysis({ seedUrl: 'https://example.cz/older-none', seedHeadline: 'Older' })
+    const newer = await createAnalysis({ seedUrl: 'https://example.cz/newer-none', seedHeadline: 'Newer' })
+
+    const results = await findRelationCandidateStories(newer.storyId, newer.createdAt, 24 * 14)
+
+    const found = results.find((r) => r.storyId === older.storyId)
+    expect(found?.entities).toEqual([])
+    expect(found?.entityRelations).toEqual([])
   })
 
   it('never returns a Story created at or after the given beforeStoryCreatedAt bound, so a Story can never appear as its own candidate\'s "older" match in the reverse direction', async () => {

@@ -87,6 +87,18 @@ describe('runEntityExtractionPass', () => {
     expect(result.entityRelations).toEqual([])
   })
 
+  it('drops a self-relation (from and to resolving to the same entity) rather than persisting one that violates the DB CHECK constraint', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      entities: [{ mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.9 }],
+      entityRelations: [{ from: 'Poland', to: 'Poland', type: 'ANNOUNCES', confidence: 0.5 }],
+    })
+
+    const result = await runEntityExtractionPass(['x'])
+
+    expect(result.entities).toHaveLength(1)
+    expect(result.entityRelations).toEqual([])
+  })
+
   it('propagates a thrown error rather than swallowing it', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockRejectedValue(new Error('API down'))
 
@@ -106,16 +118,16 @@ describe('runEntityExtractionPass', () => {
 describe('extractAndPersistStoryEntities', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('persists extraction results via the injected updateStoryEntities function, and returns what was persisted', async () => {
+  it('persists extraction results via the injected replaceStoryEntities function, and returns what was persisted', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       entities: [{ mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
       entityRelations: [],
     })
-    const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
 
-    const result = await extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
+    const result = await extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)
 
-    expect(updateStoryEntities).toHaveBeenCalledWith(
+    expect(replaceStoryEntities).toHaveBeenCalledWith(
       'story-1',
       [{ key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
       []
@@ -126,32 +138,32 @@ describe('extractAndPersistStoryEntities', () => {
     })
   })
 
-  it('does not call updateStoryEntities and returns null when nothing was extracted, so a previous good result is never clobbered by an empty one', async () => {
+  it('does not call replaceStoryEntities and returns null when nothing was extracted, so a previous good result is never clobbered by an empty one', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ entities: [], entityRelations: [] })
-    const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
 
-    const result = await extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
+    const result = await extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)
 
-    expect(updateStoryEntities).not.toHaveBeenCalled()
+    expect(replaceStoryEntities).not.toHaveBeenCalled()
     expect(result).toBeNull()
   })
 
-  it('does not call updateStoryEntities and returns null, without throwing, when extraction fails', async () => {
+  it('does not call replaceStoryEntities and returns null, without throwing, when extraction fails', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockRejectedValue(new Error('API down'))
-    const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
 
-    await expect(extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)).resolves.toBeNull()
+    await expect(extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)).resolves.toBeNull()
 
-    expect(updateStoryEntities).not.toHaveBeenCalled()
+    expect(replaceStoryEntities).not.toHaveBeenCalled()
   })
 
-  it('returns null, without throwing, when updateStoryEntities itself fails', async () => {
+  it('returns null, without throwing, when replaceStoryEntities itself fails', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       entities: [{ mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
       entityRelations: [],
     })
-    const updateStoryEntities = vi.fn().mockRejectedValue(new Error('DB down'))
+    const replaceStoryEntities = vi.fn().mockRejectedValue(new Error('DB down'))
 
-    await expect(extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)).resolves.toBeNull()
+    await expect(extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)).resolves.toBeNull()
   })
 })

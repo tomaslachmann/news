@@ -1,11 +1,6 @@
 import { cosineSimilarity } from './storyMatching.js'
-import {
-  parseStoredEntities,
-  parseStoredEntityRelations,
-  type ExtractedEntity,
-  type ExtractedEntityRelation,
-} from './entityTypes.js'
 import type { RawRelationCandidateStory } from '../repositories/storyRelation.js'
+import type { EntityForScoring, EntityRelationForScoring } from '../repositories/entity.js'
 
 // How far back a Story stays eligible as a relation candidate — deliberately much wider than
 // DEDUP_WINDOW_HOURS (48h, storyMatching.ts): that window exists to catch duplicates of the
@@ -20,6 +15,41 @@ function timeProximity(ageHours: number): number {
   return Math.max(0, 1 - ageHours / RELATION_CANDIDATE_WINDOW_HOURS)
 }
 
+/** ln((totalStories+1)/(storyCount+1)) — an entity attached to nearly every Story (e.g. "Czech
+ *  Republic", "government") weights close to zero; one attached to only a handful weights high.
+ *  ADR 0024 (fixes P1-9): this is only possible now that Entity.storyCount is a materialized,
+ *  queryable frequency, which the JSON column this replaced could never expose. */
+function idfWeight(storyCount: number, totalStories: number): number {
+  return Math.log((totalStories + 1) / (storyCount + 1))
+}
+
+/** IDF-weighted containment — Σ w(A∩B) / min(Σw(A), Σw(B)) — replacing plain Jaccard for entity
+ *  overlap (docs/audit.md P1-9): Jaccard penalizes exactly the size asymmetry this project's two
+ *  extraction paths produce (Ingestion: 2-5 entities from headlines alone; human-seeded: 30-50
+ *  from full Coverage text) — 3 entities fully contained in 40 score 0.075 under Jaccard, despite
+ *  perfect containment, and stays lost under the 0.35 threshold. Containment doesn't have that
+ *  problem, and the IDF weighting on top keeps a handful of near-universal entities from
+ *  dominating the signal the way an unweighted overlap measure would. */
+function weightedEntityContainment(
+  a: EntityForScoring[],
+  b: EntityForScoring[],
+  totalStories: number
+): number {
+  if (a.length === 0 || b.length === 0) return 0
+  const bKeys = new Set(b.map((e) => e.key))
+  let intersectionWeight = 0
+  let aWeight = 0
+  for (const e of a) {
+    const w = idfWeight(e.storyCount, totalStories)
+    aWeight += w
+    if (bKeys.has(e.key)) intersectionWeight += w
+  }
+  let bWeight = 0
+  for (const e of b) bWeight += idfWeight(e.storyCount, totalStories)
+  const denom = Math.min(aWeight, bWeight)
+  return denom === 0 ? 0 : intersectionWeight / denom
+}
+
 function jaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 && b.size === 0) return 0
   let intersection = 0
@@ -28,45 +58,20 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union === 0 ? 0 : intersection / union
 }
 
-function entityKeySet(entities: ExtractedEntity[]): Set<string> {
-  return new Set(entities.map((e) => e.key))
+function entityRelationTripleSet(relations: EntityRelationForScoring[]): Set<string> {
+  return new Set(relations.map((r) => `${r.fromKey}|${r.type}|${r.toKey}`))
 }
 
-function entityRelationTripleSet(relations: ExtractedEntityRelation[]): Set<string> {
-  return new Set(relations.map((r) => `${r.from}|${r.type}|${r.to}`))
-}
-
-export interface RelationCandidateStory {
-  storyId: string
-  analysisId: string
-  anchorHeadline: string
-  embedding: number[]
-  entities: ExtractedEntity[]
-  entityRelations: ExtractedEntityRelation[]
-  createdAt: Date
-}
+// Repository rows already carry entities/entityRelations in exactly the shape scoring needs
+// (`{key, storyCount}[]` / `{fromKey, toKey, type}[]`) — Prisma guarantees the shape, so unlike
+// the JSON column this replaced, there is no defensive-parse step between "read from the DB" and
+// "score." RelationCandidateStory is the same shape under a name scoped to this module.
+export type RelationCandidateStory = RawRelationCandidateStory
 
 export interface RelationCandidateInput {
   embedding: number[]
-  entities: ExtractedEntity[]
-  entityRelations: ExtractedEntityRelation[]
-}
-
-/** Converts a repository row's raw entities/entityRelations JSON into the parsed, typed shape
- *  scoreRelationCandidates needs — the one place this defensive parse happens, kept out of
- *  repositories/storyRelation.ts so that file has no service-layer import (repositories only
- *  talk to Prisma, per ADR 0010's spirit). Malformed/pre-migration JSON degrades to an empty
- *  array via parseStoredEntities/parseStoredEntityRelations, never thrown. */
-export function toRelationCandidateStory(raw: RawRelationCandidateStory): RelationCandidateStory {
-  return {
-    storyId: raw.storyId,
-    analysisId: raw.analysisId,
-    anchorHeadline: raw.anchorHeadline,
-    embedding: raw.embedding,
-    entities: parseStoredEntities(raw.entities),
-    entityRelations: parseStoredEntityRelations(raw.entityRelations),
-    createdAt: raw.createdAt,
-  }
+  entities: EntityForScoring[]
+  entityRelations: EntityRelationForScoring[]
 }
 
 // Weights are a starting point, not a tuned result — same convention as MATCH_THRESHOLD and
@@ -82,8 +87,10 @@ export const RELATION_CANDIDATE_POOL_SIZE = 20
 
 /**
  * Ranks `candidates` against `current` by a cheap, LLM-free combination of embedding similarity,
- * entity-key overlap, entity-relation overlap, and time proximity — the shortlist an LLM
- * confirmation call is only ever run against (ticket 35), never the full candidate pool.
+ * IDF-weighted entity-key containment, entity-relation overlap, and time proximity — the
+ * shortlist an LLM confirmation call is only ever run against (ticket 35), never the full
+ * candidate pool. `totalStories` is the corpus size the IDF weighting needs (ADR 0024) —
+ * repositories/entity.ts's countStories().
  *
  * Returns at most RELATION_CANDIDATE_POOL_SIZE candidates scoring at or above
  * RELATION_CANDIDATE_SCORE_THRESHOLD, highest score first. Does not itself bound candidates by
@@ -93,14 +100,17 @@ export const RELATION_CANDIDATE_POOL_SIZE = 20
 export function scoreRelationCandidates(
   current: RelationCandidateInput,
   candidates: RelationCandidateStory[],
+  totalStories: number,
   now: Date
 ): RelationCandidateStory[] {
-  const currentEntityKeys = entityKeySet(current.entities)
   const currentRelationTriples = entityRelationTripleSet(current.entityRelations)
 
   const scored = candidates.map((candidateStory) => {
     const embeddingSimilarity = cosineSimilarity(current.embedding, candidateStory.embedding)
-    const entityOverlap = jaccard(currentEntityKeys, entityKeySet(candidateStory.entities))
+    const entityOverlap = weightedEntityContainment(current.entities, candidateStory.entities, totalStories)
+    // Deliberately still plain Jaccard, not IDF-weighted like entityOverlap above: ADR 0024's
+    // P1-9 fix is scoped to entity-key overlap specifically, and this migration adds no
+    // frequency table for relation-triple rarity to weight by.
     const entityRelationOverlap = jaccard(
       currentRelationTriples,
       entityRelationTripleSet(candidateStory.entityRelations)

@@ -6,6 +6,7 @@ import type {
 } from '@prisma/client'
 import { prisma } from '../db.js'
 import type { AnalysisStatus } from './analysis.js'
+import type { EntityForScoring, EntityRelationForScoring } from './entity.js'
 
 export type { StoryRelation }
 
@@ -14,8 +15,8 @@ export interface RawRelationCandidateStory {
   analysisId: string
   anchorHeadline: string
   embedding: number[]
-  entities: unknown
-  entityRelations: unknown
+  entities: EntityForScoring[]
+  entityRelations: EntityRelationForScoring[]
   createdAt: Date
 }
 
@@ -35,9 +36,9 @@ export interface RawRelationCandidateStory {
  *  Excludes `excludeStoryId` (the Story generating candidates for itself doesn't need itself as a
  *  candidate — redundant given the createdAt bound, but explicit). Own window, distinct from
  *  storyMatching.ts's DEDUP_WINDOW_HOURS — see storyRelationScoring.ts. `entities`/
- *  `entityRelations` are returned raw (unknown); callers parse them via
- *  storyRelationScoring.ts's toRelationCandidateStory, keeping this repository free of any
- *  service-layer import. */
+ *  `entityRelations` come back already in the shape scoring needs (`{key, storyCount}[]` /
+ *  `{fromKey, toKey, type}[]`, repositories/entity.ts's types) — no defensive parsing required
+ *  the way the JSON-column form this replaced needed (ADR 0024). */
 export async function findRelationCandidateStories(
   excludeStoryId: string,
   beforeStoryCreatedAt: Date,
@@ -50,7 +51,17 @@ export async function findRelationCandidateStories(
       createdAt: { gte: since, lt: beforeStoryCreatedAt },
       analysis: { isNot: null },
     },
-    include: { analysis: { select: { id: true } } },
+    include: {
+      analysis: { select: { id: true } },
+      storyEntities: { select: { entity: { select: { key: true, storyCount: true } } } },
+      storyEntityRelations: {
+        select: {
+          type: true,
+          fromEntity: { select: { key: true } },
+          toEntity: { select: { key: true } },
+        },
+      },
+    },
   })
 
   return rows
@@ -60,8 +71,12 @@ export async function findRelationCandidateStories(
       analysisId: r.analysis.id,
       anchorHeadline: r.anchorHeadline,
       embedding: r.embedding,
-      entities: r.entities,
-      entityRelations: r.entityRelations,
+      entities: r.storyEntities.map((se) => se.entity),
+      entityRelations: r.storyEntityRelations.map((rel) => ({
+        fromKey: rel.fromEntity.key,
+        toKey: rel.toEntity.key,
+        type: rel.type,
+      })),
       createdAt: r.createdAt,
     }))
 }

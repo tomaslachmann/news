@@ -6,13 +6,13 @@ import { callJsonModel } from './llmClient.js'
 import {
   scoreRelationCandidates,
   RELATION_CANDIDATE_WINDOW_HOURS,
-  toRelationCandidateStory,
   type RelationCandidateInput,
   type RelationCandidateStory,
 } from './storyRelationScoring.js'
-import { parseStoredEntities, parseStoredEntityRelations } from './entityTypes.js'
 import { extractAndPersistStoryEntities } from './entityExtractionPass.js'
+import type { ExtractedEntity, ExtractedEntityRelation } from './entityTypes.js'
 import type { RawRelationCandidateStory } from '../repositories/storyRelation.js'
+import type { EntityForScoring, EntityRelationForScoring } from '../repositories/entity.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/storyRelation.txt'), 'utf8')
 
@@ -93,12 +93,16 @@ export async function linkStoryRelations(
   storyId: string,
   current: RelationCandidateInput & StoryDescriptor,
   candidatePool: RelationCandidateStory[],
+  totalStories: number,
   deps: LinkStoryRelationsDeps,
   log?: FastifyBaseLogger
 ): Promise<void> {
   let shortlist: RelationCandidateStory[]
   try {
-    shortlist = scoreRelationCandidates(current, candidatePool, new Date()).slice(0, RELATION_SHORTLIST_SIZE)
+    shortlist = scoreRelationCandidates(current, candidatePool, totalStories, new Date()).slice(
+      0,
+      RELATION_SHORTLIST_SIZE
+    )
   } catch (err) {
     log?.warn({ storyId, err }, 'Story relation candidate scoring failed; no relations created')
     return
@@ -134,15 +138,24 @@ export interface StoryForRelationPipeline {
   anchorHeadline: string
   createdAt: Date
   embedding: number[]
-  /** Currently-persisted, raw (unparsed) — the fallback used when this round's extraction finds
-   *  nothing new, so a retried/second call never scores relation candidates against an empty
-   *  signal when a Story already has good entities/entityRelations from an earlier pass. */
-  entities: unknown
-  entityRelations: unknown
 }
 
 export interface EntityAndRelationPipelineDeps {
-  updateStoryEntities: (storyId: string, entities: unknown, entityRelations: unknown) => Promise<void>
+  replaceStoryEntities: (
+    storyId: string,
+    entities: ExtractedEntity[],
+    entityRelations: ExtractedEntityRelation[]
+  ) => Promise<void>
+  /** The authoritative, currently-persisted entity/entity-relation set for `storyId` — always
+   *  read back after extractAndPersistStoryEntities rather than trusting its in-memory return
+   *  value, so a round where this round's extraction found nothing new still scores against
+   *  whatever an earlier, more successful pass persisted (ADR 0024). */
+  findStoryEntitiesForScoring: (
+    storyId: string
+  ) => Promise<{ entities: EntityForScoring[]; entityRelations: EntityRelationForScoring[] }>
+  /** Corpus size for IDF weighting (ADR 0024, fixes P1-9) — repositories/entity.ts's
+   *  countStories(). */
+  countStories: () => Promise<number>
   findRelationCandidateStories: (
     excludeStoryId: string,
     beforeStoryCreatedAt: Date,
@@ -152,14 +165,14 @@ export interface EntityAndRelationPipelineDeps {
 }
 
 /**
- * The full ticket 34 + ticket 35 pipeline for one Story: extract & persist entities, then use
- * them — falling back to whatever is already persisted on `story` if this round's extraction
- * found nothing new — to generate and persist Story relations. Shared by both trigger points
- * (approveDraft, confirmCoverages) so this sequencing, and its fresh-or-persisted fallback, live
- * in exactly one place rather than being reimplemented at each call site. Never throws: entity
- * extraction degrades gracefully on its own (extractAndPersistStoryEntities), and everything
- * from the candidate-pool fetch onward is caught here — nothing in this pipeline is allowed to
- * block the caller's own flow.
+ * The full ticket 34 + ticket 35 pipeline for one Story: extract & persist entities, then read
+ * back this Story's authoritative entity set — whatever this round's extraction just wrote, or
+ * whatever an earlier pass already persisted if this round found nothing new — to generate and
+ * persist Story relations. Shared by both trigger points (approveDraft, confirmCoverages) so this
+ * sequencing lives in exactly one place rather than being reimplemented at each call site. Never
+ * throws: entity extraction degrades gracefully on its own (extractAndPersistStoryEntities), and
+ * everything from the candidate-pool fetch onward is caught here — nothing in this pipeline is
+ * allowed to block the caller's own flow.
  */
 export async function extractEntitiesAndLinkStoryRelations(
   storyId: string,
@@ -168,22 +181,14 @@ export async function extractEntitiesAndLinkStoryRelations(
   deps: EntityAndRelationPipelineDeps,
   log?: FastifyBaseLogger
 ): Promise<void> {
-  const freshExtraction = await extractAndPersistStoryEntities(
-    storyId,
-    sourceTexts,
-    deps.updateStoryEntities,
-    log
-  )
+  await extractAndPersistStoryEntities(storyId, sourceTexts, deps.replaceStoryEntities, log)
 
   try {
-    const entities = freshExtraction?.entities ?? parseStoredEntities(story.entities)
-    const entityRelations =
-      freshExtraction?.entityRelations ?? parseStoredEntityRelations(story.entityRelations)
-    const rawCandidates = await deps.findRelationCandidateStories(
-      storyId,
-      story.createdAt,
-      RELATION_CANDIDATE_WINDOW_HOURS
-    )
+    const [{ entities, entityRelations }, rawCandidates, totalStories] = await Promise.all([
+      deps.findStoryEntitiesForScoring(storyId),
+      deps.findRelationCandidateStories(storyId, story.createdAt, RELATION_CANDIDATE_WINDOW_HOURS),
+      deps.countStories(),
+    ])
 
     await linkStoryRelations(
       storyId,
@@ -194,7 +199,8 @@ export async function extractEntitiesAndLinkStoryRelations(
         entities,
         entityRelations,
       },
-      rawCandidates.map(toRelationCandidateStory),
+      rawCandidates,
+      totalStories,
       { createStoryRelation: deps.createStoryRelation },
       log
     )

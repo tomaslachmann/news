@@ -77,6 +77,8 @@ describe('confirmStoryRelation', () => {
 describe('linkStoryRelations', () => {
   beforeEach(() => vi.resetAllMocks())
 
+  const TOTAL_STORIES = 100
+
   function makeCandidate(storyId: string) {
     return {
       storyId,
@@ -104,7 +106,9 @@ describe('linkStoryRelations', () => {
       .mockResolvedValueOnce({ related: true, type: 'RELATED', confidenceTier: 'LOW', reasoning: 'r2' })
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
-    await linkStoryRelations('story-current', CURRENT_INPUT, candidates, { createStoryRelation })
+    await linkStoryRelations('story-current', CURRENT_INPUT, candidates, TOTAL_STORIES, {
+      createStoryRelation,
+    })
 
     expect(createStoryRelation).toHaveBeenCalledWith({
       fromStoryId: 'story-current',
@@ -128,7 +132,9 @@ describe('linkStoryRelations', () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ related: false })
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
-    await linkStoryRelations('story-current', CURRENT_INPUT, [makeCandidate('c1')], { createStoryRelation })
+    await linkStoryRelations('story-current', CURRENT_INPUT, [makeCandidate('c1')], TOTAL_STORIES, {
+      createStoryRelation,
+    })
 
     expect(createStoryRelation).not.toHaveBeenCalled()
   })
@@ -140,7 +146,9 @@ describe('linkStoryRelations', () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ related: false })
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
-    await linkStoryRelations('story-current', CURRENT_INPUT, manyCandidates, { createStoryRelation })
+    await linkStoryRelations('story-current', CURRENT_INPUT, manyCandidates, TOTAL_STORIES, {
+      createStoryRelation,
+    })
 
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(RELATION_SHORTLIST_SIZE)
   })
@@ -153,7 +161,7 @@ describe('linkStoryRelations', () => {
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
     await expect(
-      linkStoryRelations('story-current', CURRENT_INPUT, candidates, { createStoryRelation })
+      linkStoryRelations('story-current', CURRENT_INPUT, candidates, TOTAL_STORIES, { createStoryRelation })
     ).resolves.toBeUndefined()
 
     expect(createStoryRelation).toHaveBeenCalledWith(expect.objectContaining({ toStoryId: 'succeeds' }))
@@ -169,7 +177,9 @@ describe('linkStoryRelations', () => {
     const createStoryRelation = vi.fn().mockRejectedValue(new Error('DB down'))
 
     await expect(
-      linkStoryRelations('story-current', CURRENT_INPUT, [makeCandidate('c1')], { createStoryRelation })
+      linkStoryRelations('story-current', CURRENT_INPUT, [makeCandidate('c1')], TOTAL_STORIES, {
+        createStoryRelation,
+      })
     ).resolves.toBeUndefined()
   })
 
@@ -177,7 +187,9 @@ describe('linkStoryRelations', () => {
     const unrelatedCandidate = { ...makeCandidate('unrelated'), embedding: [0, 1, 0] }
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
-    await linkStoryRelations('story-current', CURRENT_INPUT, [unrelatedCandidate], { createStoryRelation })
+    await linkStoryRelations('story-current', CURRENT_INPUT, [unrelatedCandidate], TOTAL_STORIES, {
+      createStoryRelation,
+    })
 
     expect(llmClientModule.callJsonModel).not.toHaveBeenCalled()
   })
@@ -190,9 +202,9 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
     anchorHeadline: 'Current story',
     createdAt: new Date('2026-01-15T00:00:00Z'),
     embedding: [1, 0, 0],
-    entities: [{ key: 'person:old', name: 'Old Person', type: 'PERSON', confidence: 0.8 }],
-    entityRelations: [],
   }
+
+  const NO_PERSISTED_ENTITIES = { entities: [], entityRelations: [] }
 
   const RAW_CANDIDATE = {
     storyId: 'candidate-1',
@@ -204,68 +216,84 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
     createdAt: new Date('2026-01-14T00:00:00Z'),
   }
 
-  it("uses this round's freshly-extracted entities for candidate scoring when extraction succeeds", async () => {
+  it('persists freshly-extracted entities via replaceStoryEntities when extraction finds something', async () => {
     vi.mocked(llmClientModule.callJsonModel)
       .mockResolvedValueOnce({
         entities: [{ mention: 'New', canonical_name: 'New Person', type: 'PERSON', confidence: 0.9 }],
         entityRelations: [],
       })
       .mockResolvedValueOnce({ related: false })
-    const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const findStoryEntitiesForScoring = vi.fn().mockResolvedValue(NO_PERSISTED_ENTITIES)
+    const countStories = vi.fn().mockResolvedValue(10)
     const findRelationCandidateStories = vi.fn().mockResolvedValue([RAW_CANDIDATE])
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
     await extractEntitiesAndLinkStoryRelations('story-1', ['some article text'], STORY, {
-      updateStoryEntities,
+      replaceStoryEntities,
+      findStoryEntitiesForScoring,
+      countStories,
       findRelationCandidateStories,
       createStoryRelation,
     })
 
-    expect(updateStoryEntities).toHaveBeenCalledWith(
+    expect(replaceStoryEntities).toHaveBeenCalledWith(
       'story-1',
       [{ key: 'person:new-person', name: 'New Person', type: 'PERSON', confidence: 0.9 }],
       []
     )
+    expect(findStoryEntitiesForScoring).toHaveBeenCalledWith('story-1')
     expect(findRelationCandidateStories).toHaveBeenCalledWith('story-1', STORY.createdAt, expect.any(Number))
   })
 
-  it("falls back to the Story's already-persisted entities for candidate scoring when this round extracts nothing new, rather than scoring against an empty signal", async () => {
+  it("does not call replaceStoryEntities when extraction finds nothing new, but still scores against findStoryEntitiesForScoring's persisted result", async () => {
     // Weak embedding match on its own (cosine ≈ 0.45, and the candidate's fixed 2026-01-14 date
     // is long past the relation window relative to the real clock this runs against, so time
-    // proximity contributes ~0 here) — only entity-key overlap against STORY.entities' persisted
-    // "person:old" can push this candidate's score above threshold and trigger an LLM
-    // confirmation call. If the fallback were silently treated as empty instead of STORY.entities,
-    // this candidate would never clear the threshold and callJsonModel would never be called.
+    // proximity contributes ~0 here) — only entity-key overlap against the persisted "person:old"
+    // findStoryEntitiesForScoring returns can push this candidate's score above threshold and
+    // trigger an LLM confirmation call. If that persisted result were ignored, this candidate
+    // would never clear the threshold and callJsonModel would never be called.
     const weakEmbeddingSharedEntityCandidate = {
       ...RAW_CANDIDATE,
       embedding: [1, 2, 0],
-      entities: [{ key: 'person:old', name: 'Old Person', type: 'PERSON', confidence: 0.8 }],
+      entities: [{ key: 'person:old', storyCount: 3 }],
     }
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ related: false })
-    const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const findStoryEntitiesForScoring = vi
+      .fn()
+      .mockResolvedValue({ entities: [{ key: 'person:old', storyCount: 3 }], entityRelations: [] })
+    const countStories = vi.fn().mockResolvedValue(10)
     const findRelationCandidateStories = vi.fn().mockResolvedValue([weakEmbeddingSharedEntityCandidate])
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
     // No source texts at all — runEntityExtractionPass returns an empty result without an LLM
-    // call, so extractAndPersistStoryEntities returns null and STORY.entities must be used.
+    // call, so extractAndPersistStoryEntities never calls replaceStoryEntities, and scoring must
+    // still use findStoryEntitiesForScoring's authoritative, already-persisted result.
     await extractEntitiesAndLinkStoryRelations('story-1', [], STORY, {
-      updateStoryEntities,
+      replaceStoryEntities,
+      findStoryEntitiesForScoring,
+      countStories,
       findRelationCandidateStories,
       createStoryRelation,
     })
 
-    expect(updateStoryEntities).not.toHaveBeenCalled()
+    expect(replaceStoryEntities).not.toHaveBeenCalled()
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(1)
   })
 
   it('never throws, even when the candidate-pool fetch fails', async () => {
-    const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const findStoryEntitiesForScoring = vi.fn().mockResolvedValue(NO_PERSISTED_ENTITIES)
+    const countStories = vi.fn().mockResolvedValue(10)
     const findRelationCandidateStories = vi.fn().mockRejectedValue(new Error('DB down'))
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)
 
     await expect(
       extractEntitiesAndLinkStoryRelations('story-1', [], STORY, {
-        updateStoryEntities,
+        replaceStoryEntities,
+        findStoryEntitiesForScoring,
+        countStories,
         findRelationCandidateStories,
         createStoryRelation,
       })

@@ -45,6 +45,31 @@ enum StoryRelationStatus {
   REJECTED
 }
 
+/// Matches entityTypes.ts's EntityTypeSchema exactly — kept in sync by hand, same convention as
+/// every other closed enum this schema mirrors from a Zod schema (see StoryRelationType).
+enum EntityType {
+  PERSON
+  ORGANIZATION
+  PLACE
+  COUNTRY
+}
+
+/// Matches entityTypes.ts's EntityRelationTypeSchema exactly.
+enum EntityRelationType {
+  REPRESENTS
+  HOLDS_POSITION_IN
+  WORKS_FOR
+  MEMBER_OF
+  LOCATED_IN
+  BASED_IN
+  PART_OF
+  INVOLVES
+  MEETS
+  ATTACKS
+  ACCUSES
+  ANNOUNCES
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -58,33 +83,97 @@ model User {
 /// against rather than being folded into Analysis's own DRAFT/PENDING/COMPLETE/FAILED lifecycle.
 /// See ADR 0017.
 model Story {
-  id              String          @id @default(cuid())
-  createdAt       DateTime        @default(now())
+  id                   String                @id @default(cuid())
+  createdAt            DateTime              @default(now())
   /// The seed/triggering article's title, fixed at creation — what every same-event
   /// verification call compares a candidate article's title against.
-  anchorHeadline  String
+  anchorHeadline       String
   /// Embedding of anchorHeadline (+ excerpt where available), used by the same-event
   /// classification step Ingestion and human-seeded submission now share (ADR 0018, ADR 0019).
   /// Every new Story gets one regardless of origin; empty only for Stories created before ADR
   /// 0019 shipped, or when embedding generation failed at creation — an empty vector never
   /// scores above the match threshold, so such a Story is simply never matched, not a broken
   /// state.
-  embedding       Float[]         @default([])
+  embedding            Float[]               @default([])
+  analysis             Analysis?
+  relationsFrom        StoryRelation[]       @relation("StoryRelationFrom")
+  relationsTo          StoryRelation[]       @relation("StoryRelationTo")
   /// Lightweight, non-authoritative entity signal extracted once (ticket 34), used only as
   /// candidate-scoring evidence for Story-to-Story relation linking (ticket 35) — never a
-  /// knowledge graph, never surfaced to a reader/Admin as ground truth. Array of
-  /// `{ key, name, type, confidence }`; `key` is a deterministic `type:slugify(name)` label, not
-  /// a verified real-world identity (see ADR, ticket 35). Empty for every Story created before
-  /// this feature shipped — no backfill.
-  entities        Json            @default("[]")
+  /// knowledge graph, never surfaced to a reader/Admin as ground truth. Normalized into
+  /// Entity/StoryEntity (ADR 0024, superseding the JSON-column form ADR 0022 originally chose)
+  /// so entity frequency can be queried and IDF-weighted, not duplicated per-Story. Empty for
+  /// every Story created before ticket 34 shipped — no backfill.
+  storyEntities        StoryEntity[]
   /// Entity-to-entity relations this Story's own coverage asserts (e.g. "Donald Tusk REPRESENTS
   /// Poland") — Story-scoped evidence, not a global/permanent fact about the entities involved.
-  /// Array of `{ from, to, type, confidence }`, `from`/`to` referencing keys in `entities` above.
-  /// Same no-backfill rule as `entities`.
-  entityRelations Json            @default("[]")
-  analysis        Analysis?
-  relationsFrom   StoryRelation[] @relation("StoryRelationFrom")
-  relationsTo     StoryRelation[] @relation("StoryRelationTo")
+  /// The assertion belongs to this join row's `storyId`, not to the Entities it references
+  /// globally (ADR 0024).
+  storyEntityRelations StoryEntityRelation[]
+}
+
+/// A named person/organization/place/country mentioned across Stories' coverage — a normalized,
+/// deduplicated label, not a verified real-world identity (ADR 0022, ADR 0024). `key` is a
+/// deterministic `type:slugify(canonicalName)` derived by the backend, never invented by the
+/// LLM, so the same real-world entity mentioned identically in two different Stories reliably
+/// produces the same key. Two distinct real-world entities that happen to normalize to the same
+/// name can collide — an accepted, documented v1 limitation, unchanged by moving this out of
+/// per-Story JSON into a shared table.
+model Entity {
+  id            String                @id @default(cuid())
+  key           String                @unique
+  type          EntityType
+  canonicalName String
+  /// Materialized count of Stories this Entity is attached to via StoryEntity — maintained by a
+  /// transactional increment/decrement alongside each StoryEntity write, not a periodic
+  /// correction job (no code path deletes a Story/StoryEntity today, so there is no drift to
+  /// correct — see ADR 0024). Powers IDF weighting in storyRelationScoring.ts (fixes P1-9: plain
+  /// Jaccard is the wrong metric for this project's asymmetric entity-set sizes between the
+  /// Ingestion and human-seeded extraction paths).
+  storyCount    Int                   @default(0)
+  storyEntities StoryEntity[]
+  relationsFrom StoryEntityRelation[] @relation("EntityRelationFrom")
+  relationsTo   StoryEntityRelation[] @relation("EntityRelationTo")
+
+  @@index([type])
+}
+
+/// Join row: this Story's coverage mentions this Entity, at this confidence. The Story-scoped
+/// evidence itself (ADR 0022's entity-resolution-avoidance reasoning is unaffected by ADR 0024's
+/// storage-shape change) — `confidence` is the extraction pass's own per-entity confidence,
+/// carried over unchanged from the JSON form this replaces.
+model StoryEntity {
+  storyId    String
+  story      Story  @relation(fields: [storyId], references: [id])
+  entityId   String
+  entity     Entity @relation(fields: [entityId], references: [id])
+  confidence Float
+
+  @@id([storyId, entityId])
+  /// The query a JSON column could never do: "all Stories mentioning entity X" (ADR 0024).
+  @@index([entityId])
+}
+
+/// What one Story's own coverage asserts about two of its Entities (e.g. "Donald Tusk REPRESENTS
+/// Poland") — the assertion belongs to `storyId`, never a global/permanent fact about the
+/// Entities involved (ADR 0022). Not the same thing as StoryRelation, which links two Stories,
+/// not two Entities within one Story — see CONTEXT.md's Event Graph entry. A `fromEntityId <>
+/// toEntityId` CHECK constraint is written by hand in this migration, same as Coverage's partial
+/// unique index — Prisma's schema DSL can't express a CHECK constraint.
+model StoryEntityRelation {
+  id           String             @id @default(cuid())
+  storyId      String
+  story        Story              @relation(fields: [storyId], references: [id])
+  fromEntityId String
+  fromEntity   Entity             @relation("EntityRelationFrom", fields: [fromEntityId], references: [id])
+  toEntityId   String
+  toEntity     Entity             @relation("EntityRelationTo", fields: [toEntityId], references: [id])
+  type         EntityRelationType
+  confidence   Float
+
+  @@unique([storyId, fromEntityId, toEntityId, type])
+  @@index([fromEntityId])
+  @@index([toEntityId])
 }
 
 /// A typed, directional Story-to-Story edge in the Event Graph (ticket 35) — the newer Story
