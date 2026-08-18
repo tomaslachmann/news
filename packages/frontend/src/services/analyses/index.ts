@@ -10,7 +10,9 @@ import type {
   PatchCoveragesBody,
   SseEvent,
   RelatedEventItem,
+  Page,
 } from '@news-triangulator/shared'
+import { cursorQueryParam } from '../pagination'
 
 export type {
   CreateAnalysisResponse,
@@ -24,6 +26,7 @@ export type {
   PatchCoveragesBody,
   SseEvent,
   RelatedEventItem,
+  Page,
 }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
@@ -94,12 +97,12 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
   return res.json() as Promise<AnalysisDetail>
 }
 
-export async function fetchAnalyses(): Promise<AnalysisListItem[]> {
-  const res = await fetch('/api/analyses', { credentials: 'include' })
+export async function fetchAnalyses(cursor?: string): Promise<Page<AnalysisListItem>> {
+  const res = await fetch(`/api/analyses${cursorQueryParam(cursor)}`, { credentials: 'include' })
 
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst analýzy')
 
-  return res.json() as Promise<AnalysisListItem[]>
+  return res.json() as Promise<Page<AnalysisListItem>>
 }
 
 function on<T extends SseEvent['type']>(

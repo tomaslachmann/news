@@ -286,19 +286,43 @@ describe('attachSeedToMatch', () => {
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
     vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
+    vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: true })
 
     await attachSeedToMatch('a1', 'https://example.cz/x')
 
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
-      {
-        analysisId: 'a1',
-        sourceId: SOURCE.id,
-        title: 'Headline',
-        articleUrl: 'https://example.cz/x',
-        status: 'PENDING',
-      },
-    ])
+    expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalledWith(
+      'a1',
+      [
+        {
+          analysisId: 'a1',
+          sourceId: SOURCE.id,
+          title: 'Headline',
+          articleUrl: 'https://example.cz/x',
+          status: 'PENDING',
+        },
+      ],
+      25
+    )
     expect(ingestionServiceModule.approveDraft).not.toHaveBeenCalled()
+  })
+
+  it('does not fail the attach when the Analysis is already at MAX_COVERAGES_PER_ANALYSIS, but still approves a DRAFT', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'x',
+      seedHeadline: 'x',
+      status: 'DRAFT',
+      createdAt: new Date(),
+    })
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
+    vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
+    vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: false, activeCount: 25 })
+
+    await attachSeedToMatch('a1', 'https://example.cz/x')
+
+    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', undefined)
   })
 
   it('attaches the seed as Coverage and runs the approve flow for a DRAFT Analysis', async () => {
@@ -313,10 +337,11 @@ describe('attachSeedToMatch', () => {
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
     vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
+    vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: true })
 
     await attachSeedToMatch('a1', 'https://example.cz/x')
 
-    expect(coverageRepo.createCoverages).toHaveBeenCalled()
+    expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalled()
     expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', undefined)
   })
 
@@ -344,6 +369,7 @@ describe('attachSeedToMatch', () => {
         extractionResult: null,
         status: 'PENDING',
         excluded: false,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
       },
     ])
 
@@ -420,6 +446,19 @@ describe('discoverSources', () => {
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockImplementation((candidates) =>
       Promise.resolve(candidates)
     )
+    vi.mocked(coverageRepo.addCoveragesUpToLimit).mockResolvedValue({
+      inserted: [
+        {
+          analysisId: 'a1',
+          sourceId: 'src-idnes',
+          title: 'T',
+          articleUrl: 'https://idnes.cz/x',
+          publishedAt: '2025-01-01T00:00:00Z',
+          status: 'PENDING',
+        },
+      ],
+      droppedCount: 0,
+    })
 
     const result = await discoverSources('a1', ['keyword'])
 
@@ -437,16 +476,20 @@ describe('discoverSources', () => {
       undefined
     )
     expect(result).toHaveLength(1)
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
-      {
-        analysisId: 'a1',
-        sourceId: 'src-idnes',
-        title: 'T',
-        articleUrl: 'https://idnes.cz/x',
-        publishedAt: '2025-01-01T00:00:00Z',
-        status: 'PENDING',
-      },
-    ])
+    expect(coverageRepo.addCoveragesUpToLimit).toHaveBeenCalledWith(
+      'a1',
+      [
+        {
+          analysisId: 'a1',
+          sourceId: 'src-idnes',
+          title: 'T',
+          articleUrl: 'https://idnes.cz/x',
+          publishedAt: '2025-01-01T00:00:00Z',
+          status: 'PENDING',
+        },
+      ],
+      25
+    )
   })
 
   it('excludes a candidate that fails same-story verification', async () => {
@@ -479,11 +522,12 @@ describe('discoverSources', () => {
       gdeltCount: 1,
     })
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockResolvedValue([])
+    vi.mocked(coverageRepo.addCoveragesUpToLimit).mockResolvedValue({ inserted: [], droppedCount: 0 })
 
     const result = await discoverSources('a1', ['keyword'])
 
     expect(result).toEqual([])
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([])
+    expect(coverageRepo.addCoveragesUpToLimit).toHaveBeenCalledWith('a1', [], 25)
   })
 })
 
@@ -522,15 +566,47 @@ describe('confirmCoverages', () => {
     extractionResult: null,
     status: 'PENDING' as const,
     excluded: false,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
   }
 
   function stubHappyPath() {
     vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(ANALYSIS)
     vi.mocked(coverageRepo.findCoverageUrlsForAnalysis).mockResolvedValue([])
+    vi.mocked(coverageRepo.reconcileCoverages).mockResolvedValue({ ok: true })
     vi.mocked(coverageRepo.findCoveragesForAnalysis)
       .mockResolvedValueOnce([PENDING_COVERAGE])
       .mockResolvedValueOnce([PENDING_COVERAGE])
   }
+
+  it('rejects new custom URLs that would push the Analysis past MAX_COVERAGES_PER_ANALYSIS, without creating any of them', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoverageUrlsForAnalysis).mockResolvedValue([])
+    vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
+    // 20 already active — 5 new custom URLs would total 25, one more pushes it to 26
+    vi.mocked(coverageRepo.reconcileCoverages).mockResolvedValue({ ok: false, activeCount: 20 })
+    const customUrls = Array.from({ length: 6 }, (_, i) => `https://example.cz/extra-${i}`)
+
+    await expect(confirmCoverages('a1', { confirmedIds: [], customUrls })).rejects.toThrow(ValidationError)
+    expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
+  })
+
+  it('allows new custom URLs that land exactly at MAX_COVERAGES_PER_ANALYSIS', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoverageUrlsForAnalysis).mockResolvedValue([])
+    vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
+    vi.mocked(coverageRepo.reconcileCoverages).mockResolvedValue({ ok: true })
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    const customUrls = Array.from({ length: 5 }, (_, i) => `https://example.cz/extra-${i}`)
+
+    await confirmCoverages('a1', { confirmedIds: [], customUrls })
+
+    expect(coverageRepo.reconcileCoverages).toHaveBeenCalledWith(
+      'a1',
+      [],
+      expect.arrayContaining([expect.objectContaining({ analysisId: 'a1' })]),
+      25
+    )
+  })
 
   it('marks a Coverage extraction-failed when the scraped text matches a blocked-content phrase, even though it is long', async () => {
     stubHappyPath()
@@ -606,6 +682,7 @@ describe('getAnalysisDetail', () => {
     extractionResult: null,
     status: 'OK' as const,
     excluded: false,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
   }
 
   const DIMENSIONS = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
@@ -892,30 +969,30 @@ describe('getAnalysisDetail', () => {
 describe('listAnalyses', () => {
   beforeEach(() => vi.resetAllMocks())
 
+  const ROW_A1 = {
+    id: 'a1',
+    seedHeadline: 'Newer analysis',
+    headline: 'Generated headline',
+    createdAt: new Date('2025-01-02T00:00:00Z'),
+    status: 'COMPLETE' as const,
+    okCoverageCount: 3,
+  }
+  const ROW_A2 = {
+    id: 'a2',
+    seedHeadline: 'Older analysis',
+    headline: null,
+    createdAt: new Date('2025-01-01T00:00:00Z'),
+    status: 'PENDING' as const,
+    okCoverageCount: 0,
+  }
+
   it('maps each repository row to an AnalysisListItem, preferring the generated headline as title when present and falling back to the working title otherwise', async () => {
-    vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([
-      {
-        id: 'a1',
-        seedHeadline: 'Newer analysis',
-        headline: 'Generated headline',
-        createdAt: new Date('2025-01-02T00:00:00Z'),
-        status: 'COMPLETE',
-        okCoverageCount: 3,
-      },
-      {
-        id: 'a2',
-        seedHeadline: 'Older analysis',
-        headline: null,
-        createdAt: new Date('2025-01-01T00:00:00Z'),
-        status: 'PENDING',
-        okCoverageCount: 0,
-      },
-    ])
+    vi.mocked(analysisRepo.findAnalysesPage).mockResolvedValue([ROW_A1, ROW_A2])
 
-    const result = await listAnalyses(true)
+    const result = await listAnalyses(true, undefined)
 
-    expect(analysisRepo.findAllAnalyses).toHaveBeenCalledWith(true)
-    expect(result).toEqual([
+    expect(analysisRepo.findAnalysesPage).toHaveBeenCalledWith(true, undefined, 20)
+    expect(result.items).toEqual([
       {
         id: 'a1',
         seedHeadline: 'Newer analysis',
@@ -933,19 +1010,48 @@ describe('listAnalyses', () => {
         status: 'pending',
       },
     ])
+    expect(result.nextCursor).toBeNull()
   })
 
   it('passes includeAllStatuses through to the repository', async () => {
-    vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([])
+    vi.mocked(analysisRepo.findAnalysesPage).mockResolvedValue([])
 
-    await listAnalyses(false)
+    await listAnalyses(false, undefined)
 
-    expect(analysisRepo.findAllAnalyses).toHaveBeenCalledWith(false)
+    expect(analysisRepo.findAnalysesPage).toHaveBeenCalledWith(false, undefined, 20)
   })
 
-  it('returns an empty array when there are no analyses', async () => {
-    vi.mocked(analysisRepo.findAllAnalyses).mockResolvedValue([])
+  it('returns an empty page when there are no analyses', async () => {
+    vi.mocked(analysisRepo.findAnalysesPage).mockResolvedValue([])
 
-    expect(await listAnalyses(true)).toEqual([])
+    expect(await listAnalyses(true, undefined)).toEqual({ items: [], nextCursor: null })
+  })
+
+  it('returns a nextCursor when the repository returns one more row than the page limit', async () => {
+    vi.mocked(analysisRepo.findAnalysesPage).mockResolvedValue([ROW_A1, ROW_A2])
+
+    const result = await listAnalyses(true, undefined, 1)
+
+    expect(analysisRepo.findAnalysesPage).toHaveBeenCalledWith(true, undefined, 1)
+    expect(result.items).toHaveLength(1)
+    expect(result.nextCursor).not.toBeNull()
+  })
+
+  it('decodes an incoming cursor and passes it through to the repository', async () => {
+    vi.mocked(analysisRepo.findAnalysesPage).mockResolvedValue([])
+    const createdAt = new Date('2025-01-01T00:00:00.000Z')
+    const cursor = Buffer.from(`${createdAt.toISOString()}|a1`).toString('base64url')
+
+    await listAnalyses(true, cursor)
+
+    expect(analysisRepo.findAnalysesPage).toHaveBeenCalledWith(true, { createdAt, id: 'a1' }, 20)
+  })
+
+  it('caps a caller-requested limit at MAX_PAGE_SIZE rather than trusting it outright', async () => {
+    vi.mocked(analysisRepo.findAnalysesPage).mockResolvedValue([])
+
+    await listAnalyses(true, undefined, 999)
+
+    expect(analysisRepo.findAnalysesPage).toHaveBeenCalledWith(true, undefined, 50)
   })
 })

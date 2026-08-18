@@ -2,9 +2,11 @@ import type {
   PendingAdditionItem,
   AnalysisListItem,
   PendingStoryRelationItem,
+  Page,
 } from '@news-triangulator/shared'
+import { cursorQueryParam } from '../pagination'
 
-export type { PendingAdditionItem, AnalysisListItem, PendingStoryRelationItem }
+export type { PendingAdditionItem, AnalysisListItem, PendingStoryRelationItem, Page }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as { error?: string }
@@ -19,12 +21,14 @@ export async function fetchPendingAdditions(): Promise<PendingAdditionItem[]> {
   return res.json() as Promise<PendingAdditionItem[]>
 }
 
-export async function fetchVisibleDrafts(): Promise<AnalysisListItem[]> {
-  const res = await fetch('/api/admin/ingestion/drafts', { credentials: 'include' })
+export async function fetchVisibleDrafts(cursor?: string): Promise<Page<AnalysisListItem>> {
+  const res = await fetch(`/api/admin/ingestion/drafts${cursorQueryParam(cursor)}`, {
+    credentials: 'include',
+  })
 
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst koncepty')
 
-  return res.json() as Promise<AnalysisListItem[]>
+  return res.json() as Promise<Page<AnalysisListItem>>
 }
 
 export async function approveDraft(analysisId: string): Promise<void> {

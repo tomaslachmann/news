@@ -48,6 +48,7 @@ function stubCommon() {
   // No Coverage from this Source on the matched Analysis yet — the collision check (P0-6,
   // docs/audit.md) lets the attach through. Tests exercising the duplicate-skip path override this.
   vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
+  vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: true })
 }
 
 describe('runIngestionPass', () => {
@@ -128,9 +129,11 @@ describe('runIngestionPass', () => {
     const summary = await runIngestionPass()
 
     expect(analysisRepo.createDraftAnalysis).toHaveBeenCalledTimes(1)
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
-      expect.objectContaining({ analysisId: 'draft-a', articleUrl: ITEM_B.url }),
-    ])
+    expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalledWith(
+      'draft-a',
+      [expect.objectContaining({ analysisId: 'draft-a', articleUrl: ITEM_B.url })],
+      25
+    )
     expect(summary).toEqual({ checked: 2, created: 1, attached: 1, flagged: 0, skipped: 0 })
   })
 
@@ -152,17 +155,42 @@ describe('runIngestionPass', () => {
     const summary = await runIngestionPass()
 
     expect(analysisRepo.createDraftAnalysis).not.toHaveBeenCalled()
-    expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
+    expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalledWith(
+      'existing-1',
+      [
+        {
+          analysisId: 'existing-1',
+          sourceId: RSS_ITEM.sourceId,
+          title: RSS_ITEM.title,
+          articleUrl: RSS_ITEM.url,
+          publishedAt: RSS_ITEM.publishedAt,
+          status: 'PENDING',
+        },
+      ],
+      25
+    )
+    expect(summary).toEqual({ checked: 1, created: 0, attached: 1, flagged: 0, skipped: 0 })
+  })
+
+  it('skips attaching (without failing the pass) when the matched Analysis is already at MAX_COVERAGES_PER_ANALYSIS', async () => {
+    stubCommon()
+    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
       {
+        storyId: 'story-x',
         analysisId: 'existing-1',
-        sourceId: RSS_ITEM.sourceId,
-        title: RSS_ITEM.title,
-        articleUrl: RSS_ITEM.url,
-        publishedAt: RSS_ITEM.publishedAt,
-        status: 'PENDING',
+        analysisStatus: 'PENDING',
+        anchorHeadline: 'Anchor headline',
+        headline: null,
+        embedding: MATCHING_EMBEDDING,
+        createdAt: new Date(),
       },
     ])
-    expect(summary).toEqual({ checked: 1, created: 0, attached: 1, flagged: 0, skipped: 0 })
+    vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: false, activeCount: 25 })
+
+    const summary = await runIngestionPass()
+
+    expect(summary).toEqual({ checked: 1, created: 0, attached: 0, flagged: 0, skipped: 1 })
   })
 
   it('skips attaching when this Source already has non-excluded Coverage on the matched Analysis (P0-6, docs/audit.md)', async () => {
@@ -366,6 +394,7 @@ function makeCoverage(id: string, title: string) {
     extractionResult: null,
     status: 'PENDING' as const,
     excluded: false,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
   }
 }
 
@@ -559,24 +588,13 @@ describe('listPendingAdditions', () => {
 describe('listVisibleDrafts', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('excludes a Draft below the minimum source count', async () => {
-    vi.mocked(analysisRepo.findDraftsWithCoverageCount).mockResolvedValue([
-      {
-        id: 'd1',
-        seedHeadline: 'Single-source draft',
-        headline: null,
-        createdAt: new Date('2026-01-01T00:00:00Z'),
-        coverageCount: 1,
-      },
-    ])
+  // The visibility threshold (MIN_VISIBLE_SOURCE_COUNT) is now applied inside the repository's
+  // own HAVING clause (ticket 03) — findDraftsPage is trusted to have already filtered these
+  // rows, so these tests exercise the mapping/pagination logic, not the threshold itself
+  // (that's covered by the integration test against real Postgres).
 
-    const result = await listVisibleDrafts()
-
-    expect(result).toEqual([])
-  })
-
-  it('includes a Draft that has crossed the minimum source count', async () => {
-    vi.mocked(analysisRepo.findDraftsWithCoverageCount).mockResolvedValue([
+  it('maps each repository row to an AnalysisListItem with status "draft"', async () => {
+    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue([
       {
         id: 'd1',
         seedHeadline: 'Corroborated draft',
@@ -586,9 +604,10 @@ describe('listVisibleDrafts', () => {
       },
     ])
 
-    const result = await listVisibleDrafts()
+    const result = await listVisibleDrafts(undefined)
 
-    expect(result).toEqual([
+    expect(analysisRepo.findDraftsPage).toHaveBeenCalledWith(2, undefined, 20)
+    expect(result.items).toEqual([
       {
         id: 'd1',
         seedHeadline: 'Corroborated draft',
@@ -598,17 +617,37 @@ describe('listVisibleDrafts', () => {
         status: 'draft',
       },
     ])
+    expect(result.nextCursor).toBeNull()
   })
 
-  it('mixes visible and hidden Drafts correctly in the same response', async () => {
-    vi.mocked(analysisRepo.findDraftsWithCoverageCount).mockResolvedValue([
-      { id: 'hidden', seedHeadline: 'Hidden', headline: null, createdAt: new Date(), coverageCount: 1 },
-      { id: 'visible', seedHeadline: 'Visible', headline: null, createdAt: new Date(), coverageCount: 3 },
+  it('returns a nextCursor when the repository returns one more row than the page limit', async () => {
+    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue([
+      {
+        id: 'd1',
+        seedHeadline: 'A',
+        headline: null,
+        createdAt: new Date('2026-01-02T00:00:00Z'),
+        coverageCount: 2,
+      },
+      {
+        id: 'd2',
+        seedHeadline: 'B',
+        headline: null,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        coverageCount: 3,
+      },
     ])
 
-    const result = await listVisibleDrafts()
+    const result = await listVisibleDrafts(undefined, 1)
 
-    expect(result.map((d) => d.id)).toEqual(['visible'])
+    expect(result.items).toHaveLength(1)
+    expect(result.nextCursor).not.toBeNull()
+  })
+
+  it('returns an empty page when nothing is visible', async () => {
+    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue([])
+
+    expect(await listVisibleDrafts(undefined)).toEqual({ items: [], nextCursor: null })
   })
 })
 

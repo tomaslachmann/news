@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify'
+import { ListQuerySchema } from '@news-triangulator/shared'
 import { requireAdmin } from '../plugins/auth.js'
 import { requireIngestionSecret } from '../plugins/ingestionAuth.js'
+import { ValidationError } from '../errors.js'
 import * as ingestionService from '../services/ingestionService.js'
 
 export function registerIngestionRoutes(fastify: FastifyInstance): void {
@@ -21,9 +23,14 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
   )
 
   // GET /api/admin/ingestion/drafts — Drafts that have crossed the visibility threshold (ADR 0018)
-  fastify.get('/api/admin/ingestion/drafts', { preHandler: requireAdmin }, async (_request, reply) => {
-    const items = await ingestionService.listVisibleDrafts()
-    return reply.code(200).send(items)
+  fastify.get('/api/admin/ingestion/drafts', { preHandler: requireAdmin }, async (request, reply) => {
+    const parsed = ListQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné parametry dotazu')
+    }
+
+    const page = await ingestionService.listVisibleDrafts(parsed.data.cursor, parsed.data.limit)
+    return reply.code(200).send(page)
   })
 
   // PATCH /api/admin/ingestion/drafts/:id/approve — DRAFT → PENDING, proceeds through the existing Review Step

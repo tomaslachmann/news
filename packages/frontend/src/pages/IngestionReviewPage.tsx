@@ -15,7 +15,8 @@ import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
 
 function DraftsSection() {
-  const { data: drafts, isLoading, isError } = useVisibleDrafts()
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useVisibleDrafts()
+  const drafts = data?.pages.flatMap((page) => page.items)
   const navigate = useNavigate()
   const approveMutation = useApproveDraft()
   const rejectMutation = useRejectDraft()
@@ -76,6 +77,19 @@ function DraftsSection() {
             </li>
           ))}
         </ul>
+      )}
+
+      {hasNextPage && (
+        <div className="mt-4 flex justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? 'Načítání…' : 'Načíst další'}
+          </Button>
+        </div>
       )}
     </section>
   )

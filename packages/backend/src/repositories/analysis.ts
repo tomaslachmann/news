@@ -1,6 +1,8 @@
-import type { Analysis, AnalysisStatus, Story, SynthesisResult, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import type { Analysis, AnalysisStatus, Story, SynthesisResult } from '@prisma/client'
 import { prisma } from '../db.js'
 import type { CoverageWithSource } from './coverage.js'
+import type { Cursor } from '../pagination.js'
 
 export type { Analysis, AnalysisStatus }
 
@@ -108,10 +110,17 @@ export async function updateStoryEntities(
   })
 }
 
-/** Every Seed Article URL ever recorded, across all Analyses — used by Ingestion alongside
- *  findAllArticleUrls to skip RSS items it has already turned into an Analysis. */
-export async function findAllSeedUrls(): Promise<string[]> {
-  const rows = await prisma.analysis.findMany({ select: { seedUrl: true } })
+/** Every Seed Article URL from the last `sinceHours` — used by Ingestion alongside
+ *  findAllArticleUrls to skip RSS items it has already turned into an Analysis. Bounded, not
+ *  the whole table's history: a URL genuinely re-published weeks ago realistically never
+ *  reappears in a 20-minute RSS poll, and this query ran unbounded on every single poll
+ *  (docs/audit.md P0-2, ticket 03). */
+export async function findAllSeedUrls(sinceHours: number): Promise<string[]> {
+  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000)
+  const rows = await prisma.analysis.findMany({
+    where: { createdAt: { gte: since } },
+    select: { seedUrl: true },
+  })
   return rows.map((r) => r.seedUrl)
 }
 
@@ -133,21 +142,13 @@ export async function findAnalysisWithDetails(id: string): Promise<AnalysisWithD
   })
 }
 
-/** Shared by findAllAnalyses and findDraftsWithCoverageCount — both need "Analyses matching X,
- *  each with a Coverage count matching Y", differing only in which rows and which Coverage rows
- *  count. */
-async function findAnalysesWithCoverageCount(
-  analysisWhere: Prisma.AnalysisWhereInput | undefined,
-  coverageWhere: Prisma.CoverageWhereInput
-) {
-  return prisma.analysis.findMany({
-    where: analysisWhere,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: { select: { coverages: { where: coverageWhere } } },
-      synthesisResult: { select: { headline: true } },
-    },
-  })
+/** Row-tuple comparison, not a plain `createdAt <` — stable across inserts that land exactly on
+ *  the boundary timestamp (keyset pagination, docs/audit.md P0-7, ticket 03). */
+function cursorWhere(cursor: Cursor | undefined): Prisma.AnalysisWhereInput {
+  if (!cursor) return {}
+  return {
+    OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+  }
 }
 
 export interface AnalysisListRow {
@@ -159,10 +160,25 @@ export interface AnalysisListRow {
   okCoverageCount: number
 }
 
-export async function findAllAnalyses(includeAllStatuses: boolean): Promise<AnalysisListRow[]> {
-  const rows = await findAnalysesWithCoverageCount(includeAllStatuses ? undefined : { status: 'COMPLETE' }, {
-    status: 'OK',
-    excluded: false,
+/** Fetches `limit + 1` rows (the caller peels off the extra one to know whether a next page
+ *  exists — see `pagination.ts`'s `splitPage`). Admins see every status; everyone else only
+ *  COMPLETE. */
+export async function findAnalysesPage(
+  includeAllStatuses: boolean,
+  cursor: Cursor | undefined,
+  limit: number
+): Promise<AnalysisListRow[]> {
+  const rows = await prisma.analysis.findMany({
+    where: {
+      ...(includeAllStatuses ? {} : { status: 'COMPLETE' }),
+      ...cursorWhere(cursor),
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    include: {
+      _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },
+      synthesisResult: { select: { headline: true } },
+    },
   })
 
   return rows.map((r) => ({
@@ -183,26 +199,51 @@ export interface DraftListRow {
   coverageCount: number
 }
 
-/** Every DRAFT Analysis with its attached (non-excluded) Coverage count — deliberately every
- *  status, not just `OK` like `findAllAnalyses`'s `okCoverageCount`: a Draft's Coverage is
- *  always `PENDING` (nothing is scraped until Review Step confirmation after approval), so an
- *  OK-only count would always read zero here. Unfiltered by any visibility threshold — that's
- *  the caller's job (see `ingestionService.listVisibleDrafts`), so an Admin's full History audit
- *  can still see every Draft regardless of source count. */
-export async function findDraftsWithCoverageCount(): Promise<DraftListRow[]> {
-  const rows = await findAnalysesWithCoverageCount({ status: 'DRAFT' }, { excluded: false })
+/** DRAFT Analyses with at least `minVisibleSourceCount` attached (non-excluded) Coverage —
+ *  raw SQL because the visibility threshold has to be a `HAVING` clause (filtering on the
+ *  aggregated count), which Prisma's query builder can't express; pushing it into the query
+ *  itself (rather than fetching everything and filtering in JS, as before) is what makes cursor
+ *  pagination here return a consistent page size (ticket 03). Deliberately every Coverage
+ *  status, not just OK, like `findAnalysesPage`'s `okCoverageCount`: a Draft's Coverage is
+ *  always PENDING (nothing is scraped until Review Step confirmation after approval), so an
+ *  OK-only count would always read zero here. */
+export async function findDraftsPage(
+  minVisibleSourceCount: number,
+  cursor: Cursor | undefined,
+  limit: number
+): Promise<DraftListRow[]> {
+  const rows = await prisma.$queryRaw<
+    { id: string; seedHeadline: string; headline: string | null; createdAt: Date; coverageCount: bigint }[]
+  >`
+    SELECT a.id, a."seedHeadline", sr.headline, a."createdAt",
+           count(c.id) FILTER (WHERE c.excluded = false) AS "coverageCount"
+    FROM "Analysis" a
+    LEFT JOIN "SynthesisResult" sr ON sr."analysisId" = a.id
+    LEFT JOIN "Coverage" c ON c."analysisId" = a.id
+    WHERE a.status = 'DRAFT'
+      ${
+        cursor
+          ? Prisma.sql`AND (a."createdAt" < ${cursor.createdAt} OR (a."createdAt" = ${cursor.createdAt} AND a.id < ${cursor.id}))`
+          : Prisma.empty
+      }
+    GROUP BY a.id, sr.headline
+    HAVING count(c.id) FILTER (WHERE c.excluded = false) >= ${minVisibleSourceCount}
+    ORDER BY a."createdAt" DESC, a.id DESC
+    LIMIT ${limit + 1}
+  `
 
-  return rows.map((r) => ({
-    id: r.id,
-    seedHeadline: r.seedHeadline,
-    headline: r.synthesisResult?.headline ?? null,
-    createdAt: r.createdAt,
-    coverageCount: r._count.coverages,
-  }))
+  return rows.map((r) => ({ ...r, coverageCount: Number(r.coverageCount) }))
 }
 
 export async function updateAnalysisStatus(id: string, status: AnalysisStatus): Promise<void> {
   await prisma.analysis.update({ where: { id }, data: { status } })
+}
+
+/** Backdates/postdates an Analysis's createdAt — real code never does this; it exists for
+ *  integration tests that need deterministic keyset-pagination ordering (ticket 03) without
+ *  relying on wall-clock creation order, which a shared test database can't guarantee. */
+export async function setAnalysisCreatedAtForTesting(id: string, createdAt: Date): Promise<void> {
+  await prisma.analysis.update({ where: { id }, data: { createdAt } })
 }
 
 /** Like updateAnalysisStatus, but only writes if the row is still `fromStatus` — returns

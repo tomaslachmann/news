@@ -33,6 +33,13 @@ source. It reports two axes — Standards (does the diff follow this repo's conv
 ask for?). Its Speculative-Generality check is specifically there to catch hooks, components, or
 abstractions the ticket didn't call for — see ADR 0009. Address what it finds before moving on.
 
+If a review round turns up findings, fix them, verify (tests + typecheck), and **commit that round
+before running review again**. Without a commit to anchor to, `code-review` diffs the whole
+working tree against `main`, so re-running it re-reviews everything from scratch each time —
+wasteful, and it mixes already-reviewed code back into every later pass. Committing after each
+round scopes the next review to just what changed since. Only re-review the full branch diff when
+that's explicitly what's needed (e.g. one final pre-merge pass).
+
 ## Finishing a ticket
 
 Once every acceptance criterion is checked off and the review above is clean, run:

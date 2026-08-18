@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import {
   createAnalysis,
   findAnalysisWithDetails,
-  findAllAnalyses,
+  findAnalysesPage,
   updateAnalysisStatus,
   completeAnalysisWithSynthesis,
   disconnect,
@@ -11,6 +11,9 @@ import {
   createCoverages,
   excludeCoverages,
   findCoveragesForAnalysis,
+  reconcileCoverages,
+  addCoveragesUpToLimit,
+  addCoveragesIfWithinLimit,
 } from '../../src/repositories/coverage.js'
 
 describe('Analysis + Coverage repositories against a real Postgres instance', () => {
@@ -55,7 +58,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
       },
     ])
 
-    const list = await findAllAnalyses(true)
+    const list = await findAnalysesPage(true, undefined, 50)
     const olderIndex = list.findIndex((a) => a.id === older.id)
     const newerIndex = list.findIndex((a) => a.id === newer.id)
     const newerEntry = list[newerIndex]
@@ -82,7 +85,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const [kept] = await findCoveragesForAnalysis(analysis.id)
     await excludeCoverages(analysis.id, [kept.id])
 
-    const list = await findAllAnalyses(true)
+    const list = await findAnalysesPage(true, undefined, 50)
     const entry = list.find((a) => a.id === analysis.id)
 
     expect(entry?.okCoverageCount).toBe(1)
@@ -93,7 +96,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const complete = await createAnalysis({ seedUrl: 'https://example.cz/e', seedHeadline: 'Done' })
     await updateAnalysisStatus(complete.id, 'COMPLETE')
 
-    const list = await findAllAnalyses(false)
+    const list = await findAnalysesPage(false, undefined, 50)
     const ids = list.map((a) => a.id)
 
     expect(ids).toContain(complete.id)
@@ -123,5 +126,197 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
 
     expect(found?.status).toBe('COMPLETE')
     expect(found?.synthesisResult?.headline).toBeNull()
+  })
+
+  it('reconcileCoverages rolls back exclude/include entirely when the cap check fails', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/h', seedHeadline: 'Cap test' })
+    await createCoverages([
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-idnes',
+        articleUrl: 'https://idnes.cz/h1',
+        status: 'PENDING',
+      },
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-novinky',
+        articleUrl: 'https://novinky.cz/h2',
+        status: 'PENDING',
+      },
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-aktualne',
+        articleUrl: 'https://aktualne.cz/h3',
+        status: 'PENDING',
+      },
+    ])
+    const all = await findCoveragesForAnalysis(analysis.id)
+    const [kept1, kept2, previouslyExcluded] = all
+    await excludeCoverages(analysis.id, [kept1.id, kept2.id])
+
+    // Re-including the previously-excluded row would push active count to 3, over the cap of 2.
+    const result = await reconcileCoverages(analysis.id, [kept1.id, kept2.id, previouslyExcluded.id], [], 2)
+
+    expect(result).toEqual({ ok: false, activeCount: 3 })
+    const stillActive = await findCoveragesForAnalysis(analysis.id)
+    expect(stillActive.map((c) => c.id).sort()).toEqual([kept1.id, kept2.id].sort())
+  })
+
+  it('reconcileCoverages atomically excludes non-confirmed, includes confirmed, and inserts new coverages', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/i', seedHeadline: 'Reconcile test' })
+    await createCoverages([
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-idnes',
+        articleUrl: 'https://idnes.cz/i1',
+        status: 'PENDING',
+      },
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-novinky',
+        articleUrl: 'https://novinky.cz/i2',
+        status: 'PENDING',
+      },
+    ])
+    const [confirmed, toExclude] = await findCoveragesForAnalysis(analysis.id)
+
+    const result = await reconcileCoverages(
+      analysis.id,
+      [confirmed.id],
+      [
+        {
+          analysisId: analysis.id,
+          sourceId: 'src-aktualne',
+          articleUrl: 'https://aktualne.cz/i3',
+          status: 'PENDING',
+        },
+      ],
+      5
+    )
+
+    expect(result).toEqual({ ok: true })
+    const active = await findCoveragesForAnalysis(analysis.id)
+    expect(active.map((c) => c.sourceId).sort()).toEqual(['src-aktualne', 'src-idnes'].sort())
+    expect(active.some((c) => c.id === toExclude.id)).toBe(false)
+  })
+
+  it('addCoveragesUpToLimit truncates new coverages to whatever room remains under the cap', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/j', seedHeadline: 'Truncate test' })
+    await createCoverages([
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-idnes',
+        articleUrl: 'https://idnes.cz/j1',
+        status: 'PENDING',
+      },
+    ])
+
+    const result = await addCoveragesUpToLimit(
+      analysis.id,
+      [
+        {
+          analysisId: analysis.id,
+          sourceId: 'src-novinky',
+          articleUrl: 'https://novinky.cz/j2',
+          status: 'PENDING',
+        },
+        {
+          analysisId: analysis.id,
+          sourceId: 'src-aktualne',
+          articleUrl: 'https://aktualne.cz/j3',
+          status: 'PENDING',
+        },
+        {
+          analysisId: analysis.id,
+          sourceId: 'src-ct24',
+          articleUrl: 'https://ct24.cz/j4',
+          status: 'PENDING',
+        },
+      ],
+      3
+    )
+
+    expect(result.inserted).toHaveLength(2)
+    expect(result.droppedCount).toBe(1)
+    const active = await findCoveragesForAnalysis(analysis.id)
+    expect(active).toHaveLength(3)
+  })
+
+  it('addCoveragesIfWithinLimit reports ok:false when a colliding insert is silently skipped by skipDuplicates', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/k', seedHeadline: 'Collision test' })
+    await createCoverages([
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-idnes',
+        articleUrl: 'https://idnes.cz/k-original',
+        status: 'PENDING',
+      },
+    ])
+
+    // src-idnes already has an active Coverage row — createMany's skipDuplicates will no-op this
+    // insert rather than throw, since it collides on the partial unique index.
+    const result = await addCoveragesIfWithinLimit(
+      analysis.id,
+      [
+        {
+          analysisId: analysis.id,
+          sourceId: 'src-idnes',
+          articleUrl: 'https://idnes.cz/k-colliding',
+          status: 'PENDING',
+        },
+      ],
+      25
+    )
+
+    expect(result).toEqual({ ok: false, activeCount: 1 })
+    const active = await findCoveragesForAnalysis(analysis.id)
+    expect(active).toHaveLength(1)
+    expect(active[0]?.articleUrl).toBe('https://idnes.cz/k-original')
+  })
+
+  it('addCoveragesUpToLimit excludes a candidate whose insert was silently skipped from `inserted`', async () => {
+    const analysis = await createAnalysis({
+      seedUrl: 'https://example.cz/l',
+      seedHeadline: 'Partial collision test',
+    })
+    await createCoverages([
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-idnes',
+        articleUrl: 'https://idnes.cz/l-original',
+        status: 'PENDING',
+      },
+    ])
+
+    const result = await addCoveragesUpToLimit(
+      analysis.id,
+      [
+        {
+          analysisId: analysis.id,
+          sourceId: 'src-idnes',
+          articleUrl: 'https://idnes.cz/l-colliding',
+          status: 'PENDING',
+        },
+        {
+          analysisId: analysis.id,
+          sourceId: 'src-novinky',
+          articleUrl: 'https://novinky.cz/l2',
+          status: 'PENDING',
+        },
+      ],
+      25
+    )
+
+    expect(result.inserted).toEqual([
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-novinky',
+        articleUrl: 'https://novinky.cz/l2',
+        status: 'PENDING',
+      },
+    ])
+    expect(result.droppedCount).toBe(1)
+    const active = await findCoveragesForAnalysis(analysis.id)
+    expect(active.map((c) => c.sourceId).sort()).toEqual(['src-idnes', 'src-novinky'])
   })
 })

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchAnalysis, fetchAnalyses } from './index'
+import { usePaginatedQuery } from '../pagination'
 
 export function useAnalysisDetail(analysisId: string | undefined) {
   return useQuery({
@@ -10,8 +11,5 @@ export function useAnalysisDetail(analysisId: string | undefined) {
 }
 
 export function useAnalysesList() {
-  return useQuery({
-    queryKey: ['analyses'],
-    queryFn: fetchAnalyses,
-  })
+  return usePaginatedQuery(['analyses'], fetchAnalyses)
 }
