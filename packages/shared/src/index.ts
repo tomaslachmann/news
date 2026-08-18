@@ -200,6 +200,17 @@ export interface AdminUserListItem {
   createdAt: string
 }
 
+/** A PUBLISHED StoryRelation (ticket 35), from the current Analysis's point of view — the
+ *  *other* Story's own display title/id/source count, already resolved server-side. Only ever
+ *  present when the other side's Analysis is COMPLETE (see ticket 37) — nothing here ever links
+ *  to a Draft/PENDING page that isn't a stable Article yet. */
+export interface RelatedEventItem {
+  analysisId: string
+  title: string
+  type: StoryRelationTypeLabel
+  coverageCount: number
+}
+
 export interface AnalysisDetail {
   id: string
   seedUrl: string
@@ -213,4 +224,7 @@ export interface AnalysisDetail {
   synthesisResult?: AnalysisDimensions
   /** Cross-Source Narrative segments — generated lazily on first view, undefined until then. */
   narrative?: DimensionItem[]
+  /** Other Events (Stories) this one has been linked to — see ticket 37. Empty, not undefined,
+   *  when there are none, so callers never need an extra existence check. */
+  relatedEvents: RelatedEventItem[]
 }

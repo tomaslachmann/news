@@ -5,6 +5,7 @@ import type {
   StoryRelationStatus,
 } from '@prisma/client'
 import { prisma } from '../db.js'
+import type { AnalysisStatus } from './analysis.js'
 
 export type { StoryRelation }
 
@@ -152,4 +153,67 @@ export async function updateStoryRelationStatusIfCurrently(
     data: { status: toStatus },
   })
   return result.count > 0
+}
+
+export interface RawStoryRelationForEvents {
+  fromStoryId: string
+  toStoryId: string
+  type: StoryRelationType
+  fromAnalysisId: string
+  fromSeedHeadline: string
+  fromHeadline: string | null
+  fromStatus: AnalysisStatus
+  fromCoverageCount: number
+  toAnalysisId: string
+  toSeedHeadline: string
+  toHeadline: string | null
+  toStatus: AnalysisStatus
+  toCoverageCount: number
+}
+
+/** Every `PUBLISHED` StoryRelation touching `storyId`, either side, with both sides' Analysis
+ *  id/seedHeadline/headline/status/coverageCount flattened raw — ticket 37's Related Events
+ *  section. Deliberately returns *both* sides rather than pre-selecting "the other one": which
+ *  side is "other" depends on `storyId`, and that JS-level decision plus the COMPLETE-only
+ *  filter belong in mappers/storyRelation.ts's `toRelatedEvents` (a pure, directly-testable
+ *  function), not baked into this query — see that function's own docs. A row whose either side
+ *  somehow has no Analysis (shouldn't happen — see findRelationCandidateStories's identical
+ *  note) is skipped. `coverageCount` matches AnalysisListRow's own convention: OK, non-excluded
+ *  Coverage only. */
+export async function findPublishedRelationsForStory(storyId: string): Promise<RawStoryRelationForEvents[]> {
+  const analysisInclude = {
+    include: {
+      synthesisResult: { select: { headline: true } },
+      _count: { select: { coverages: { where: { status: 'OK' as const, excluded: false } } } },
+    },
+  }
+
+  const rows = await prisma.storyRelation.findMany({
+    where: { status: 'PUBLISHED', OR: [{ fromStoryId: storyId }, { toStoryId: storyId }] },
+    include: {
+      fromStory: { include: { analysis: analysisInclude } },
+      toStory: { include: { analysis: analysisInclude } },
+    },
+  })
+
+  const result: RawStoryRelationForEvents[] = []
+  for (const r of rows) {
+    if (!r.fromStory.analysis || !r.toStory.analysis) continue
+    result.push({
+      fromStoryId: r.fromStoryId,
+      toStoryId: r.toStoryId,
+      type: r.type,
+      fromAnalysisId: r.fromStory.analysis.id,
+      fromSeedHeadline: r.fromStory.analysis.seedHeadline,
+      fromHeadline: r.fromStory.analysis.synthesisResult?.headline ?? null,
+      fromStatus: r.fromStory.analysis.status,
+      fromCoverageCount: r.fromStory.analysis._count.coverages,
+      toAnalysisId: r.toStory.analysis.id,
+      toSeedHeadline: r.toStory.analysis.seedHeadline,
+      toHeadline: r.toStory.analysis.synthesisResult?.headline ?? null,
+      toStatus: r.toStory.analysis.status,
+      toCoverageCount: r.toStory.analysis._count.coverages,
+    })
+  }
+  return result
 }

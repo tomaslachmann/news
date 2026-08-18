@@ -1,5 +1,4 @@
 import { Link, useNavigate } from 'react-router-dom'
-import type { StoryRelationTypeLabel } from '@news-triangulator/shared'
 import { Button } from '@/components/ui/button'
 import { PageContainer } from '@/components/PageContainer'
 import { PageTitle } from '@/components/PageTitle'
@@ -13,11 +12,7 @@ import {
   useRejectStoryRelation,
 } from '@/services/ingestion/hooks'
 import { formatDate } from '@/lib/formatDate'
-
-const RELATION_TYPE_LABELS: Record<StoryRelationTypeLabel, string> = {
-  RELATED: 'Související',
-  FOLLOW_UP: 'Navazující',
-}
+import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
 
 function DraftsSection() {
   const { data: drafts, isLoading, isError } = useVisibleDrafts()
