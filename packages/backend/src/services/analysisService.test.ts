@@ -9,7 +9,8 @@ import * as narrativePassModule from './narrativePass.js'
 import * as storyVerificationModule from './storyVerification.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as ingestionServiceModule from './ingestionService.js'
-import * as entityExtractionPassModule from './entityExtractionPass.js'
+import * as storyRelationPassModule from './storyRelationPass.js'
+import * as storyRelationRepo from '../repositories/storyRelation.js'
 import {
   createAnalysis,
   attachSeedToMatch,
@@ -30,7 +31,8 @@ vi.mock('./narrativePass.js')
 vi.mock('./storyVerification.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./ingestionService.js')
-vi.mock('./entityExtractionPass.js')
+vi.mock('./storyRelationPass.js')
+vi.mock('../repositories/storyRelation.js')
 
 const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
 const SEED_EMBEDDING = [1, 0, 0]
@@ -469,7 +471,7 @@ describe('discoverSources', () => {
 describe('confirmCoverages', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    vi.mocked(entityExtractionPassModule.extractAndPersistStoryEntities).mockResolvedValue(undefined)
+    vi.mocked(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).mockResolvedValue(undefined)
   })
 
   const ANALYSIS = {
@@ -479,6 +481,14 @@ describe('confirmCoverages', () => {
     seedHeadline: 'x',
     status: 'PENDING' as const,
     createdAt: new Date(),
+    story: {
+      id: 's1',
+      createdAt: new Date(),
+      anchorHeadline: 'Anchor headline',
+      embedding: [1, 0, 0],
+      entities: [],
+      entityRelations: [],
+    },
   }
 
   const PENDING_COVERAGE = {
@@ -495,7 +505,7 @@ describe('confirmCoverages', () => {
   }
 
   function stubHappyPath() {
-    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(ANALYSIS)
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(ANALYSIS)
     vi.mocked(coverageRepo.findCoverageUrlsForAnalysis).mockResolvedValue([])
     vi.mocked(coverageRepo.findCoveragesForAnalysis)
       .mockResolvedValueOnce([PENDING_COVERAGE])
@@ -529,7 +539,7 @@ describe('confirmCoverages', () => {
     expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('c1', { extractedText: fullText, status: 'OK' })
   })
 
-  it("extracts entities from every OK Coverage's full extracted text", async () => {
+  it("runs the entity-extraction + story-relation pipeline with every OK Coverage's full extracted text and this Story", async () => {
     stubHappyPath()
     const fullText = 'A perfectly ordinary article body with plenty of real content in it. '.repeat(10)
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
@@ -544,10 +554,15 @@ describe('confirmCoverages', () => {
 
     await confirmCoverages('a1', { confirmedIds: ['c1'] })
 
-    expect(entityExtractionPassModule.extractAndPersistStoryEntities).toHaveBeenCalledWith(
+    expect(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).toHaveBeenCalledWith(
       's1',
       [fullText],
-      analysisRepo.updateStoryEntities,
+      ANALYSIS.story,
+      {
+        updateStoryEntities: analysisRepo.updateStoryEntities,
+        findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
+        createStoryRelation: storyRelationRepo.createStoryRelation,
+      },
       undefined
     )
   })

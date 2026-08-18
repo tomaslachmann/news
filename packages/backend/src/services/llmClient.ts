@@ -13,6 +13,7 @@ export type LlmCallSite =
   | 'keywordExtractor'
   | 'headline'
   | 'entityExtraction'
+  | 'storyRelation'
 
 export async function callJsonModel(
   model: string,

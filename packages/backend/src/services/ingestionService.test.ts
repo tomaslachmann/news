@@ -5,7 +5,8 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as rssModule from './rss.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as storyVerificationModule from './storyVerification.js'
-import * as entityExtractionPassModule from './entityExtractionPass.js'
+import * as storyRelationPassModule from './storyRelationPass.js'
+import * as storyRelationRepo from '../repositories/storyRelation.js'
 import {
   runIngestionPass,
   approveDraft,
@@ -21,7 +22,8 @@ vi.mock('../repositories/pendingAddition.js')
 vi.mock('./rss.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./storyVerification.js')
-vi.mock('./entityExtractionPass.js')
+vi.mock('./storyRelationPass.js')
+vi.mock('../repositories/storyRelation.js')
 
 const RSS_ITEM = {
   outlet: 'iDnes',
@@ -340,7 +342,7 @@ describe('approveDraft', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(true)
-    vi.mocked(entityExtractionPassModule.extractAndPersistStoryEntities).mockResolvedValue(undefined)
+    vi.mocked(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).mockResolvedValue(undefined)
   })
 
   it('flips a Draft to PENDING and excludes nothing when every Coverage verifies', async () => {
@@ -429,7 +431,7 @@ describe('approveDraft', () => {
     await expect(approveDraft('a1')).rejects.toThrow(ValidationError)
   })
 
-  it('extracts entities from the anchor headline plus only the verified Coverage titles', async () => {
+  it('runs the entity-extraction + story-relation pipeline with the anchor headline plus only the verified Coverage titles', async () => {
     vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
     const good = makeCoverage('c1', 'Related to the anchor')
     const bad = makeCoverage('c2', 'Unrelated trending item')
@@ -438,10 +440,15 @@ describe('approveDraft', () => {
 
     await approveDraft('a1')
 
-    expect(entityExtractionPassModule.extractAndPersistStoryEntities).toHaveBeenCalledWith(
+    expect(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).toHaveBeenCalledWith(
       's1',
       ['Anchor headline', 'Related to the anchor'],
-      analysisRepo.updateStoryEntities,
+      DRAFT_WITH_STORY.story,
+      {
+        updateStoryEntities: analysisRepo.updateStoryEntities,
+        findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
+        createStoryRelation: storyRelationRepo.createStoryRelation,
+      },
       undefined
     )
   })

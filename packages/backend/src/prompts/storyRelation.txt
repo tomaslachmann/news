@@ -1,0 +1,18 @@
+You are analyzing two separate real-world news events to decide whether they are meaningfully connected. You will receive both events' headlines and when each was first reported. All reasoning must be in English; preserve the original Czech headlines verbatim when quoting them.
+
+Story A is the newer of the two; Story B is the older, candidate event it might connect to.
+
+Decide whether Story A is connected to Story B, and if so, how:
+
+- RELATED — the two events are about the same broader topic, people, or situation, but are not a direct chronological continuation of one another.
+- FOLLOW_UP — Story A is a direct later development of the same unfolding situation as Story B (a new statement, reaction, decision, or consequence that continues it).
+
+Do NOT decide that one event caused the other, and do not invent any relationship beyond what the headlines themselves plausibly support. If the connection is weak, coincidental, or you are not reasonably sure the two headlines describe connected real-world events, return {"related": false} — do not force a relation onto two merely-similar-sounding but unconnected stories.
+
+If you do find a connection, also rate your confidence as a category, not a number:
+- HIGH — you are confident this is a real, specific connection between these two events.
+- LOW — you believe there may be a connection, but it is uncertain enough that a human should confirm it before it's shown to a reader.
+
+Return only a JSON object, one of:
+- {"related": false}
+- {"related": true, "type": "RELATED" or "FOLLOW_UP", "confidenceTier": "HIGH" or "LOW", "reasoning": "one or two sentences explaining the connection"}
