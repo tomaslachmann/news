@@ -34,4 +34,4 @@ Scope decided, differing from the audit's Etapa 4 bundle:
 - **Split into [ticket 11](11-entity-extraction-chunking-and-model-var.md)**: P1-14 (chunked entity extraction) + P1-15 (`ENTITY_MODEL` env var) — both touch `entityExtractionPass.ts`, the same file this migration rewrites, but are independent decisions from the storage shape itself.
 - **Split into [ticket 12](12-entity-salience-and-fuzzy-search.md)**: `salience` + trigram fuzzy entity-name search, as their own deferred future features. Ticket only, no ADR — omitting two unbuilt fields isn't the hard-to-reverse, real-trade-off kind of decision ADRs are for.
 
-Not yet implemented — this session was decisions only (grilling), no code. Ticket 07 (`Thread`) remains open; its blocker is now resolved (entities are queryable), but whether to actually build `Thread` is still its own undecided question.
+Implemented on `ticket/audit-04-entity-model-table-vs-json`. Ticket 07 (`Thread`) remains open; its blocker is now resolved (entities are queryable), but whether to actually build `Thread` is still its own undecided question.
