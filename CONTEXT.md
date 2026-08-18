@@ -16,7 +16,10 @@ Typed, directional links between Stories (`StoryRelation`) that let a reader nav
 _Avoid_: confusing "Entity Relation" (inside one Story, entity-to-entity) with "`StoryRelation`" (between two Stories) — they operate at different levels and are never interchangeable.
 
 ## Source
-A distinct news outlet (e.g. iDnes, ČT24, Novinky). Each Source contributes at most one Coverage per Analysis.
+A distinct news outlet (e.g. iDnes, ČT24, Novinky). Each Source contributes at most one Coverage per Analysis — enforced at the DB level via a partial unique index on `(Analysis, Source)` among non-excluded Coverage (see ticket 02, `docs/audit.md` P0-6). A persisted entity (`name`, `domains`) rather than a free-text field, resolved from a URL or bare hostname by `resolveSource*` (`sourceResolver.ts`) — the single place that turns "servis.idnes.cz" and "idnes.cz" into the same Source, regardless of which path (RSS Ingestion, GDELT, a human-seeded URL) found the article. A domain nothing is registered under gets an **unverified Source** (`name` = the raw domain) rather than being dropped or lumped under an unrelated outlet, so it still shows up as itself and can be merged into a curated Source later.
+
+## SourceFeed
+One RSS feed URL belonging to a Source — replaces the old hardcoded feed-URL config, so Ingestion reads what to poll from the database instead of a deploy-time file. Purely configuration; carries no polling state yet (no conditional-GET bookkeeping) — that's deferred to the async-worker rework tracked in the backend-audit wayfinder map.
 
 ## Coverage
 A single article from one Source about a Story. The unit of input to the Analysis pipeline.

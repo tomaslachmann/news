@@ -1,10 +1,11 @@
-import type { Analysis, AnalysisStatus, Coverage, Story, SynthesisResult, Prisma } from '@prisma/client'
+import type { Analysis, AnalysisStatus, Story, SynthesisResult, Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
+import type { CoverageWithSource } from './coverage.js'
 
 export type { Analysis, AnalysisStatus }
 
 export type AnalysisWithDetails = Analysis & {
-  coverages: Coverage[]
+  coverages: CoverageWithSource[]
   synthesisResult: SynthesisResult | null
 }
 
@@ -122,7 +123,11 @@ export async function findAnalysisWithDetails(id: string): Promise<AnalysisWithD
   return prisma.analysis.findUnique({
     where: { id },
     include: {
-      coverages: { where: { excluded: false }, orderBy: { id: 'asc' } },
+      coverages: {
+        where: { excluded: false },
+        orderBy: { id: 'asc' },
+        include: { source: { select: { name: true } } },
+      },
       synthesisResult: true,
     },
   })

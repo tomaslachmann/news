@@ -6,7 +6,7 @@ export function toPendingAdditionItem(row: PendingAdditionWithAnalysis): Pending
     id: row.id,
     analysisId: row.analysisId,
     analysisSeedHeadline: row.analysis.seedHeadline,
-    outlet: row.outlet,
+    outlet: row.source.name,
     title: row.title ?? undefined,
     articleUrl: row.articleUrl,
     publishedAt: row.publishedAt ?? undefined,

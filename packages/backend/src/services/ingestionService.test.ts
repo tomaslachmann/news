@@ -29,6 +29,7 @@ vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
 
 const RSS_ITEM = {
+  sourceId: 'src-idnes',
   outlet: 'iDnes',
   title: 'Fresh headline',
   url: 'https://idnes.cz/fresh-article',
@@ -44,6 +45,9 @@ function stubCommon() {
   vi.mocked(coverageRepo.findAllArticleUrls).mockResolvedValue([])
   vi.mocked(embeddingClientModule.generateEmbedding).mockResolvedValue(ITEM_EMBEDDING)
   vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([])
+  // No Coverage from this Source on the matched Analysis yet — the collision check (P0-6,
+  // docs/audit.md) lets the attach through. Tests exercising the duplicate-skip path override this.
+  vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
 }
 
 describe('runIngestionPass', () => {
@@ -82,7 +86,7 @@ describe('runIngestionPass', () => {
     expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
       {
         analysisId: 'draft-1',
-        outlet: RSS_ITEM.outlet,
+        sourceId: RSS_ITEM.sourceId,
         title: RSS_ITEM.title,
         articleUrl: RSS_ITEM.url,
         publishedAt: RSS_ITEM.publishedAt,
@@ -98,12 +102,14 @@ describe('runIngestionPass', () => {
     // item's own match check, exactly as when candidates were re-fetched every time.
     stubCommon()
     const ITEM_A = {
+      sourceId: 'src-idnes',
       outlet: 'iDnes',
       title: 'Item A headline',
       url: 'https://idnes.cz/item-a',
       publishedAt: '2026-01-01T00:00:00Z',
     }
     const ITEM_B = {
+      sourceId: 'src-novinky',
       outlet: 'Novinky',
       title: 'Item B headline',
       url: 'https://novinky.cz/item-b',
@@ -149,7 +155,7 @@ describe('runIngestionPass', () => {
     expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
       {
         analysisId: 'existing-1',
-        outlet: RSS_ITEM.outlet,
+        sourceId: RSS_ITEM.sourceId,
         title: RSS_ITEM.title,
         articleUrl: RSS_ITEM.url,
         publishedAt: RSS_ITEM.publishedAt,
@@ -157,6 +163,30 @@ describe('runIngestionPass', () => {
       },
     ])
     expect(summary).toEqual({ checked: 1, created: 0, attached: 1, flagged: 0, skipped: 0 })
+  })
+
+  it('skips attaching when this Source already has non-excluded Coverage on the matched Analysis (P0-6, docs/audit.md)', async () => {
+    stubCommon()
+    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 'story-x',
+        analysisId: 'existing-1',
+        analysisStatus: 'PENDING',
+        anchorHeadline: 'Anchor headline',
+        headline: null,
+        embedding: MATCHING_EMBEDDING,
+        createdAt: new Date(),
+      },
+    ])
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([
+      makeCoverage('already-there', 'Earlier article from the same outlet'),
+    ])
+
+    const summary = await runIngestionPass()
+
+    expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
+    expect(summary).toEqual({ checked: 1, created: 0, attached: 0, flagged: 0, skipped: 1 })
   })
 
   it('flags a possible addition instead of modifying a matched COMPLETE Analysis', async () => {
@@ -179,7 +209,7 @@ describe('runIngestionPass', () => {
     expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
     expect(pendingAdditionRepo.createPendingAddition).toHaveBeenCalledWith({
       analysisId: 'completed-1',
-      outlet: RSS_ITEM.outlet,
+      sourceId: RSS_ITEM.sourceId,
       title: RSS_ITEM.title,
       articleUrl: RSS_ITEM.url,
       publishedAt: RSS_ITEM.publishedAt,
@@ -281,6 +311,7 @@ describe('runIngestionPass', () => {
   it('skips an item whose embedding generation fails, without aborting the rest of the pass', async () => {
     stubCommon()
     const secondItem = {
+      sourceId: 'src-novinky',
       outlet: 'Novinky',
       title: 'Second',
       url: 'https://novinky.cz/second',
@@ -326,7 +357,8 @@ function makeCoverage(id: string, title: string) {
   return {
     id,
     analysisId: 'a1',
-    outlet: 'iDnes',
+    sourceId: 'src-idnes',
+    source: { name: 'iDnes' },
     title,
     articleUrl: `https://idnes.cz/${id}`,
     publishedAt: '2026-01-01T00:00:00Z',
@@ -497,12 +529,13 @@ describe('listPendingAdditions', () => {
       {
         id: 'p1',
         analysisId: 'a1',
-        outlet: 'iDnes',
+        sourceId: 'src-idnes',
         title: 'T',
         articleUrl: 'https://idnes.cz/x',
         publishedAt: '2026-01-01T00:00:00Z',
         createdAt: new Date('2026-01-02T00:00:00Z'),
         analysis: { seedHeadline: 'Original story' },
+        source: { name: 'iDnes' },
       },
     ])
 

@@ -10,7 +10,8 @@ import type {
 } from '@news-triangulator/shared'
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from './articleScraper.js'
 import { extractKeywords } from './keywordExtractor.js'
-import { discoverCoverage, extractDomain } from './discovery.js'
+import { discoverCoverage } from './discovery.js'
+import { resolveSourceByUrl } from './sourceResolver.js'
 import { isBlockedContent } from './blockedContent.js'
 import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVerification.js'
 import { generateEmbedding } from './embeddingClient.js'
@@ -136,14 +137,15 @@ export async function attachSeedToMatch(
 
   // Each Source contributes at most one Coverage per Analysis (CONTEXT.md) — skip rather than
   // duplicate if this outlet is already attached (e.g. Ingestion attached it between the seed's
-  // dedup match and this confirm click).
-  const outlet = extractDomain(seedUrl)
+  // dedup match and this confirm click). Also enforced at the DB level (see docs/adr — Coverage's
+  // partial unique index), this check just avoids relying on that constraint throwing.
+  const source = await resolveSourceByUrl(seedUrl)
   const existingCoverages = await coverageRepo.findCoveragesForAnalysis(analysisId)
-  if (!existingCoverages.some((c) => c.outlet === outlet)) {
+  if (!existingCoverages.some((c) => c.sourceId === source.id)) {
     await coverageRepo.createCoverages([
       {
         analysisId,
-        outlet,
+        sourceId: source.id,
         title: scraped.title,
         articleUrl: seedUrl,
         status: 'PENDING',
@@ -175,7 +177,7 @@ export async function discoverSources(
   await coverageRepo.createCoverages(
     verified.map((c) => ({
       analysisId,
-      outlet: c.outlet,
+      sourceId: c.sourceId,
       title: c.title,
       articleUrl: c.url,
       publishedAt: c.publishedAt,
@@ -219,14 +221,15 @@ export async function confirmCoverages(
   })
 
   if (newUrls.length > 0) {
-    await coverageRepo.createCoverages(
-      newUrls.map((u) => ({
+    const newCoverages = await Promise.all(
+      newUrls.map(async (u) => ({
         analysisId,
-        outlet: extractDomain(u),
+        sourceId: (await resolveSourceByUrl(u)).id,
         articleUrl: u,
-        status: 'PENDING',
+        status: 'PENDING' as const,
       }))
     )
+    await coverageRepo.createCoverages(newCoverages)
   }
 
   const pending = await coverageRepo.findCoveragesForAnalysis(analysisId, { onlyStatus: 'PENDING' })
@@ -320,7 +323,7 @@ export async function getAnalysisDetail(
   if (analysis.status === 'COMPLETE' && analysis.synthesisResult && !analysis.synthesisResult.narrative) {
     const sources: NarrativeSource[] = analysis.coverages
       .filter((c) => c.status === 'OK' && c.extractedText)
-      .map((c) => ({ outlet: c.outlet, articleUrl: c.articleUrl, fullText: c.extractedText! }))
+      .map((c) => ({ outlet: c.source.name, articleUrl: c.articleUrl, fullText: c.extractedText! }))
 
     if (sources.length > 0) {
       const dimensions = analysis.synthesisResult.dimensions as unknown as SynthesisDimensions

@@ -1,5 +1,5 @@
 import type { CoverageInfo } from '@news-triangulator/shared'
-import type { Coverage, CoverageStatus } from '../repositories/coverage.js'
+import type { CoverageStatus, CoverageWithSource } from '../repositories/coverage.js'
 
 const STATUS_MAP: Record<CoverageStatus, CoverageInfo['status']> = {
   OK: 'ok',
@@ -7,10 +7,10 @@ const STATUS_MAP: Record<CoverageStatus, CoverageInfo['status']> = {
   PENDING: 'pending',
 }
 
-export function toCoverageInfo(coverage: Coverage): CoverageInfo {
+export function toCoverageInfo(coverage: CoverageWithSource): CoverageInfo {
   return {
     id: coverage.id,
-    outlet: coverage.outlet,
+    outlet: coverage.source.name,
     title: coverage.title ?? undefined,
     articleUrl: coverage.articleUrl,
     publishedAt: coverage.publishedAt ?? undefined,
