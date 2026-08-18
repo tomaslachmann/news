@@ -4,7 +4,7 @@
 
 **Blocked by:** 35 — Story Relation Candidate Generation, Confirmation & Persistence (needs `StoryRelation` rows with `PENDING_REVIEW` status to review)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A new endpoint lists every `PENDING_REVIEW` `StoryRelation`, each with both Stories' display titles (`resolveDisplayTitle`, per ticket 33's convention), the proposed `type`, and the `reasoning` string
 - [x] A new shared type for a pending relation list item (mirroring `PendingAdditionItem`'s shape)
