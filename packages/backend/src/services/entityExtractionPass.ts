@@ -4,25 +4,14 @@ import { z } from 'zod'
 import type { FastifyBaseLogger } from 'fastify'
 import { callJsonModel } from './llmClient.js'
 import { deriveEntityKey } from './entityKey.js'
+import {
+  EntityTypeSchema,
+  EntityRelationTypeSchema,
+  type ExtractedEntity,
+  type ExtractedEntityRelation,
+} from './entityTypes.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/entityExtraction.txt'), 'utf8')
-
-const EntityTypeSchema = z.enum(['PERSON', 'ORGANIZATION', 'PLACE', 'COUNTRY'])
-
-const EntityRelationTypeSchema = z.enum([
-  'REPRESENTS',
-  'HOLDS_POSITION_IN',
-  'WORKS_FOR',
-  'MEMBER_OF',
-  'LOCATED_IN',
-  'BASED_IN',
-  'PART_OF',
-  'INVOLVES',
-  'MEETS',
-  'ATTACKS',
-  'ACCUSES',
-  'ANNOUNCES',
-])
 
 const LlmResultSchema = z.object({
   entities: z.array(
@@ -42,20 +31,6 @@ const LlmResultSchema = z.object({
     })
   ),
 })
-
-export interface ExtractedEntity {
-  key: string
-  name: string
-  type: z.infer<typeof EntityTypeSchema>
-  confidence: number
-}
-
-export interface ExtractedEntityRelation {
-  from: string
-  to: string
-  type: z.infer<typeof EntityRelationTypeSchema>
-  confidence: number
-}
 
 export interface EntityExtractionResult {
   entities: ExtractedEntity[]
@@ -135,21 +110,27 @@ export async function runEntityExtractionPass(
  *  Shared by both pipeline trigger points (approveDraft, confirmCoverages — ticket 34) so the
  *  try/catch and empty-result guard live in exactly one place. Takes `updateStoryEntities` as a
  *  dependency rather than importing the repository directly, keeping this pass module decoupled
- *  from persistence and easy to unit-test without mocking the repository layer. */
+ *  from persistence and easy to unit-test without mocking the repository layer.
+ *
+ *  Returns what was persisted (or null if extraction failed or produced nothing) so a caller that
+ *  immediately needs this Story's own entities/entityRelations — ticket 35's relation-candidate
+ *  scoring — doesn't have to re-fetch the Story it was just written to. */
 export async function extractAndPersistStoryEntities(
   storyId: string,
   sourceTexts: string[],
   updateStoryEntities: (storyId: string, entities: unknown, entityRelations: unknown) => Promise<void>,
   log?: FastifyBaseLogger
-): Promise<void> {
+): Promise<EntityExtractionResult | null> {
   try {
     const extraction = await runEntityExtractionPass(sourceTexts, log)
     // Nothing extracted is not the same as "clear whatever was there before" — e.g. a Review Step
     // confirmation call that ends up with no OK Coverage this round must not wipe out a Story's
     // previously-extracted entities from an earlier, more successful pass.
-    if (extraction.entities.length === 0) return
+    if (extraction.entities.length === 0) return null
     await updateStoryEntities(storyId, extraction.entities, extraction.entityRelations)
+    return extraction
   } catch (err) {
     log?.warn({ storyId, err }, 'Entity extraction failed; leaving Story.entities/entityRelations unchanged')
+    return null
   }
 }

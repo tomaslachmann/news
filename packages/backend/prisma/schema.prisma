@@ -29,6 +29,22 @@ enum UserRole {
   READONLY
 }
 
+enum StoryRelationType {
+  RELATED
+  FOLLOW_UP
+}
+
+enum StoryRelationConfidenceTier {
+  HIGH
+  LOW
+}
+
+enum StoryRelationStatus {
+  PUBLISHED
+  PENDING_REVIEW
+  REJECTED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -67,6 +83,31 @@ model Story {
   /// Same no-backfill rule as `entities`.
   entityRelations  Json    @default("[]")
   analysis       Analysis?
+  relationsFrom  StoryRelation[] @relation("StoryRelationFrom")
+  relationsTo    StoryRelation[] @relation("StoryRelationTo")
+}
+
+/// A typed, directional Story-to-Story edge in the Event Graph (ticket 35) — the newer Story
+/// (`fromStoryId`) matched backward against an already-visible, older candidate (`toStoryId`)
+/// during its own one-time relation-candidate generation pass; read bidirectionally for display
+/// (a Story's "related Events" includes rows where it's either side). See ADR 0022.
+model StoryRelation {
+  id             String                      @id @default(cuid())
+  fromStoryId    String
+  fromStory      Story                       @relation("StoryRelationFrom", fields: [fromStoryId], references: [id])
+  toStoryId      String
+  toStory        Story                       @relation("StoryRelationTo", fields: [toStoryId], references: [id])
+  type           StoryRelationType
+  /// Categorical, not a raw score (ADR 0022) — HIGH publishes immediately, LOW waits in the
+  /// Admin review queue (ticket 36).
+  confidenceTier StoryRelationConfidenceTier
+  /// Plain-language reason from the confirming LLM call — traceability for why these two Stories
+  /// are linked, shown wherever the relation is surfaced (tickets 36/37).
+  reasoning      String
+  status         StoryRelationStatus
+  createdAt      DateTime                    @default(now())
+
+  @@unique([fromStoryId, toStoryId])
 }
 
 model Analysis {

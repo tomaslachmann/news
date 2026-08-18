@@ -4,11 +4,12 @@ import { queryRssFeeds } from './rss.js'
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
-import { extractAndPersistStoryEntities } from './entityExtractionPass.js'
+import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
+import * as storyRelationRepo from '../repositories/storyRelation.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
 
@@ -149,12 +150,24 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
     await coverageRepo.excludeCoverageIds(failedIds)
   }
 
-  // Entity & entity-relation extraction (ticket 34) — best-effort evidence for later
-  // relation-candidate scoring (ticket 35), never allowed to block approval itself. Uses only
-  // the titles that survived the quality gate above, not every originally-attached title, so an
-  // excluded wrong-event Coverage doesn't pollute this Story's entity signal.
+  // Entity extraction (ticket 34) + Story-relation candidate generation & confirmation (ticket
+  // 35), run once immediately, searching backward against already-visible recent Stories only.
+  // Uses only the titles that survived the quality gate above, not every originally-attached
+  // title, so an excluded wrong-event Coverage doesn't pollute this Story's entity signal.
+  // Entirely best-effort: nothing in this pipeline is ever allowed to block this Draft's
+  // approval.
   const titles = [analysis.story.anchorHeadline, ...verified.map((c) => c.title)]
-  await extractAndPersistStoryEntities(analysis.storyId, titles, analysisRepo.updateStoryEntities, log)
+  await extractEntitiesAndLinkStoryRelations(
+    analysis.storyId,
+    titles,
+    analysis.story,
+    {
+      updateStoryEntities: analysisRepo.updateStoryEntities,
+      findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
+      createStoryRelation: storyRelationRepo.createStoryRelation,
+    },
+    log
+  )
 
   // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during
   // the verification pass above; if so, this must not resurrect it back to PENDING.

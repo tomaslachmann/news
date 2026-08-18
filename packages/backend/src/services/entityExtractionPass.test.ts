@@ -106,51 +106,52 @@ describe('runEntityExtractionPass', () => {
 describe('extractAndPersistStoryEntities', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('persists extraction results via the injected updateStoryEntities function', async () => {
+  it('persists extraction results via the injected updateStoryEntities function, and returns what was persisted', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       entities: [{ mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
       entityRelations: [],
     })
     const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
 
-    await extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
+    const result = await extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
 
     expect(updateStoryEntities).toHaveBeenCalledWith(
       'story-1',
       [{ key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
       []
     )
+    expect(result).toEqual({
+      entities: [{ key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
+      entityRelations: [],
+    })
   })
 
-  it('does not call updateStoryEntities when nothing was extracted, so a previous good result is never clobbered by an empty one', async () => {
+  it('does not call updateStoryEntities and returns null when nothing was extracted, so a previous good result is never clobbered by an empty one', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ entities: [], entityRelations: [] })
     const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
 
-    await extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
+    const result = await extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
 
     expect(updateStoryEntities).not.toHaveBeenCalled()
+    expect(result).toBeNull()
   })
 
-  it('does not call updateStoryEntities and does not throw when extraction fails', async () => {
+  it('does not call updateStoryEntities and returns null, without throwing, when extraction fails', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockRejectedValue(new Error('API down'))
     const updateStoryEntities = vi.fn().mockResolvedValue(undefined)
 
-    await expect(
-      extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
-    ).resolves.toBeUndefined()
+    await expect(extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)).resolves.toBeNull()
 
     expect(updateStoryEntities).not.toHaveBeenCalled()
   })
 
-  it('does not throw when updateStoryEntities itself fails', async () => {
+  it('returns null, without throwing, when updateStoryEntities itself fails', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       entities: [{ mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
       entityRelations: [],
     })
     const updateStoryEntities = vi.fn().mockRejectedValue(new Error('DB down'))
 
-    await expect(
-      extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)
-    ).resolves.toBeUndefined()
+    await expect(extractAndPersistStoryEntities('story-1', ['x'], updateStoryEntities)).resolves.toBeNull()
   })
 })

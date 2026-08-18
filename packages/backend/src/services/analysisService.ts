@@ -16,13 +16,14 @@ import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVer
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 import { approveDraft } from './ingestionService.js'
-import { extractAndPersistStoryEntities } from './entityExtractionPass.js'
+import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
 import { runNarrativePass, type NarrativeSource, type NarrativeResult } from './narrativePass.js'
 import type { SynthesisResult as SynthesisDimensions } from './synthesisPass.js'
 import { NotFoundError, ValidationError, ExternalServiceError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisResultRepo from '../repositories/synthesisResult.js'
+import * as storyRelationRepo from '../repositories/storyRelation.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { toAnalysisDetail, toAnalysisListItem, resolveDisplayTitle, STATUS_MAP } from '../mappers/analysis.js'
 
@@ -191,7 +192,7 @@ export async function confirmCoverages(
 ): Promise<CoverageInfo[]> {
   const { confirmedIds, customUrls = [], manualTexts = [] } = body
 
-  const analysis = await analysisRepo.findAnalysisById(analysisId)
+  const analysis = await analysisRepo.findAnalysisWithStory(analysisId)
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
 
   const manualMap = new Map(manualTexts.map((m) => [m.id, m.text]))
@@ -247,11 +248,23 @@ export async function confirmCoverages(
 
   const updated = await coverageRepo.findCoveragesForAnalysis(analysisId)
 
-  // Entity & entity-relation extraction (ticket 34) — human-seeded path. Runs here, not at
-  // createAnalysis, because this is the earliest point real multi-source extractedText exists
-  // for a human-seeded Story (createAnalysis only ever has the single seed article).
+  // Entity extraction (ticket 34) + Story-relation candidate generation & confirmation (ticket
+  // 35) — human-seeded path. Runs here, not at createAnalysis, because this is the earliest
+  // point real multi-source extractedText exists for a human-seeded Story (createAnalysis only
+  // ever has the single seed article). Entirely best-effort: nothing in this pipeline is ever
+  // allowed to block this confirmation flow.
   const okTexts = updated.filter((c) => c.status === 'OK' && c.extractedText).map((c) => c.extractedText!)
-  await extractAndPersistStoryEntities(analysis.storyId, okTexts, analysisRepo.updateStoryEntities, log)
+  await extractEntitiesAndLinkStoryRelations(
+    analysis.storyId,
+    okTexts,
+    analysis.story,
+    {
+      updateStoryEntities: analysisRepo.updateStoryEntities,
+      findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
+      createStoryRelation: storyRelationRepo.createStoryRelation,
+    },
+    log
+  )
 
   return updated.map(toCoverageInfo)
 }
