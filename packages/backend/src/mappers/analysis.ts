@@ -3,6 +3,7 @@ import type {
   AnalysisDimensions,
   AnalysisListItem,
   DimensionItem,
+  RelatedEventItem,
 } from '@news-triangulator/shared'
 import type {
   AnalysisWithDetails,
@@ -29,7 +30,10 @@ export function resolveDisplayTitle(headline: string | null | undefined, seedHea
   return headline ?? seedHeadline
 }
 
-export function toAnalysisDetail(analysis: AnalysisWithDetails): AnalysisDetail {
+export function toAnalysisDetail(
+  analysis: AnalysisWithDetails,
+  relatedEvents: RelatedEventItem[]
+): AnalysisDetail {
   return {
     id: analysis.id,
     seedUrl: analysis.seedUrl,
@@ -44,6 +48,7 @@ export function toAnalysisDetail(analysis: AnalysisWithDetails): AnalysisDetail 
     narrative: analysis.synthesisResult?.narrative
       ? (analysis.synthesisResult.narrative as unknown as DimensionItem[])
       : undefined,
+    relatedEvents,
   }
 }
 

@@ -9,6 +9,7 @@ import type {
   CoverageInfo,
   PatchCoveragesBody,
   SseEvent,
+  RelatedEventItem,
 } from '@news-triangulator/shared'
 
 export type {
@@ -22,6 +23,7 @@ export type {
   CoverageInfo,
   PatchCoveragesBody,
   SseEvent,
+  RelatedEventItem,
 }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {

@@ -11,9 +11,11 @@ import {
   type AnalysisDimensions,
   type DimensionItem,
   type CoverageInfo,
+  type RelatedEventItem,
 } from '@/services/analyses'
 import { useAnalysisDetail } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
+import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
 
 type ExtractionState =
   | { phase: 'pending' }
@@ -287,6 +289,30 @@ function ResultsTabs({
   )
 }
 
+function RelatedEventsSection({ events }: { events: RelatedEventItem[] }) {
+  if (events.length === 0) return null
+
+  return (
+    <section className="mt-10">
+      <h2 className="font-serif text-lg font-semibold">Související události</h2>
+      <ul className="mt-4 flex flex-col gap-3">
+        {events.map((event) => (
+          <li key={event.analysisId} className="rounded-lg border bg-card p-4">
+            <p className="utility-label">{RELATION_TYPE_LABELS[event.type]}</p>
+            <Link
+              to={`/analysis/${event.analysisId}`}
+              className="mt-1 block font-serif text-lg font-semibold hover:underline"
+            >
+              {event.title}
+            </Link>
+            <p className="mt-1 text-sm text-muted-foreground">zdrojů: {event.coverageCount}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 function ErrorState({ message }: { message: string }) {
   return (
     <PageContainer width="default">
@@ -489,6 +515,7 @@ export default function AnalysisPage() {
       <PageContainer width="default">
         <PageTitle size="sm">{analysis.title}</PageTitle>
         <ResultsTabs dimensions={analysis.synthesisResult} narrative={analysis.narrative} />
+        <RelatedEventsSection events={analysis.relatedEvents} />
       </PageContainer>
     )
   }

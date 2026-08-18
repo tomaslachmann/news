@@ -26,6 +26,7 @@ import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { toAnalysisDetail, toAnalysisListItem, resolveDisplayTitle, STATUS_MAP } from '../mappers/analysis.js'
+import { toRelatedEvents } from '../mappers/storyRelation.js'
 
 /** Submits a seed URL. Ticket 27/ADR 0019: before creating a new Analysis, checks whether the
  *  seed already matches an open Story within the dedup window — the same embedding-match +
@@ -328,7 +329,18 @@ export async function getAnalysisDetail(
     }
   }
 
-  return toAnalysisDetail(analysis)
+  // AnalysisPage only ever renders relatedEvents for a COMPLETE Analysis (a Draft/PENDING/FAILED
+  // one never reaches that branch) — skip the extra StoryRelation/Story/Analysis join entirely
+  // for every other status rather than fetching data that can never be shown.
+  const relatedEvents =
+    analysis.status === 'COMPLETE'
+      ? toRelatedEvents(
+          analysis.storyId,
+          await storyRelationRepo.findPublishedRelationsForStory(analysis.storyId)
+        )
+      : []
+
+  return toAnalysisDetail(analysis, relatedEvents)
 }
 
 export async function listAnalyses(includeAllStatuses: boolean): Promise<AnalysisListItem[]> {

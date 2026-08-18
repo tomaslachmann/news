@@ -569,7 +569,10 @@ describe('confirmCoverages', () => {
 })
 
 describe('getAnalysisDetail', () => {
-  beforeEach(() => vi.resetAllMocks())
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.mocked(storyRelationRepo.findPublishedRelationsForStory).mockResolvedValue([])
+  })
 
   const OK_COVERAGE = {
     id: 'c1',
@@ -609,6 +612,43 @@ describe('getAnalysisDetail', () => {
     expect(result.status).toBe('complete')
     expect(result.coverages).toEqual([])
     expect(result.synthesisResult).toBeUndefined()
+  })
+
+  it('fetches published relations for this Story and includes them as relatedEvents', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+    vi.mocked(storyRelationRepo.findPublishedRelationsForStory).mockResolvedValue([
+      {
+        fromStoryId: 's1',
+        toStoryId: 's-other',
+        type: 'FOLLOW_UP',
+        fromAnalysisId: 'a1',
+        fromSeedHeadline: 'Headline',
+        fromHeadline: null,
+        fromStatus: 'COMPLETE',
+        fromCoverageCount: 2,
+        toAnalysisId: 'a-other',
+        toSeedHeadline: 'Other working title',
+        toHeadline: 'Other generated headline',
+        toStatus: 'COMPLETE',
+        toCoverageCount: 4,
+      },
+    ])
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(storyRelationRepo.findPublishedRelationsForStory).toHaveBeenCalledWith('s1')
+    expect(result.relatedEvents).toEqual([
+      { analysisId: 'a-other', title: 'Other generated headline', type: 'FOLLOW_UP', coverageCount: 4 },
+    ])
   })
 
   it('generates and caches the narrative when the Analysis is complete and has no narrative yet', async () => {
@@ -775,6 +815,24 @@ describe('getAnalysisDetail', () => {
     await getAnalysisDetail('a1')
 
     expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
+  })
+
+  it('does not fetch related events when the Analysis is not COMPLETE, since AnalysisPage never shows them for a non-COMPLETE Analysis', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(storyRelationRepo.findPublishedRelationsForStory).not.toHaveBeenCalled()
+    expect(result.relatedEvents).toEqual([])
   })
 
   it('prefers the generated headline as title when present, falling back to the working title otherwise', async () => {
