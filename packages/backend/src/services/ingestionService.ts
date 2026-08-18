@@ -4,6 +4,7 @@ import { queryRssFeeds } from './rss.js'
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
+import { extractAndPersistStoryEntities } from './entityExtractionPass.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
@@ -147,6 +148,13 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
     )
     await coverageRepo.excludeCoverageIds(failedIds)
   }
+
+  // Entity & entity-relation extraction (ticket 34) — best-effort evidence for later
+  // relation-candidate scoring (ticket 35), never allowed to block approval itself. Uses only
+  // the titles that survived the quality gate above, not every originally-attached title, so an
+  // excluded wrong-event Coverage doesn't pollute this Story's entity signal.
+  const titles = [analysis.story.anchorHeadline, ...verified.map((c) => c.title)]
+  await extractAndPersistStoryEntities(analysis.storyId, titles, analysisRepo.updateStoryEntities, log)
 
   // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during
   // the verification pass above; if so, this must not resurrect it back to PENDING.

@@ -9,6 +9,7 @@ import * as narrativePassModule from './narrativePass.js'
 import * as storyVerificationModule from './storyVerification.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as ingestionServiceModule from './ingestionService.js'
+import * as entityExtractionPassModule from './entityExtractionPass.js'
 import {
   createAnalysis,
   attachSeedToMatch,
@@ -29,6 +30,7 @@ vi.mock('./narrativePass.js')
 vi.mock('./storyVerification.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./ingestionService.js')
+vi.mock('./entityExtractionPass.js')
 
 const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
 const SEED_EMBEDDING = [1, 0, 0]
@@ -388,7 +390,14 @@ describe('discoverSources', () => {
       seedHeadline: 'x',
       status: 'PENDING',
       createdAt: new Date(),
-      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x', embedding: [] },
+      story: {
+        id: 's1',
+        createdAt: new Date(),
+        anchorHeadline: 'x',
+        embedding: [],
+        entities: [],
+        entityRelations: [],
+      },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
       candidates: [
@@ -428,7 +437,14 @@ describe('discoverSources', () => {
       seedHeadline: 'x',
       status: 'PENDING',
       createdAt: new Date(),
-      story: { id: 's1', createdAt: new Date(), anchorHeadline: 'x', embedding: [] },
+      story: {
+        id: 's1',
+        createdAt: new Date(),
+        anchorHeadline: 'x',
+        embedding: [],
+        entities: [],
+        entityRelations: [],
+      },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
       candidates: [
@@ -451,7 +467,10 @@ describe('discoverSources', () => {
 })
 
 describe('confirmCoverages', () => {
-  beforeEach(() => vi.resetAllMocks())
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.mocked(entityExtractionPassModule.extractAndPersistStoryEntities).mockResolvedValue(undefined)
+  })
 
   const ANALYSIS = {
     id: 'a1',
@@ -508,6 +527,29 @@ describe('confirmCoverages', () => {
     await confirmCoverages('a1', { confirmedIds: ['c1'] })
 
     expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('c1', { extractedText: fullText, status: 'OK' })
+  })
+
+  it("extracts entities from every OK Coverage's full extracted text", async () => {
+    stubHappyPath()
+    const fullText = 'A perfectly ordinary article body with plenty of real content in it. '.repeat(10)
+    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
+      title: 'Article',
+      excerpt: 'excerpt',
+      fullText,
+    })
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockReset()
+      .mockResolvedValueOnce([PENDING_COVERAGE])
+      .mockResolvedValueOnce([{ ...PENDING_COVERAGE, status: 'OK', extractedText: fullText }])
+
+    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+
+    expect(entityExtractionPassModule.extractAndPersistStoryEntities).toHaveBeenCalledWith(
+      's1',
+      [fullText],
+      analysisRepo.updateStoryEntities,
+      undefined
+    )
   })
 })
 

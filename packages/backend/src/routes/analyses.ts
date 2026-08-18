@@ -72,7 +72,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
         throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
       }
 
-      const response = await analysisService.confirmCoverages(request.params.id, parsed.data)
+      const response = await analysisService.confirmCoverages(request.params.id, parsed.data, fastify.log)
       return reply.code(200).send(response)
     }
   )

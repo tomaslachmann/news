@@ -5,6 +5,7 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as rssModule from './rss.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as storyVerificationModule from './storyVerification.js'
+import * as entityExtractionPassModule from './entityExtractionPass.js'
 import {
   runIngestionPass,
   approveDraft,
@@ -20,6 +21,7 @@ vi.mock('../repositories/pendingAddition.js')
 vi.mock('./rss.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./storyVerification.js')
+vi.mock('./entityExtractionPass.js')
 
 const RSS_ITEM = {
   outlet: 'iDnes',
@@ -305,7 +307,14 @@ const DRAFT_WITH_STORY = {
   seedHeadline: 'x',
   status: 'DRAFT' as const,
   createdAt: new Date(),
-  story: { id: 's1', createdAt: new Date(), anchorHeadline: 'Anchor headline', embedding: [] },
+  story: {
+    id: 's1',
+    createdAt: new Date(),
+    anchorHeadline: 'Anchor headline',
+    embedding: [],
+    entities: [],
+    entityRelations: [],
+  },
 }
 
 function makeCoverage(id: string, title: string) {
@@ -331,6 +340,7 @@ describe('approveDraft', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(true)
+    vi.mocked(entityExtractionPassModule.extractAndPersistStoryEntities).mockResolvedValue(undefined)
   })
 
   it('flips a Draft to PENDING and excludes nothing when every Coverage verifies', async () => {
@@ -417,6 +427,23 @@ describe('approveDraft', () => {
     })
 
     await expect(approveDraft('a1')).rejects.toThrow(ValidationError)
+  })
+
+  it('extracts entities from the anchor headline plus only the verified Coverage titles', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const good = makeCoverage('c1', 'Related to the anchor')
+    const bad = makeCoverage('c2', 'Unrelated trending item')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([good, bad])
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([good])
+
+    await approveDraft('a1')
+
+    expect(entityExtractionPassModule.extractAndPersistStoryEntities).toHaveBeenCalledWith(
+      's1',
+      ['Anchor headline', 'Related to the anchor'],
+      analysisRepo.updateStoryEntities,
+      undefined
+    )
   })
 })
 
