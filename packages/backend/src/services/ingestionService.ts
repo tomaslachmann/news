@@ -1,5 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify'
-import type { IngestionRunSummary, PendingAdditionItem, AnalysisListItem } from '@news-triangulator/shared'
+import type {
+  IngestionRunSummary,
+  PendingAdditionItem,
+  AnalysisListItem,
+  PendingStoryRelationItem,
+} from '@news-triangulator/shared'
 import { queryRssFeeds } from './rss.js'
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
@@ -12,6 +17,7 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
+import { toPendingStoryRelationItem } from '../mappers/storyRelation.js'
 
 // A Draft below this many attached sources stays hidden from the review queue — decluttering
 // single-source noise without changing the approval gate itself. Tunable, like the other
@@ -202,4 +208,43 @@ export async function listPendingAdditions(): Promise<PendingAdditionItem[]> {
 export async function listVisibleDrafts(): Promise<AnalysisListItem[]> {
   const drafts = await analysisRepo.findDraftsWithCoverageCount()
   return drafts.filter((d) => d.coverageCount >= MIN_VISIBLE_SOURCE_COUNT).map(toVisibleDraftListItem)
+}
+
+/** LOW-confidence StoryRelations (ticket 35) awaiting Admin review — the Event Graph's equivalent
+ *  of the Draft review queue above, on the same Admin surface (ticket 36). */
+export async function listPendingStoryRelations(): Promise<PendingStoryRelationItem[]> {
+  const rows = await storyRelationRepo.findPendingReviewRelations()
+  return rows.map(toPendingStoryRelationItem)
+}
+
+export async function approveStoryRelation(id: string): Promise<void> {
+  const relation = await storyRelationRepo.findStoryRelationById(id)
+  if (!relation) throw new NotFoundError('Vztah nenalezen')
+  if (relation.status !== 'PENDING_REVIEW') throw new ValidationError('Schválit lze pouze čekající vztahy')
+
+  // Conditional, not a plain write — guards against a concurrent action on the same row (e.g. an
+  // Admin double-clicking approve then reject) racing this read-check-then-write.
+  const transitioned = await storyRelationRepo.updateStoryRelationStatusIfCurrently(
+    id,
+    'PENDING_REVIEW',
+    'PUBLISHED'
+  )
+  if (!transitioned) throw new ValidationError('Vztah mezitím změnil stav; zkuste to prosím znovu')
+}
+
+/** Permanent — a rejected pair is never re-evaluated or re-surfaced by a later
+ *  relation-candidate-generation pass (ticket 35 only ever runs once per Story, searching
+ *  backward; it never revisits a pair it already produced a row for, per the @@unique
+ *  constraint). */
+export async function rejectStoryRelation(id: string): Promise<void> {
+  const relation = await storyRelationRepo.findStoryRelationById(id)
+  if (!relation) throw new NotFoundError('Vztah nenalezen')
+  if (relation.status !== 'PENDING_REVIEW') throw new ValidationError('Zamítnout lze pouze čekající vztahy')
+
+  const transitioned = await storyRelationRepo.updateStoryRelationStatusIfCurrently(
+    id,
+    'PENDING_REVIEW',
+    'REJECTED'
+  )
+  if (!transitioned) throw new ValidationError('Vztah mezitím změnil stav; zkuste to prosím znovu')
 }

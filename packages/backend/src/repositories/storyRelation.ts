@@ -84,3 +84,72 @@ export async function createStoryRelation(data: CreateStoryRelationInput): Promi
     update: {},
   })
 }
+
+export interface PendingReviewRelationRow {
+  id: string
+  fromAnalysisId: string
+  fromSeedHeadline: string
+  fromHeadline: string | null
+  toAnalysisId: string
+  toSeedHeadline: string
+  toHeadline: string | null
+  type: StoryRelationType
+  reasoning: string
+  createdAt: Date
+}
+
+/** Every `PENDING_REVIEW` StoryRelation (ticket 36's Admin review queue), flattened with both
+ *  sides' Analysis id/seedHeadline/headline — everything `resolveDisplayTitle` needs for each
+ *  side, computed by the caller (mappers/analysis.ts) rather than here, keeping this repository
+ *  Prisma-only. A row whose either side somehow has no Analysis (structurally shouldn't happen —
+ *  every Story is created with one in the same transaction, but the schema doesn't guarantee it)
+ *  is skipped rather than shown with a broken title. */
+export async function findPendingReviewRelations(): Promise<PendingReviewRelationRow[]> {
+  const rows = await prisma.storyRelation.findMany({
+    where: { status: 'PENDING_REVIEW' },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      fromStory: { include: { analysis: { include: { synthesisResult: { select: { headline: true } } } } } },
+      toStory: { include: { analysis: { include: { synthesisResult: { select: { headline: true } } } } } },
+    },
+  })
+
+  const result: PendingReviewRelationRow[] = []
+  for (const r of rows) {
+    if (!r.fromStory.analysis || !r.toStory.analysis) continue
+    result.push({
+      id: r.id,
+      fromAnalysisId: r.fromStory.analysis.id,
+      fromSeedHeadline: r.fromStory.analysis.seedHeadline,
+      fromHeadline: r.fromStory.analysis.synthesisResult?.headline ?? null,
+      toAnalysisId: r.toStory.analysis.id,
+      toSeedHeadline: r.toStory.analysis.seedHeadline,
+      toHeadline: r.toStory.analysis.synthesisResult?.headline ?? null,
+      type: r.type,
+      reasoning: r.reasoning,
+      createdAt: r.createdAt,
+    })
+  }
+  return result
+}
+
+export async function findStoryRelationById(id: string): Promise<StoryRelation | null> {
+  return prisma.storyRelation.findUnique({ where: { id } })
+}
+
+/** Like updateAnalysisStatusIfCurrently (repositories/analysis.ts) — only writes if the row is
+ *  still `fromStatus`, returning whether the transition actually happened. Guards against an
+ *  Admin double-clicking approve then reject (or two admins acting on the same row) racing a
+ *  plain read-check-then-write, where the last write to commit would silently win regardless of
+ *  which action the Admin actually intended last. */
+export async function updateStoryRelationStatusIfCurrently(
+  id: string,
+  fromStatus: StoryRelationStatus,
+  toStatus: StoryRelationStatus
+): Promise<boolean> {
+  const result = await prisma.storyRelation.updateMany({
+    where: { id, status: fromStatus },
+    data: { status: toStatus },
+  })
+  return result.count > 0
+}

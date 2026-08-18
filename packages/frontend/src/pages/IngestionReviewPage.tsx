@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import type { StoryRelationTypeLabel } from '@news-triangulator/shared'
 import { Button } from '@/components/ui/button'
 import { PageContainer } from '@/components/PageContainer'
 import { PageTitle } from '@/components/PageTitle'
@@ -7,8 +8,16 @@ import {
   useVisibleDrafts,
   useApproveDraft,
   useRejectDraft,
+  usePendingStoryRelations,
+  useApproveStoryRelation,
+  useRejectStoryRelation,
 } from '@/services/ingestion/hooks'
 import { formatDate } from '@/lib/formatDate'
+
+const RELATION_TYPE_LABELS: Record<StoryRelationTypeLabel, string> = {
+  RELATED: 'Související',
+  FOLLOW_UP: 'Navazující',
+}
 
 function DraftsSection() {
   const { data: drafts, isLoading, isError } = useVisibleDrafts()
@@ -117,6 +126,60 @@ function PendingAdditionsSection() {
   )
 }
 
+function StoryRelationsSection() {
+  const { data: relations, isLoading, isError } = usePendingStoryRelations()
+  const approveMutation = useApproveStoryRelation()
+  const rejectMutation = useRejectStoryRelation()
+
+  return (
+    <section className="mt-10">
+      <h2 className="font-serif text-lg font-semibold">Vztahy mezi událostmi čekající na schválení</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Nástroj s nižší jistotou navrhl souvislost mezi dvěma událostmi. Potvrďte, pokud dává smysl, nebo
+        zamítněte — zamítnutí je trvalé a nástroj tuto dvojici znovu nenabídne.
+      </p>
+
+      {isLoading && <p className="mt-4 text-sm text-muted-foreground">Načítání…</p>}
+      {isError && <p className="mt-4 text-sm text-destructive">Nepodařilo se načíst čekající vztahy.</p>}
+
+      {relations && relations.length === 0 && (
+        <p className="mt-4 text-sm text-muted-foreground">Momentálně žádné čekající vztahy.</p>
+      )}
+
+      {relations && relations.length > 0 && (
+        <ul className="mt-4 flex flex-col gap-3">
+          {relations.map((relation) => (
+            <li key={relation.id} className="rounded-lg border bg-card p-4">
+              <p className="utility-label">{RELATION_TYPE_LABELS[relation.type]}</p>
+              <p className="mt-1 text-sm font-medium leading-snug">
+                {relation.fromTitle} <span className="text-muted-foreground">→</span> {relation.toTitle}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">{relation.reasoning}</p>
+              <div className="mt-3 flex shrink-0 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={rejectMutation.isPending}
+                  onClick={() => rejectMutation.mutate(relation.id)}
+                >
+                  Zamítnout
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={approveMutation.isPending}
+                  onClick={() => approveMutation.mutate(relation.id)}
+                >
+                  Schválit
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 export default function IngestionReviewPage() {
   return (
     <PageContainer>
@@ -124,6 +187,7 @@ export default function IngestionReviewPage() {
       <div className="mt-8">
         <DraftsSection />
         <PendingAdditionsSection />
+        <StoryRelationsSection />
       </div>
     </PageContainer>
   )
