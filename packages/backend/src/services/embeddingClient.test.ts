@@ -35,7 +35,10 @@ describe('generateEmbedding', () => {
     await expect(generateEmbedding('Headline text', 'ingestion')).rejects.toThrow('no embedding data')
   })
 
-  it('records a successful call with the input text, serialized embedding, and callSite', async () => {
+  it("records a successful call with the input text and callSite, logging the vector's dimension count rather than the vector itself", async () => {
+    // P0-4 (docs/audit.md): a raw 1536-float vector has ~no debugging value per byte compared to
+    // text prompts/responses, so it's excluded from what this table stores — dimension count is
+    // still enough to confirm the call returned a shape consistent with the configured model.
     mockCreate.mockResolvedValue({ data: [{ embedding: [0.1, 0.2], index: 0, object: 'embedding' }] })
 
     await generateEmbedding('Headline text', 'submissionDedup')
@@ -45,7 +48,7 @@ describe('generateEmbedding', () => {
       model: 'text-embedding-3-small',
       systemPrompt: null,
       userContent: 'Headline text',
-      responseContent: JSON.stringify([0.1, 0.2]),
+      responseContent: JSON.stringify({ dimensions: 2 }),
       error: null,
     })
   })

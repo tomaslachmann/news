@@ -108,6 +108,13 @@ model StoryRelation {
   createdAt      DateTime                    @default(now())
 
   @@unique([fromStoryId, toStoryId])
+  /// findPublishedRelationsForStory reads both sides of the edge ("a Story's related Events
+  /// includes rows where it's either fromStoryId or toStoryId") — the unique constraint above
+  /// covers lookups keyed on fromStoryId, but toStoryId needs its own index for the other side.
+  @@index([toStoryId])
+  /// The Admin review queue's findPendingReviewRelations query: filter by status, order by
+  /// createdAt.
+  @@index([status, createdAt])
 }
 
 model Analysis {
@@ -121,6 +128,10 @@ model Analysis {
   coverages        Coverage[]
   synthesisResult  SynthesisResult?
   pendingAdditions PendingAddition[]
+
+  /// The reader listing (status COMPLETE) and the Draft review queue (status DRAFT) both filter
+  /// by status and sort by createdAt desc.
+  @@index([status, createdAt])
 }
 
 model Coverage {
@@ -135,6 +146,10 @@ model Coverage {
   extractionResult Json?
   status           CoverageStatus @default(PENDING)
   excluded         Boolean        @default(false)
+
+  /// Every Coverage read is scoped to one Analysis and almost always filters excluded/status too
+  /// (findCoveragesForAnalysis, findAnalysesWithCoverageCount's per-row count).
+  @@index([analysisId, excluded, status])
 }
 
 model SynthesisResult {
@@ -184,7 +199,9 @@ model LlmCallLog {
   userContent     String?
   /// The raw response content on success, or the malformed content that failed to parse — null
   /// only when the call itself never returned (the API call/network failed before any content
-  /// was received).
+  /// was received). Exception: an 'embedding' callSite never logs the raw vector here (P0-4,
+  /// docs/audit.md) — just `{ dimensions }`, since a float array has ~no debugging value per byte
+  /// compared to the text this column otherwise holds.
   responseContent String?
   /// Null on success. Set for any failure: the OpenAI API call throwing, or its response failing
   /// to parse as JSON.

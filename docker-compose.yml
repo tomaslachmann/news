@@ -70,7 +70,15 @@ services:
       - -c
       - |
         while true; do
-          curl -sf -X POST -H "x-ingestion-secret: $$INGESTION_SECRET" http://backend:3001/api/ingestion/run || true
+          # --max-time is a safety net against a truly hung connection (P2-20, docs/audit.md),
+          # not a step-timing mechanism — kept well above any realistic run duration so it can't
+          # itself cause a normal-but-slow run to be treated as failed. If curl times out or
+          # errors, runIngestionPass may still be running server-side when the next tick starts;
+          # nothing currently locks against that overlap (P2-22, tracked in the async-job-queue
+          # ticket at .scratch/backend-audit/issues/06-async-job-queue.md) — this flag only stops
+          # curl itself from blocking forever, it doesn't add that protection.
+          curl -sf --max-time 600 -X POST -H "x-ingestion-secret: $$INGESTION_SECRET" http://backend:3001/api/ingestion/run \
+            || echo "[ingestion-cron] request failed or timed out (curl exit $?)"
           sleep 1200
         done
 
