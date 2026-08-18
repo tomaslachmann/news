@@ -4,7 +4,7 @@
 
 **Blocked by:** 35 — Story Relation Candidate Generation, Confirmation & Persistence (needs `PUBLISHED` `StoryRelation` rows to display)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `AnalysisDetail` gains a new field (e.g. `relatedEvents: RelatedEventItem[]`) populated by `toAnalysisDetail` — no separate endpoint, one round-trip for the whole Article page
 - [x] Only `PUBLISHED` `StoryRelation`s are included, read bidirectionally (the current Story as either `fromStoryId` or `toStoryId`)
