@@ -19,7 +19,15 @@ export async function generateEmbedding(text: string, callSite: EmbeddingCallSit
     // guards a zero-length vector to always score 0 — silently orphaning a real event instead of
     // hitting the caller's own skip-and-retry-next-poll path.
     if (!embedding) throw new Error('Embeddings API returned no embedding data')
-    await recordLlmCallSafe({ ...logBase, responseContent: JSON.stringify(embedding), error: null })
+    // The raw vector itself isn't logged (docs/audit.md P0-4): a 1536-float array has ~no
+    // debugging value per byte next to the text prompts/responses this table otherwise holds.
+    // Dimension count is still enough to confirm the call returned a shape consistent with the
+    // configured model.
+    await recordLlmCallSafe({
+      ...logBase,
+      responseContent: JSON.stringify({ dimensions: embedding.length }),
+      error: null,
+    })
     return embedding
   } catch (err) {
     await recordLlmCallSafe({

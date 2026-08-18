@@ -16,12 +16,13 @@ A triage decision on every finding in `docs/audit.md` (a 1701-line, Czech-langua
 
 ## Decisions so far
 
-(none yet)
+- [Quick fixes: no-brainers regardless of scale](issues/01-quick-fixes-no-brainers.md) — accepted P0-1 (no indexes), P0-4 (LlmCallLog stores full embedding vectors forever), P2-17 (non-timing-safe secret compare), P2-20 (no curl `--max-time`), P2-26 (integration tests skip push-to-`ticket/**`); split P2-24 (admin audit log) into its own ticket; deferred P1-12 (title-less Coverage misclassified as a verification failure) to pair with P2-23 later; rejected P2-25 (`.scratch/` committed) as not-a-finding — that's this project's deliberate ticket-tracking convention.
 
 ## Not yet specified
 
 - Concrete numeric trigger conditions for the two deferred-candidate tickets (retrieval/matching architecture, async job queue) aren't chosen yet — resolving those tickets *is* choosing the trigger, not a prerequisite to them.
 - Whether `docs/audit.md` itself is kept (translated, as reference material) or deleted once every finding has a home — not yet decided; revisit once the map's tickets are resolved and nothing in the raw file is still unaccounted for.
+- P1-12 (title-less Coverage logged as a verification failure it never underwent) — real, but deferred out of ticket 01 pending P2-23 (splitting `EXTRACTION_FAILED` into a real `blockReason` enum), since an honest fix for P1-12 likely wants the same reason-taxonomy machinery. Not yet sharp enough to ticket on its own until P2-23 is scoped.
 
 ## Out of scope
 

@@ -19,6 +19,8 @@ Instrumentation lives in `callJsonModel` alone, not in each individual pass — 
 
 Ticket 31 extends this same table to `generateEmbedding` calls (a structurally different request/response shape — text in, vector out, no system/user prompt split), completing coverage of every LLM-facing call in the backend.
 
+> **Amended by ADR 0023.** The "full response content... uncapped" description above no longer holds for `'embedding'`-callSite rows: since ADR 0023, a successful embedding call logs `{ dimensions }` instead of the vector itself. Every other call site is unaffected, and this ADR's no-pruning stance is untouched.
+
 ## Consequences
 - A maintainer can now inspect real Extraction/Synthesis/Narrative/story-verification/keyword-extraction LLM calls and failures via Prisma Studio, instead of grepping ephemeral Docker logs for a bare failure count.
 - One additional Postgres write per LLM call (success or failure) — negligible next to the LLM call's own latency, and explicitly allowed to fail without affecting the call it's recording.

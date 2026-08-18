@@ -8,6 +8,14 @@ on:
     branches:
       - main
 
+# A ticket branch's push and its open PR's synchronize event both fire for the same commit —
+# without this, integration (now running on push too, not just pull_request) would run twice per
+# commit. Grouping by the actual commit SHA (falling back to the ref for events with no PR head)
+# means the later-starting event's run cancels the earlier one instead of both running to completion.
+concurrency:
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   fast:
     name: Typecheck, lint, unit tests
@@ -30,7 +38,6 @@ jobs:
 
   integration:
     name: Integration tests (testcontainers)
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
