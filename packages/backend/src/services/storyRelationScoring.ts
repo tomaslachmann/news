@@ -108,6 +108,9 @@ export function scoreRelationCandidates(
   const scored = candidates.map((candidateStory) => {
     const embeddingSimilarity = cosineSimilarity(current.embedding, candidateStory.embedding)
     const entityOverlap = weightedEntityContainment(current.entities, candidateStory.entities, totalStories)
+    // Deliberately still plain Jaccard, not IDF-weighted like entityOverlap above: ADR 0024's
+    // P1-9 fix is scoped to entity-key overlap specifically, and this migration adds no
+    // frequency table for relation-triple rarity to weight by.
     const entityRelationOverlap = jaccard(
       currentRelationTriples,
       entityRelationTripleSet(candidateStory.entityRelations)

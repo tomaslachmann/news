@@ -99,6 +99,13 @@ export async function runEntityExtractionPass(
       log?.warn({ relation: r }, 'Dropping entityRelation referencing an unknown or ambiguous entity name')
       continue
     }
+    // A self-relation (from and to resolving to the same entity) violates
+    // StoryEntityRelation's no_self_relation CHECK constraint — dropped here, before
+    // persistence, rather than letting the DB reject it and roll back the whole extraction.
+    if (from === to) {
+      log?.warn({ relation: r }, 'Dropping entityRelation whose from/to resolve to the same entity')
+      continue
+    }
     entityRelations.push({ from, to, type: r.type, confidence: r.confidence })
   }
 

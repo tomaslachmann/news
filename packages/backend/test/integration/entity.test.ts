@@ -51,6 +51,21 @@ describe('Entity repository against a real Postgres instance', () => {
     expect(result.entities).toEqual([{ key: 'place:entity-test-3', storyCount: 1 }])
   })
 
+  it('does not double-count storyCount when two calls for the same Story race concurrently', async () => {
+    const { storyId } = await createAnalysis({ seedUrl: 'https://example.cz/entity-e4b', seedHeadline: 'x' })
+    const entity = { key: 'place:entity-test-3b', name: 'Prague', type: 'PLACE' as const, confidence: 0.8 }
+
+    // Both calls see the same pre-write state if unserialized — the pg_advisory_xact_lock in
+    // replaceStoryEntities must force one to wait for the other rather than both incrementing.
+    await Promise.all([
+      replaceStoryEntities(storyId, [entity], []),
+      replaceStoryEntities(storyId, [entity], []),
+    ])
+
+    const result = await findStoryEntitiesForScoring(storyId)
+    expect(result.entities).toEqual([{ key: 'place:entity-test-3b', storyCount: 1 }])
+  })
+
   it('decrements storyCount for an entity a Story drops on re-extraction, without affecting another Story still attached to it', async () => {
     const dropping = await createAnalysis({ seedUrl: 'https://example.cz/entity-e5', seedHeadline: 'x' })
     const stillAttached = await createAnalysis({ seedUrl: 'https://example.cz/entity-e6', seedHeadline: 'x' })

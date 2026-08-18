@@ -57,7 +57,7 @@ Two pieces of related audit findings are explicitly out of this ticket's scope, 
 
 ## Consequences
 - ADR 0022's entity-resolution-avoidance reasoning and its other two decisions (closed `StoryRelation` types, categorical confidence tiers) are unaffected and remain in force — this ADR narrows ADR 0022 to its storage-shape clause only. ADR 0022 has been amended with a pointer to this ADR.
-- `storyRelationScoring.ts` can now compute IDF-weighted containment instead of plain Jaccard for entity/entity-relation overlap, fixing P1-9's asymmetric-set-size problem.
+- `storyRelationScoring.ts` can now compute IDF-weighted containment instead of plain Jaccard for entity-*key* overlap, fixing P1-9's asymmetric-set-size problem. Entity-*relation* overlap (the `from|type|to` triple sets) stays plain Jaccard — this migration adds no frequency table for relation triples, and the ticket's own P1-9 fix is scoped to entity keys; revisit relation-triple weighting separately if it turns out to matter in practice.
 - "All Stories mentioning entity X" becomes a single indexed query, unblocking ticket 07's proposed `Thread` revival mechanism if that ticket is later accepted — this ADR does not itself decide whether `Thread` gets built.
 - Two entity-key collisions (two distinct real-world entities normalizing to the same label) remain possible and are still an accepted v1 limitation, unchanged from ADR 0022 — normalizing storage does not change what the `key` means or guarantees.
 - `Story.entities`/`Story.entityRelations` no longer exist as of this migration; any code or query still assuming the JSON shape must be updated as part of the implementing ticket.
