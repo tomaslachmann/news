@@ -58,33 +58,33 @@ model User {
 /// against rather than being folded into Analysis's own DRAFT/PENDING/COMPLETE/FAILED lifecycle.
 /// See ADR 0017.
 model Story {
-  id             String    @id @default(cuid())
-  createdAt      DateTime  @default(now())
+  id              String          @id @default(cuid())
+  createdAt       DateTime        @default(now())
   /// The seed/triggering article's title, fixed at creation — what every same-event
   /// verification call compares a candidate article's title against.
-  anchorHeadline String
+  anchorHeadline  String
   /// Embedding of anchorHeadline (+ excerpt where available), used by the same-event
   /// classification step Ingestion and human-seeded submission now share (ADR 0018, ADR 0019).
   /// Every new Story gets one regardless of origin; empty only for Stories created before ADR
   /// 0019 shipped, or when embedding generation failed at creation — an empty vector never
   /// scores above the match threshold, so such a Story is simply never matched, not a broken
   /// state.
-  embedding      Float[]   @default([])
+  embedding       Float[]         @default([])
   /// Lightweight, non-authoritative entity signal extracted once (ticket 34), used only as
   /// candidate-scoring evidence for Story-to-Story relation linking (ticket 35) — never a
   /// knowledge graph, never surfaced to a reader/Admin as ground truth. Array of
   /// `{ key, name, type, confidence }`; `key` is a deterministic `type:slugify(name)` label, not
   /// a verified real-world identity (see ADR, ticket 35). Empty for every Story created before
   /// this feature shipped — no backfill.
-  entities         Json    @default("[]")
+  entities        Json            @default("[]")
   /// Entity-to-entity relations this Story's own coverage asserts (e.g. "Donald Tusk REPRESENTS
   /// Poland") — Story-scoped evidence, not a global/permanent fact about the entities involved.
   /// Array of `{ from, to, type, confidence }`, `from`/`to` referencing keys in `entities` above.
   /// Same no-backfill rule as `entities`.
-  entityRelations  Json    @default("[]")
-  analysis       Analysis?
-  relationsFrom  StoryRelation[] @relation("StoryRelationFrom")
-  relationsTo    StoryRelation[] @relation("StoryRelationTo")
+  entityRelations Json            @default("[]")
+  analysis        Analysis?
+  relationsFrom   StoryRelation[] @relation("StoryRelationFrom")
+  relationsTo     StoryRelation[] @relation("StoryRelationTo")
 }
 
 /// A typed, directional Story-to-Story edge in the Event Graph (ticket 35) — the newer Story
@@ -138,7 +138,12 @@ model Coverage {
   id               String         @id @default(cuid())
   analysisId       String
   analysis         Analysis       @relation(fields: [analysisId], references: [id])
-  outlet           String
+  sourceId         String
+  /// Resolved once via resolveSource() at Coverage-creation time (fixes P0-6, docs/audit.md) —
+  /// the same real outlet always produces the same Source regardless of which path (RSS,
+  /// GDELT, human-seeded/custom URL) found it. Read Source.name for display, never a free-text
+  /// outlet column (removed — that inconsistency was the bug).
+  source           Source         @relation(fields: [sourceId], references: [id])
   title            String?
   articleUrl       String
   publishedAt      String?
@@ -150,6 +155,11 @@ model Coverage {
   /// Every Coverage read is scoped to one Analysis and almost always filters excluded/status too
   /// (findCoveragesForAnalysis, findAnalysesWithCoverageCount's per-row count).
   @@index([analysisId, excluded, status])
+  /// "Each Source contributes at most one Coverage per Analysis" (CONTEXT.md) — enforced at the
+  /// DB level as a partial unique index (excluded Coverage doesn't count, matching the existing
+  /// app-level dedup checks) written by hand in this migration; Prisma's schema DSL can't express
+  /// a WHERE-filtered unique index, so it isn't declared here — see migration.sql.
+  @@index([sourceId])
 }
 
 model SynthesisResult {
@@ -173,11 +183,47 @@ model PendingAddition {
   id          String   @id @default(cuid())
   analysisId  String
   analysis    Analysis @relation(fields: [analysisId], references: [id])
-  outlet      String
+  sourceId    String
+  source      Source   @relation(fields: [sourceId], references: [id])
   title       String?
   articleUrl  String
   publishedAt String?
   createdAt   DateTime @default(now())
+}
+
+/// A distinct news outlet (CONTEXT.md) — the single identity every Coverage/PendingAddition
+/// resolves to via resolveSource(), replacing the free-text `outlet` string that used to be
+/// generated three inconsistent ways depending on discovery path (P0-6, docs/audit.md).
+model Source {
+  id               String            @id @default(cuid())
+  /// Display name shown to readers/Admins, e.g. "iDnes" — chosen once, here, and read through
+  /// the relation everywhere a Coverage/PendingAddition used to carry its own free-text outlet.
+  name             String            @unique
+  /// Every hostname known to belong to this Source (apex + any subdomain actually seen in the
+  /// wild, e.g. both "idnes.cz" and "servis.idnes.cz") — resolveSource() matches the most
+  /// specific suffix first. A Source created automatically for a not-yet-configured domain
+  /// (GDELT surfacing an outlet outside the curated RSS list) starts with just that one domain.
+  domains          String[]
+  createdAt        DateTime          @default(now())
+  feeds            SourceFeed[]
+  coverages        Coverage[]
+  pendingAdditions PendingAddition[]
+}
+
+/// One RSS feed to poll for a Source — replaces the hardcoded RSS_FEEDS config array, so adding
+/// or changing a feed is a data change, not a deploy. Deliberately minimal: conditional-GET
+/// bookkeeping (etag, lastPolledAt, consecutiveErrors, ...) belongs to the async worker rework
+/// (.scratch/backend-audit/issues/06-async-job-queue.md) and isn't added until something actually
+/// reads/writes it — this table exists now only so that ticket has somewhere to read feed URLs
+/// from instead of static config.
+model SourceFeed {
+  id        String   @id @default(cuid())
+  sourceId  String
+  source    Source   @relation(fields: [sourceId], references: [id])
+  url       String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([sourceId])
 }
 
 /// Every LLM chat-completion call the backend makes (extraction/synthesis/narrative/story

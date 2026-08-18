@@ -8,7 +8,7 @@ import { toCoverageInfo } from '../mappers/coverage.js'
 import { runExtractionPass, ExtractionResultSchema } from './extractionPass.js'
 import { runSynthesisPass, type SourceExtraction } from './synthesisPass.js'
 import { runHeadlinePass } from './headlinePass.js'
-import type { Coverage } from '../repositories/coverage.js'
+import type { CoverageWithSource } from '../repositories/coverage.js'
 
 export interface RunAnalysisStreamOptions {
   /** Called once the Analysis is confirmed to exist, right before the first `send`. */
@@ -37,7 +37,7 @@ export async function runAnalysisStream(
     send({
       type: 'extraction-error',
       coverageId: c.id,
-      outlet: c.outlet,
+      outlet: c.source.name,
       error: 'Text článku není k dispozici',
     })
   }
@@ -52,8 +52,8 @@ export async function runAnalysisStream(
 
 async function runExtractionAndSynthesis(
   analysisId: string,
-  allCoverages: Coverage[],
-  extractable: Coverage[],
+  allCoverages: CoverageWithSource[],
+  extractable: CoverageWithSource[],
   send: (event: SseEvent) => void,
   log?: FastifyBaseLogger
 ): Promise<void> {
@@ -66,7 +66,7 @@ async function runExtractionAndSynthesis(
           send({
             type: 'extraction-complete',
             coverageId: coverage.id,
-            outlet: coverage.outlet,
+            outlet: coverage.source.name,
             claimCount: result.data.factualClaims.length,
             attributedClaimCount: result.data.attributedClaims.length,
             framingSignalCount: result.data.framingSignals.length,
@@ -81,14 +81,19 @@ async function runExtractionAndSynthesis(
         send({
           type: 'extraction-complete',
           coverageId: coverage.id,
-          outlet: coverage.outlet,
+          outlet: coverage.source.name,
           claimCount: extraction.factualClaims.length,
           attributedClaimCount: extraction.attributedClaims.length,
           framingSignalCount: extraction.framingSignals.length,
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Extrakce se nezdařila'
-        send({ type: 'extraction-error', coverageId: coverage.id, outlet: coverage.outlet, error: message })
+        send({
+          type: 'extraction-error',
+          coverageId: coverage.id,
+          outlet: coverage.source.name,
+          error: message,
+        })
       }
     })
   )
@@ -111,7 +116,7 @@ async function runExtractionAndSynthesis(
     const parsed = ExtractionResultSchema.safeParse(c.extractionResult)
     if (parsed.success) {
       sources.push({
-        outlet: c.outlet,
+        outlet: c.source.name,
         articleUrl: c.articleUrl,
         extraction: parsed.data,
         extractedText: c.extractedText!,

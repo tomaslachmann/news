@@ -64,21 +64,36 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
 
     if (match) {
       if (match.analysisStatus === 'PENDING' || match.analysisStatus === 'DRAFT') {
-        await coverageRepo.createCoverages([
-          {
-            analysisId: match.analysisId,
-            outlet: item.outlet,
-            title: item.title,
-            articleUrl: item.url,
-            publishedAt: item.publishedAt,
-            status: 'PENDING',
-          },
-        ])
-        summary.attached++
+        // Each Source contributes at most one Coverage per Analysis (CONTEXT.md) — unlike
+        // createAnalysis's confirm-coverage path, this attach path previously had no such check
+        // at all, so two RSS items from the same outlet matching the same Draft both became
+        // separate Coverage rows (P0-6, docs/audit.md). Also enforced at the DB level (Coverage's
+        // partial unique index) as a backstop, but checked here first for a clean skip instead of
+        // relying on that constraint to throw.
+        const existing = await coverageRepo.findCoveragesForAnalysis(match.analysisId)
+        if (existing.some((c) => c.sourceId === item.sourceId)) {
+          log?.info(
+            { analysisId: match.analysisId, sourceId: item.sourceId },
+            'Ingestion: this Source already has Coverage on the matched Analysis, skipping duplicate'
+          )
+          summary.skipped++
+        } else {
+          await coverageRepo.createCoverages([
+            {
+              analysisId: match.analysisId,
+              sourceId: item.sourceId,
+              title: item.title,
+              articleUrl: item.url,
+              publishedAt: item.publishedAt,
+              status: 'PENDING',
+            },
+          ])
+          summary.attached++
+        }
       } else if (match.analysisStatus === 'COMPLETE') {
         await pendingAdditionRepo.createPendingAddition({
           analysisId: match.analysisId,
-          outlet: item.outlet,
+          sourceId: item.sourceId,
           title: item.title,
           articleUrl: item.url,
           publishedAt: item.publishedAt,
@@ -111,7 +126,7 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
     await coverageRepo.createCoverages([
       {
         analysisId: draft.id,
-        outlet: item.outlet,
+        sourceId: item.sourceId,
         title: item.title,
         articleUrl: item.url,
         publishedAt: item.publishedAt,

@@ -6,14 +6,10 @@ import { queryRssFeeds } from './rss.js'
 const MAX_CANDIDATES = 10
 const GDELT_MIN_THRESHOLD = 5
 
-export function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
-}
-
+/** Keys on sourceId, not the raw URL's hostname — two candidates that resolve to the same real
+ *  Source (e.g. GDELT surfacing "zpravy.idnes.cz" and "servis.idnes.cz", both iDnes) must
+ *  collapse to one here, or both survive to createCoverages and collide on Coverage's partial
+ *  unique index (docs/audit.md P0-6, ticket 02). */
 function deduplicateInto(
   candidates: CandidateArticle[],
   seen: Set<string>,
@@ -22,9 +18,8 @@ function deduplicateInto(
   const result: CandidateArticle[] = []
   for (const c of candidates) {
     if (result.length >= limit) break
-    const domain = extractDomain(c.url)
-    if (!seen.has(domain)) {
-      seen.add(domain)
+    if (!seen.has(c.sourceId)) {
+      seen.add(c.sourceId)
       result.push(c)
     }
   }

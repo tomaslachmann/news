@@ -17,6 +17,7 @@ A triage decision on every finding in `docs/audit.md` (a 1701-line, Czech-langua
 ## Decisions so far
 
 - [Quick fixes: no-brainers regardless of scale](issues/01-quick-fixes-no-brainers.md) — accepted P0-1 (no indexes), P0-4 (LlmCallLog stores full embedding vectors forever), P2-17 (non-timing-safe secret compare), P2-20 (no curl `--max-time`), P2-26 (integration tests skip push-to-`ticket/**`); split P2-24 (admin audit log) into its own ticket; deferred P1-12 (title-less Coverage misclassified as a verification failure) to pair with P2-23 later; rejected P2-25 (`.scratch/` committed) as not-a-finding — that's this project's deliberate ticket-tracking convention.
+- [Source identity: adopt Source/SourceFeed now?](issues/02-source-identity-model.md) — confirmed P0-6 (worse than described: Ingestion's attach path had no duplicate-source check at all, not just inconsistent naming); adopted the full `Source`/`SourceFeed` schema now (not the lighter option initially recommended); fixed at the DB level via a partial unique index, plus the Ingestion collision-check gap. Split P1-13 (no robots.txt/rate-limiting/backoff) into its own ticket.
 
 ## Not yet specified
 

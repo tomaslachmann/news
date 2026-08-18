@@ -5,6 +5,7 @@ import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import * as articleScraperModule from './articleScraper.js'
 import * as keywordExtractorModule from './keywordExtractor.js'
 import * as discoveryModule from './discovery.js'
+import * as sourceResolverModule from './sourceResolver.js'
 import * as narrativePassModule from './narrativePass.js'
 import * as storyVerificationModule from './storyVerification.js'
 import * as embeddingClientModule from './embeddingClient.js'
@@ -27,6 +28,7 @@ vi.mock('../repositories/synthesisResult.js')
 vi.mock('./articleScraper.js')
 vi.mock('./keywordExtractor.js')
 vi.mock('./discovery.js')
+vi.mock('./sourceResolver.js')
 vi.mock('./narrativePass.js')
 vi.mock('./storyVerification.js')
 vi.mock('./embeddingClient.js')
@@ -36,6 +38,7 @@ vi.mock('../repositories/storyRelation.js')
 
 const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
 const SEED_EMBEDDING = [1, 0, 0]
+const SOURCE = { id: 'src-example', name: 'example.cz', domains: ['example.cz'], createdAt: new Date() }
 
 function stubScrapeAndEmbedding() {
   vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
@@ -281,7 +284,7 @@ describe('attachSeedToMatch', () => {
       createdAt: new Date(),
     })
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
-    vi.mocked(discoveryModule.extractDomain).mockReturnValue('example.cz')
+    vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
 
     await attachSeedToMatch('a1', 'https://example.cz/x')
@@ -289,7 +292,7 @@ describe('attachSeedToMatch', () => {
     expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
       {
         analysisId: 'a1',
-        outlet: 'example.cz',
+        sourceId: SOURCE.id,
         title: 'Headline',
         articleUrl: 'https://example.cz/x',
         status: 'PENDING',
@@ -308,7 +311,7 @@ describe('attachSeedToMatch', () => {
       createdAt: new Date(),
     })
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
-    vi.mocked(discoveryModule.extractDomain).mockReturnValue('example.cz')
+    vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
 
     await attachSeedToMatch('a1', 'https://example.cz/x')
@@ -327,12 +330,13 @@ describe('attachSeedToMatch', () => {
       createdAt: new Date(),
     })
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
-    vi.mocked(discoveryModule.extractDomain).mockReturnValue('example.cz')
+    vi.mocked(sourceResolverModule.resolveSourceByUrl).mockResolvedValue(SOURCE)
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([
       {
         id: 'c1',
         analysisId: 'a1',
-        outlet: 'example.cz',
+        sourceId: SOURCE.id,
+        source: { name: SOURCE.name },
         title: null,
         articleUrl: 'https://example.cz/already-there',
         publishedAt: null,
@@ -403,7 +407,13 @@ describe('discoverSources', () => {
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
       candidates: [
-        { outlet: 'iDnes', title: 'T', url: 'https://idnes.cz/x', publishedAt: '2025-01-01T00:00:00Z' },
+        {
+          sourceId: 'src-idnes',
+          outlet: 'iDnes',
+          title: 'T',
+          url: 'https://idnes.cz/x',
+          publishedAt: '2025-01-01T00:00:00Z',
+        },
       ],
       gdeltCount: 1,
     })
@@ -414,7 +424,15 @@ describe('discoverSources', () => {
     const result = await discoverSources('a1', ['keyword'])
 
     expect(storyVerificationModule.verifyCandidatesAgainstAnchor).toHaveBeenCalledWith(
-      [{ outlet: 'iDnes', title: 'T', url: 'https://idnes.cz/x', publishedAt: '2025-01-01T00:00:00Z' }],
+      [
+        {
+          sourceId: 'src-idnes',
+          outlet: 'iDnes',
+          title: 'T',
+          url: 'https://idnes.cz/x',
+          publishedAt: '2025-01-01T00:00:00Z',
+        },
+      ],
       'x',
       undefined
     )
@@ -422,7 +440,7 @@ describe('discoverSources', () => {
     expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
       {
         analysisId: 'a1',
-        outlet: 'iDnes',
+        sourceId: 'src-idnes',
         title: 'T',
         articleUrl: 'https://idnes.cz/x',
         publishedAt: '2025-01-01T00:00:00Z',
@@ -451,6 +469,7 @@ describe('discoverSources', () => {
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
       candidates: [
         {
+          sourceId: 'src-idnes',
           outlet: 'iDnes',
           title: 'Unrelated',
           url: 'https://idnes.cz/x',
@@ -494,7 +513,8 @@ describe('confirmCoverages', () => {
   const PENDING_COVERAGE = {
     id: 'c1',
     analysisId: 'a1',
-    outlet: 'iDnes',
+    sourceId: 'src-idnes',
+    source: { name: 'iDnes' },
     title: null,
     articleUrl: 'https://idnes.cz/x',
     publishedAt: null,
@@ -577,7 +597,8 @@ describe('getAnalysisDetail', () => {
   const OK_COVERAGE = {
     id: 'c1',
     analysisId: 'a1',
-    outlet: 'iDnes',
+    sourceId: 'src-idnes',
+    source: { name: 'iDnes' },
     title: null,
     articleUrl: 'https://idnes.cz/x',
     publishedAt: null,

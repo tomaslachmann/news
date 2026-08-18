@@ -14,6 +14,11 @@ export interface CoverageInfo {
 }
 
 export interface CandidateArticle {
+  /** Resolved via resolveSource() — the same identity every other path (human-seeded, GDELT)
+   *  resolves to for this real outlet (fixes P0-6, docs/audit.md). What Coverage.sourceId is set
+   *  to if this candidate becomes Coverage. */
+  sourceId: string
+  /** Display name only (Source.name) — never used as an identity key. */
   outlet: string
   title: string
   url: string

@@ -38,7 +38,8 @@ const VALID_EXTRACTION = {
 const BASE_COVERAGE = {
   id: 'c1',
   analysisId: 'a1',
-  outlet: 'iDnes',
+  sourceId: 'src-idnes',
+  source: { name: 'iDnes' },
   title: null,
   articleUrl: 'https://idnes.cz/x',
   publishedAt: null,

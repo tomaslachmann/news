@@ -27,7 +27,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     await createCoverages([
       {
         analysisId: analysis.id,
-        outlet: 'iDnes',
+        sourceId: 'src-idnes',
         articleUrl: 'https://idnes.cz/some-article',
         status: 'PENDING',
       },
@@ -38,7 +38,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     expect(found).not.toBeNull()
     expect(found?.seedHeadline).toBe('Test headline')
     expect(found?.coverages).toHaveLength(1)
-    expect(found?.coverages[0]?.outlet).toBe('iDnes')
+    expect(found?.coverages[0]?.source.name).toBe('iDnes')
   })
 
   it('lists analyses newest first, counting only OK coverages', async () => {
@@ -46,8 +46,13 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const newer = await createAnalysis({ seedUrl: 'https://example.cz/b', seedHeadline: 'Newer analysis' })
 
     await createCoverages([
-      { analysisId: newer.id, outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', status: 'OK' },
-      { analysisId: newer.id, outlet: 'Novinky', articleUrl: 'https://novinky.cz/y', status: 'PENDING' },
+      { analysisId: newer.id, sourceId: 'src-idnes', articleUrl: 'https://idnes.cz/x', status: 'OK' },
+      {
+        analysisId: newer.id,
+        sourceId: 'src-novinky',
+        articleUrl: 'https://novinky.cz/y',
+        status: 'PENDING',
+      },
     ])
 
     const list = await findAllAnalyses(true)
@@ -65,8 +70,13 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const analysis = await createAnalysis({ seedUrl: 'https://example.cz/c', seedHeadline: 'Analysis' })
 
     await createCoverages([
-      { analysisId: analysis.id, outlet: 'iDnes', articleUrl: 'https://idnes.cz/kept', status: 'OK' },
-      { analysisId: analysis.id, outlet: 'Novinky', articleUrl: 'https://novinky.cz/dropped', status: 'OK' },
+      { analysisId: analysis.id, sourceId: 'src-idnes', articleUrl: 'https://idnes.cz/kept', status: 'OK' },
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-novinky',
+        articleUrl: 'https://novinky.cz/dropped',
+        status: 'OK',
+      },
     ])
 
     const [kept] = await findCoveragesForAnalysis(analysis.id)

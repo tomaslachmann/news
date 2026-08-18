@@ -1,5 +1,5 @@
 import type { CandidateArticle } from '@news-triangulator/shared'
-import { DOMAIN_TO_OUTLET } from '../config/rssFeeds.js'
+import { resolveSourcesByDomains } from './sourceResolver.js'
 import { fetchGdelt } from './gdeltClient.js'
 
 interface GdeltArticle {
@@ -34,11 +34,20 @@ export async function queryGdelt(keywords: string[]): Promise<CandidateArticle[]
   })
 
   const data = (await fetchGdelt(params)) as GdeltResponse
+  const articles = data.articles ?? []
 
-  return (data.articles ?? []).map((a) => ({
-    outlet: DOMAIN_TO_OUTLET[a.domain] ?? a.domain,
-    title: a.title,
-    url: a.url,
-    publishedAt: parseGdeltDate(a.seendate),
-  }))
+  // One query for the whole batch, not one per article (GDELT can return up to 25) — see
+  // resolveSourcesByDomains.
+  const sourcesByDomain = await resolveSourcesByDomains(articles.map((a) => a.domain))
+
+  return articles.map((a) => {
+    const source = sourcesByDomain.get(a.domain.replace(/^www\./, ''))!
+    return {
+      sourceId: source.id,
+      outlet: source.name,
+      title: a.title,
+      url: a.url,
+      publishedAt: parseGdeltDate(a.seendate),
+    }
+  })
 }

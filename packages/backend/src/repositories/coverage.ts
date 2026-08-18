@@ -5,26 +5,35 @@ export type { Coverage, CoverageStatus }
 
 export interface NewCoverage {
   analysisId: string
-  outlet: string
+  sourceId: string
   title?: string
   articleUrl: string
   publishedAt?: string
   status: CoverageStatus
 }
 
+export type CoverageWithSource = Coverage & { source: { name: string } }
+
 export async function createCoverages(coverages: NewCoverage[]): Promise<void> {
   if (coverages.length === 0) return
-  await prisma.coverage.createMany({ data: coverages })
+  // skipDuplicates: defense-in-depth for the partial unique index on (analysisId, sourceId) —
+  // callers should never pass two rows for the same (analysisId, sourceId), but a caller-level
+  // dedup bug or a race with a concurrent write should degrade to "one Coverage created" rather
+  // than the whole batch throwing and creating none (docs/audit.md P0-6, ticket 02).
+  await prisma.coverage.createMany({ data: coverages, skipDuplicates: true })
 }
 
-/** Non-excluded coverages for an Analysis, optionally narrowed to one status. */
+/** Non-excluded coverages for an Analysis, optionally narrowed to one status. Includes the
+ *  Source relation — every caller needs the display name (Source.name), never a free-text
+ *  outlet column (see docs/audit.md P0-6, fixed by ticket 02). */
 export async function findCoveragesForAnalysis(
   analysisId: string,
   opts: { onlyStatus?: CoverageStatus } = {}
-): Promise<Coverage[]> {
+): Promise<CoverageWithSource[]> {
   return prisma.coverage.findMany({
     where: { analysisId, excluded: false, ...(opts.onlyStatus ? { status: opts.onlyStatus } : {}) },
     orderBy: { id: 'asc' },
+    include: { source: { select: { name: true } } },
   })
 }
 
