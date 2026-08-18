@@ -54,6 +54,18 @@ model Story {
   /// scores above the match threshold, so such a Story is simply never matched, not a broken
   /// state.
   embedding      Float[]   @default([])
+  /// Lightweight, non-authoritative entity signal extracted once (ticket 34), used only as
+  /// candidate-scoring evidence for Story-to-Story relation linking (ticket 35) — never a
+  /// knowledge graph, never surfaced to a reader/Admin as ground truth. Array of
+  /// `{ key, name, type, confidence }`; `key` is a deterministic `type:slugify(name)` label, not
+  /// a verified real-world identity (see ADR, ticket 35). Empty for every Story created before
+  /// this feature shipped — no backfill.
+  entities         Json    @default("[]")
+  /// Entity-to-entity relations this Story's own coverage asserts (e.g. "Donald Tusk REPRESENTS
+  /// Poland") — Story-scoped evidence, not a global/permanent fact about the entities involved.
+  /// Array of `{ from, to, type, confidence }`, `from`/`to` referencing keys in `entities` above.
+  /// Same no-backfill rule as `entities`.
+  entityRelations  Json    @default("[]")
   analysis       Analysis?
 }
 

@@ -16,6 +16,7 @@ import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVer
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 import { approveDraft } from './ingestionService.js'
+import { extractAndPersistStoryEntities } from './entityExtractionPass.js'
 import { runNarrativePass, type NarrativeSource, type NarrativeResult } from './narrativePass.js'
 import type { SynthesisResult as SynthesisDimensions } from './synthesisPass.js'
 import { NotFoundError, ValidationError, ExternalServiceError } from '../errors.js'
@@ -185,7 +186,8 @@ export async function discoverSources(
 
 export async function confirmCoverages(
   analysisId: string,
-  body: PatchCoveragesBody
+  body: PatchCoveragesBody,
+  log?: FastifyBaseLogger
 ): Promise<CoverageInfo[]> {
   const { confirmedIds, customUrls = [], manualTexts = [] } = body
 
@@ -244,6 +246,13 @@ export async function confirmCoverages(
   )
 
   const updated = await coverageRepo.findCoveragesForAnalysis(analysisId)
+
+  // Entity & entity-relation extraction (ticket 34) — human-seeded path. Runs here, not at
+  // createAnalysis, because this is the earliest point real multi-source extractedText exists
+  // for a human-seeded Story (createAnalysis only ever has the single seed article).
+  const okTexts = updated.filter((c) => c.status === 'OK' && c.extractedText).map((c) => c.extractedText!)
+  await extractAndPersistStoryEntities(analysis.storyId, okTexts, analysisRepo.updateStoryEntities, log)
+
   return updated.map(toCoverageInfo)
 }
 
