@@ -7,7 +7,10 @@ import type {
   AnalysisListItem,
   CoverageInfo,
   PatchCoveragesBody,
+  Page,
 } from '@news-triangulator/shared'
+import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
+import { fetchPage } from '../pagination.js'
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from './articleScraper.js'
 import { extractKeywords } from './keywordExtractor.js'
 import { discoverCoverage } from './discovery.js'
@@ -17,6 +20,7 @@ import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVer
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 import { approveDraft } from './ingestionService.js'
+import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
 import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
 import { runNarrativePass, type NarrativeSource, type NarrativeResult } from './narrativePass.js'
 import type { SynthesisResult as SynthesisDimensions } from './synthesisPass.js'
@@ -142,15 +146,20 @@ export async function attachSeedToMatch(
   const source = await resolveSourceByUrl(seedUrl)
   const existingCoverages = await coverageRepo.findCoveragesForAnalysis(analysisId)
   if (!existingCoverages.some((c) => c.sourceId === source.id)) {
-    await coverageRepo.createCoverages([
-      {
-        analysisId,
-        sourceId: source.id,
-        title: scraped.title,
-        articleUrl: seedUrl,
-        status: 'PENDING',
-      },
-    ])
+    // Best-effort, not a hard reject — unlike confirmCoverages, failing to attach here would
+    // block the "continue with this match"/approve flow over a cap that has nothing to do with
+    // what the admin is actually trying to do (code review, ticket 03).
+    const result = await coverageRepo.addCoveragesIfWithinLimit(
+      analysisId,
+      [{ analysisId, sourceId: source.id, title: scraped.title, articleUrl: seedUrl, status: 'PENDING' }],
+      MAX_COVERAGES_PER_ANALYSIS
+    )
+    if (!result.ok) {
+      log?.warn(
+        { analysisId, activeCount: result.activeCount },
+        'Skipped attaching seed as Coverage: at MAX_COVERAGES_PER_ANALYSIS, or a concurrent write already attached this Source'
+      )
+    }
   }
 
   if (fresh.status === 'DRAFT') {
@@ -174,18 +183,32 @@ export async function discoverSources(
   // aborting the whole request — see verifyCandidatesAgainstAnchor.
   const verified = await verifyCandidatesAgainstAnchor(candidates, analysis.story.anchorHeadline, log)
 
-  await coverageRepo.createCoverages(
+  // Bounded by the same MAX_COVERAGES_PER_ANALYSIS cap confirmCoverages enforces — otherwise
+  // repeated discovery calls could accumulate past it without ever going through a check (code
+  // review, ticket 03). Truncates rather than rejecting the whole batch (see
+  // addCoveragesUpToLimit); the returned candidates are filtered down to what was actually
+  // created so the Review Step never offers a candidate that isn't really persisted.
+  const { inserted, droppedCount } = await coverageRepo.addCoveragesUpToLimit(
+    analysisId,
     verified.map((c) => ({
       analysisId,
       sourceId: c.sourceId,
       title: c.title,
       articleUrl: c.url,
       publishedAt: c.publishedAt,
-      status: 'PENDING',
-    }))
+      status: 'PENDING' as const,
+    })),
+    MAX_COVERAGES_PER_ANALYSIS
   )
+  if (droppedCount > 0) {
+    log?.warn(
+      { analysisId, droppedCount },
+      'Discovery found more candidates than the remaining Coverage cap allowed; dropping the rest'
+    )
+  }
 
-  return verified
+  const insertedUrls = new Set(inserted.map((c) => c.articleUrl))
+  return verified.filter((c) => insertedUrls.has(c.url))
 }
 
 export async function confirmCoverages(
@@ -207,9 +230,6 @@ export async function confirmCoverages(
     )
   }
 
-  await coverageRepo.excludeCoverages(analysisId, confirmedIds)
-  await coverageRepo.includeCoverages(analysisId, confirmedIds)
-
   const existingUrls = new Set(await coverageRepo.findCoverageUrlsForAnalysis(analysisId))
   const newUrls = customUrls.filter((u) => {
     try {
@@ -220,16 +240,27 @@ export async function confirmCoverages(
     }
   })
 
-  if (newUrls.length > 0) {
-    const newCoverages = await Promise.all(
-      newUrls.map(async (u) => ({
-        analysisId,
-        sourceId: (await resolveSourceByUrl(u)).id,
-        articleUrl: u,
-        status: 'PENDING' as const,
-      }))
-    )
-    await coverageRepo.createCoverages(newCoverages)
+  const newCoverages = await Promise.all(
+    newUrls.map(async (u) => ({
+      analysisId,
+      sourceId: (await resolveSourceByUrl(u)).id,
+      articleUrl: u,
+      status: 'PENDING' as const,
+    }))
+  )
+
+  // Exclude-not-confirmed, include-confirmed, the active-Coverage cap check, and the new-Coverage
+  // insert all happen atomically in one transaction (see reconcileCoverages) — otherwise a
+  // request the cap rejects could still have already committed the exclude/include writes,
+  // silently reactivating previously-excluded Coverage even though the request failed.
+  const result = await coverageRepo.reconcileCoverages(
+    analysisId,
+    confirmedIds,
+    newCoverages,
+    MAX_COVERAGES_PER_ANALYSIS
+  )
+  if (!result.ok) {
+    throw new ValidationError(`Analýza může mít nejvýše ${MAX_COVERAGES_PER_ANALYSIS} zdrojů`)
   }
 
   const pending = await coverageRepo.findCoveragesForAnalysis(analysisId, { onlyStatus: 'PENDING' })
@@ -346,7 +377,13 @@ export async function getAnalysisDetail(
   return toAnalysisDetail(analysis, relatedEvents)
 }
 
-export async function listAnalyses(includeAllStatuses: boolean): Promise<AnalysisListItem[]> {
-  const rows = await analysisRepo.findAllAnalyses(includeAllStatuses)
-  return rows.map(toAnalysisListItem)
+export async function listAnalyses(
+  includeAllStatuses: boolean,
+  cursor: string | undefined,
+  limit: number = DEFAULT_PAGE_SIZE
+): Promise<Page<AnalysisListItem>> {
+  const { items, nextCursor } = await fetchPage(cursor, limit, (decoded, boundedLimit) =>
+    analysisRepo.findAnalysesPage(includeAllStatuses, decoded, boundedLimit)
+  )
+  return { items: items.map(toAnalysisListItem), nextCursor }
 }

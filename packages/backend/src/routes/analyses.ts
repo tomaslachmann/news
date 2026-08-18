@@ -4,6 +4,7 @@ import {
   PostAttachSeedBodySchema,
   PostDiscoverBodySchema,
   PatchCoveragesBodySchema,
+  ListQuerySchema,
 } from '@news-triangulator/shared'
 import { requireAdmin, verifyAuthCookie } from '../plugins/auth.js'
 import { ValidationError } from '../errors.js'
@@ -103,11 +104,16 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
     }
   )
 
-  // GET /api/analyses — return all analyses, newest first; Admins see every status,
+  // GET /api/analyses — keyset-paginated, newest first; Admins see every status,
   // everyone else (including unauthenticated readers) only sees completed ones
   fastify.get('/api/analyses', async (request, reply) => {
+    const parsed = ListQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné parametry dotazu')
+    }
+
     const isAdmin = verifyAuthCookie(request)?.role === 'ADMIN'
-    const response = await analysisService.listAnalyses(isAdmin)
+    const response = await analysisService.listAnalyses(isAdmin, parsed.data.cursor, parsed.data.limit)
     return reply.code(200).send(response)
   })
 

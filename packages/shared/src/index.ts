@@ -88,12 +88,32 @@ export const PostDiscoverBodySchema = z.object({
 })
 export type PostDiscoverBody = z.infer<typeof PostDiscoverBodySchema>
 
+// Bounds how many custom URLs one confirm-coverages request can add — each one triggers a scrape
+// and, downstream, real LLM spend (extraction/synthesis). See docs/audit.md P0-7, ticket 03.
+export const MAX_CUSTOM_URLS = 10
+
 export const PatchCoveragesBodySchema = z.object({
   confirmedIds: z.array(z.string()),
-  customUrls: z.array(z.string()).optional(),
+  customUrls: z.array(z.string()).max(MAX_CUSTOM_URLS).optional(),
   manualTexts: z.array(z.object({ id: z.string(), text: z.string() })).optional(),
 })
 export type PatchCoveragesBody = z.infer<typeof PatchCoveragesBodySchema>
+
+// Shared shape for GET /api/analyses and the Admin draft queue — keyset (cursor) pagination, not
+// offset, so results stay stable across inserts (docs/audit.md P0-7, ticket 03).
+export const DEFAULT_PAGE_SIZE = 20
+export const MAX_PAGE_SIZE = 50
+
+export const ListQuerySchema = z.object({
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
+})
+export type ListQuery = z.infer<typeof ListQuerySchema>
+
+export interface Page<T> {
+  items: T[]
+  nextCursor: string | null
+}
 
 export const LoginBodySchema = z.object({
   email: z.string().min(1),

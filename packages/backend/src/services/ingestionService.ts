@@ -4,12 +4,16 @@ import type {
   PendingAdditionItem,
   AnalysisListItem,
   PendingStoryRelationItem,
+  Page,
 } from '@news-triangulator/shared'
+import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
+import { fetchPage } from '../pagination.js'
 import { queryRssFeeds } from './rss.js'
 import { generateEmbedding } from './embeddingClient.js'
 import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
+import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
@@ -24,6 +28,12 @@ import { toPendingStoryRelationItem } from '../mappers/storyRelation.js'
 // thresholds in this pipeline (MATCH_THRESHOLD, GDELT_MIN_THRESHOLD). See ADR 0018.
 const MIN_VISIBLE_SOURCE_COUNT = 2
 
+// How far back the "have I already ingested this URL?" check looks. A URL genuinely re-appearing
+// in a fresh RSS poll after this long is realistic enough to accept as a re-check; unbounded (the
+// entire table's history, scanned on every 20-minute poll) was the actual problem (docs/audit.md
+// P0-2, ticket 03).
+const KNOWN_URL_LOOKBACK_HOURS = 30 * 24
+
 export async function runIngestionPass(log?: FastifyBaseLogger): Promise<IngestionRunSummary> {
   const summary: IngestionRunSummary = { checked: 0, created: 0, attached: 0, flagged: 0, skipped: 0 }
 
@@ -31,8 +41,8 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
   summary.checked = items.length
 
   const [knownSeedUrls, knownCoverageUrls] = await Promise.all([
-    analysisRepo.findAllSeedUrls(),
-    coverageRepo.findAllArticleUrls(),
+    analysisRepo.findAllSeedUrls(KNOWN_URL_LOOKBACK_HOURS),
+    coverageRepo.findAllArticleUrls(KNOWN_URL_LOOKBACK_HOURS),
   ])
   const known = new Set([...knownSeedUrls, ...knownCoverageUrls])
 
@@ -78,17 +88,33 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
           )
           summary.skipped++
         } else {
-          await coverageRepo.createCoverages([
-            {
-              analysisId: match.analysisId,
-              sourceId: item.sourceId,
-              title: item.title,
-              articleUrl: item.url,
-              publishedAt: item.publishedAt,
-              status: 'PENDING',
-            },
-          ])
-          summary.attached++
+          // Best-effort, not a failure — a Draft/PENDING Analysis already at the cap just stops
+          // accumulating more Coverage from later polls rather than blocking the rest of this
+          // pass (code review, ticket 03; MAX_COVERAGES_PER_ANALYSIS previously only guarded the
+          // confirmCoverages/discoverSources paths, not this automatic attach).
+          const result = await coverageRepo.addCoveragesIfWithinLimit(
+            match.analysisId,
+            [
+              {
+                analysisId: match.analysisId,
+                sourceId: item.sourceId,
+                title: item.title,
+                articleUrl: item.url,
+                publishedAt: item.publishedAt,
+                status: 'PENDING',
+              },
+            ],
+            MAX_COVERAGES_PER_ANALYSIS
+          )
+          if (result.ok) {
+            summary.attached++
+          } else {
+            log?.info(
+              { analysisId: match.analysisId, sourceId: item.sourceId, activeCount: result.activeCount },
+              'Ingestion: skipping attach — matched Analysis at MAX_COVERAGES_PER_ANALYSIS, or a concurrent write already attached this Source'
+            )
+            summary.skipped++
+          }
         }
       } else if (match.analysisStatus === 'COMPLETE') {
         await pendingAdditionRepo.createPendingAddition({
@@ -220,9 +246,14 @@ export async function listPendingAdditions(): Promise<PendingAdditionItem[]> {
  *  background regardless; this only changes what's visible here. Distinct from the general
  *  `/api/analyses` listing (unfiltered, still shows every Draft for a full Admin History audit)
  *  — see ADR 0018. */
-export async function listVisibleDrafts(): Promise<AnalysisListItem[]> {
-  const drafts = await analysisRepo.findDraftsWithCoverageCount()
-  return drafts.filter((d) => d.coverageCount >= MIN_VISIBLE_SOURCE_COUNT).map(toVisibleDraftListItem)
+export async function listVisibleDrafts(
+  cursor: string | undefined,
+  limit: number = DEFAULT_PAGE_SIZE
+): Promise<Page<AnalysisListItem>> {
+  const { items, nextCursor } = await fetchPage(cursor, limit, (decoded, boundedLimit) =>
+    analysisRepo.findDraftsPage(MIN_VISIBLE_SOURCE_COUNT, decoded, boundedLimit)
+  )
+  return { items: items.map(toVisibleDraftListItem), nextCursor }
 }
 
 /** LOW-confidence StoryRelations (ticket 35) awaiting Admin review — the Event Graph's equivalent

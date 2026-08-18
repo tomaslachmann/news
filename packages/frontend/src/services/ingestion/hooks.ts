@@ -8,6 +8,7 @@ import {
   approveStoryRelation,
   rejectStoryRelation,
 } from './index'
+import { usePaginatedQuery } from '../pagination'
 
 const PENDING_ADDITIONS_QUERY_KEY = ['ingestion-pending-additions']
 const VISIBLE_DRAFTS_QUERY_KEY = ['ingestion-visible-drafts']
@@ -21,10 +22,7 @@ export function usePendingAdditions() {
 }
 
 export function useVisibleDrafts() {
-  return useQuery({
-    queryKey: VISIBLE_DRAFTS_QUERY_KEY,
-    queryFn: fetchVisibleDrafts,
-  })
+  return usePaginatedQuery(VISIBLE_DRAFTS_QUERY_KEY, fetchVisibleDrafts)
 }
 
 function useDraftDecision(mutationFn: (analysisId: string) => Promise<void>) {

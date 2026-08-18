@@ -151,6 +151,11 @@ model Coverage {
   extractionResult Json?
   status           CoverageStatus @default(PENDING)
   excluded         Boolean        @default(false)
+  /// Ingest time, not publishedAt (which is the outlet's own claimed publish time, a String, and
+  /// sometimes absent). Bounds findAllArticleUrls' dedup-check window (P0-2, docs/audit.md,
+  /// ticket 03) — a Coverage from months ago realistically never needs re-checking against a
+  /// fresh 20-minute RSS poll.
+  createdAt        DateTime       @default(now())
 
   /// Every Coverage read is scoped to one Analysis and almost always filters excluded/status too
   /// (findCoveragesForAnalysis, findAnalysesWithCoverageCount's per-row count).
@@ -160,6 +165,8 @@ model Coverage {
   /// app-level dedup checks) written by hand in this migration; Prisma's schema DSL can't express
   /// a WHERE-filtered unique index, so it isn't declared here — see migration.sql.
   @@index([sourceId])
+  /// findAllArticleUrls' recency-bounded scan (P0-2, ticket 03).
+  @@index([createdAt])
 }
 
 model SynthesisResult {

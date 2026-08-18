@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { AnalysisListItem } from '@/services/analyses'
 import { useAnalysesList } from '@/services/analyses/hooks'
 import { PageContainer } from '@/components/PageContainer'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/formatDate'
 import { cn } from '@/lib/utils'
@@ -43,7 +44,8 @@ function HistoryEntry({ item }: { item: AnalysisListItem }) {
 export default function HistoryPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
-  const { data: analyses, isLoading, isError } = useAnalysesList()
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useAnalysesList()
+  const analyses = data?.pages.flatMap((page) => page.items)
 
   return (
     <PageContainer className="font-serif">
@@ -72,11 +74,21 @@ export default function HistoryPage() {
       )}
 
       {analyses && analyses.length > 0 && (
-        <ul className="mt-4 divide-y border-b border-t">
-          {analyses.map((item) => (
-            <HistoryEntry key={item.id} item={item} />
-          ))}
-        </ul>
+        <>
+          <ul className="mt-4 divide-y border-b border-t">
+            {analyses.map((item) => (
+              <HistoryEntry key={item.id} item={item} />
+            ))}
+          </ul>
+
+          {hasNextPage && (
+            <div className="mt-4 flex justify-center font-sans">
+              <Button variant="outline" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
+                {isFetchingNextPage ? 'Načítání…' : 'Načíst další'}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </PageContainer>
   )
