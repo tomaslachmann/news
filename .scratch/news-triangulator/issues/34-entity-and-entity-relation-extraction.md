@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `Story` gains two new nullable/default-empty JSON columns: `entities` (array of `{ key, name, type, confidence }`, `type` one of `PERSON`/`ORGANIZATION`/`PLACE`/`COUNTRY`) and `entityRelations` (array of `{ from, to, type, confidence }`, `from`/`to` are entity keys, `type` drawn from a small closed enum — candidates: `REPRESENTS`, `HOLDS_POSITION_IN`, `WORKS_FOR`, `MEMBER_OF`, `LOCATED_IN`, `BASED_IN`, `PART_OF`, `INVOLVES`, `MEETS`, `ATTACKS`, `ACCUSES`, `ANNOUNCES` — pick a final ~8–12 during implementation)
 - [x] A new pass module exports a function that takes a Story's available source text and calls the shared `callJsonModel` LLM client, returning `{ entities, entityRelations }` validated against a zod schema with closed enums — malformed/out-of-enum responses are rejected, not silently coerced
