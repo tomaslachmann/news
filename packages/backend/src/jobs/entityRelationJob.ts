@@ -47,17 +47,23 @@ export async function runEntityRelationJob(
 ): Promise<void> {
   // Run together, not sequentially — findCoveragesForAnalysis only needs payload.analysisId, not
   // the Analysis lookup's result, so there's no reason to serialize them on the common
-  // (Analysis-exists) path. The rare not-found path pays for a Coverage query it then discards.
-  const [analysis, coverages] = await Promise.all([
+  // (Analysis-exists) path. allSettled, not all: a Coverage-fetch failure must not turn the
+  // "Analysis genuinely gone" permanent case into a thrown, retried job — Promise.all would
+  // reject before the `!analysis` check below ever ran if both happened to fail together.
+  const [analysisResult, coveragesResult] = await Promise.allSettled([
     deps.findAnalysisWithStory(payload.analysisId),
     deps.findCoveragesForAnalysis(payload.analysisId),
   ])
+  if (analysisResult.status === 'rejected') throw analysisResult.reason as Error
+
+  const analysis = analysisResult.value
   if (!analysis) {
     log?.warn({ analysisId: payload.analysisId }, 'entity.extract job: Analysis no longer exists, skipping')
     return
   }
 
-  const sourceTexts = deriveSourceTexts(coverages, analysis.story, payload.origin)
+  if (coveragesResult.status === 'rejected') throw coveragesResult.reason as Error
+  const sourceTexts = deriveSourceTexts(coveragesResult.value, analysis.story, payload.origin)
 
   await extractEntitiesAndLinkStoryRelations(analysis.storyId, sourceTexts, analysis.story, deps, log)
 }

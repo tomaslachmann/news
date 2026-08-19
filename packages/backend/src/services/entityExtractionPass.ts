@@ -10,7 +10,7 @@ import {
   type ExtractedEntity,
   type ExtractedEntityRelation,
 } from './entityTypes.js'
-import { ExternalServiceError } from '../errors.js'
+import { runStageOrThrow } from './pipelineStage.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/entityExtraction.txt'), 'utf8')
 
@@ -119,30 +119,14 @@ export async function runEntityExtractionPass(
  *  genuine failure (LLM call error, persistence error) is logged with stage context and rethrown
  *  as `ExternalServiceError` rather than swallowed — this runs inside the `entity.extract` job
  *  (ticket 14) now, where a thrown error is what makes `pg-boss`'s retry policy do anything;
- *  swallowing it here would make that retry policy dead code. Takes `replaceStoryEntities` as a
- *  dependency rather than importing the repository directly, keeping this pass module decoupled
- *  from persistence and easy to unit-test without mocking the repository layer.
+ *  swallowing it here would make that retry policy dead code (see pipelineStage.ts). Takes
+ *  `replaceStoryEntities` as a dependency rather than importing the repository directly, keeping
+ *  this pass module decoupled from persistence and easy to unit-test without mocking the
+ *  repository layer.
  *
  *  Returns what was persisted (or null if nothing was extracted) so a caller that immediately
  *  needs this Story's own entities/entityRelations — ticket 35's relation-candidate scoring —
  *  doesn't have to re-fetch the Story it was just written to. */
-// Shared by both stages below so a genuine failure always gets the same treatment: logged with
-// which stage it was, then rethrown as ExternalServiceError so it propagates out of the
-// `entity.extract` job instead of being swallowed (see the doc comment above).
-async function runStageOrThrow<T>(
-  storyId: string,
-  stage: string,
-  log: FastifyBaseLogger | undefined,
-  run: () => Promise<T>
-): Promise<T> {
-  try {
-    return await run()
-  } catch (err) {
-    log?.error({ storyId, err }, `${stage} failed`)
-    throw new ExternalServiceError(`${stage} failed for Story ${storyId}`, { cause: err })
-  }
-}
-
 export async function extractAndPersistStoryEntities(
   storyId: string,
   sourceTexts: string[],

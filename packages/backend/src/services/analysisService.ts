@@ -320,7 +320,8 @@ export async function confirmCoverages(
         } else {
           await coverageRepo.updateCoverage(coverage.id, { extractedText: scraped.fullText, status: 'OK' })
         }
-      } catch {
+      } catch (err) {
+        log?.warn({ analysisId, coverageId: coverage.id, err }, 'Scraping Coverage article failed')
         await coverageRepo.updateCoverage(coverage.id, { status: 'EXTRACTION_FAILED' })
       }
     })

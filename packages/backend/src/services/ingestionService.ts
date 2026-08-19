@@ -269,16 +269,23 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
   // 35) now run on the `entity.extract` job (ticket 14), not inline — enqueued inside the same
   // transaction as the DRAFT→PENDING write (ADR 0028: never a Draft approved without its job),
   // so a queue failure rolls the status transition back rather than leaving this Draft stuck in
-  // PENDING with no job ever enqueued for it.
-  const transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(
-    analysisId,
-    'DRAFT',
-    'PENDING',
-    (tx) =>
-      enqueueJob(JobName.EntityRelation, { analysisId, origin: 'draft-approval' }, { tx }).then(
-        () => undefined
-      )
-  )
+  // PENDING with no job ever enqueued for it. Logged explicitly before rethrowing — unlike a
+  // plain propagated exception, this way the failure's cause (e.g. a queue timeout) survives in
+  // the application log, not just as a bare 500 to the caller.
+  let transitioned: boolean
+  try {
+    transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(
+      analysisId,
+      'DRAFT',
+      'PENDING',
+      async (tx) => {
+        await enqueueJob(JobName.EntityRelation, { analysisId, origin: 'draft-approval' }, { tx })
+      }
+    )
+  } catch (err) {
+    log?.error({ analysisId, err }, 'Failed to transition Draft to PENDING and enqueue entity.extract')
+    throw err
+  }
   if (!transitioned) {
     log?.warn(
       { analysisId },

@@ -264,15 +264,23 @@ export async function updateAnalysisStatusIfCurrently(
   toStatus: AnalysisStatus,
   onTransition?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<boolean> {
-  return prisma.$transaction(async (tx) => {
-    const result = await tx.analysis.updateMany({
-      where: { id, status: fromStatus },
-      data: { status: toStatus },
-    })
-    if (result.count === 0) return false
-    await onTransition?.(tx)
-    return true
-  })
+  return prisma.$transaction(
+    async (tx) => {
+      const result = await tx.analysis.updateMany({
+        where: { id, status: fromStatus },
+        data: { status: toStatus },
+      })
+      if (result.count === 0) return false
+      await onTransition?.(tx)
+      return true
+    },
+    // A generous margin over Prisma's 5s default: onTransition can enqueue a pg-boss job, and
+    // getQueueClient()'s one-time cold start (schema setup + declaring every queue) risks blowing
+    // the default interactive-transaction timeout on the very first call after a (re)deploy. The
+    // API process pre-warms the queue client at startup (index.ts) specifically to avoid paying
+    // that cost inside a transaction at all — this is a defensive margin, not the primary fix.
+    { timeout: 10_000 }
+  )
 }
 
 /** Closes the underlying Prisma connection pool — for test teardown only. */

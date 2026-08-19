@@ -122,4 +122,33 @@ describe('runEntityRelationJob', () => {
       )
     ).rejects.toThrow('LLM outage')
   })
+
+  it('still treats a genuinely-gone Analysis as permanent (warn + return) even when the concurrent Coverage fetch also fails', async () => {
+    const findAnalysisWithStory = vi.fn().mockResolvedValue(null)
+    const findCoveragesForAnalysis = vi.fn().mockRejectedValue(new Error('pool exhausted'))
+    const log = { warn: vi.fn(), error: vi.fn() }
+
+    await runEntityRelationJob(
+      { analysisId: 'gone', origin: 'draft-approval' },
+      { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis },
+      log as never
+    )
+
+    expect(mockExtractEntitiesAndLinkStoryRelations).not.toHaveBeenCalled()
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ analysisId: 'gone' }), expect.any(String))
+  })
+
+  it('propagates a Coverage-fetch failure as retryable when the Analysis does exist', async () => {
+    const findAnalysisWithStory = vi.fn().mockResolvedValue({ storyId: 'story-1', story: STORY })
+    const findCoveragesForAnalysis = vi.fn().mockRejectedValue(new Error('pool exhausted'))
+
+    await expect(
+      runEntityRelationJob(
+        { analysisId: 'a1', origin: 'draft-approval' },
+        { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis }
+      )
+    ).rejects.toThrow('pool exhausted')
+
+    expect(mockExtractEntitiesAndLinkStoryRelations).not.toHaveBeenCalled()
+  })
 })
