@@ -6,6 +6,7 @@ import { callJsonModel } from './llmClient.js'
 import {
   scoreRelationCandidates,
   RELATION_CANDIDATE_WINDOW_HOURS,
+  eventTimeOrFallback,
   type RelationCandidateInput,
   type RelationCandidateStory,
 } from './storyRelationScoring.js'
@@ -40,6 +41,13 @@ export type StoryRelationVerdict = z.infer<typeof StoryRelationVerdictSchema>
 interface StoryDescriptor {
   anchorHeadline: string
   createdAt: Date
+  /** When the event happened/was first reported, not this row's own insert time — ticket 16,
+   *  fixes the rest of P1-11 (docs/audit.md): this used to be `createdAt`, which drifts from the
+   *  real event time whenever a Draft sits in the Ingestion review queue before approval. Null
+   *  for a human-seeded Story (no reliable published date to scrape, ADR 0029's amendment) or a
+   *  pre-migration Story (no backfill) — `createdAt` is the fallback wherever this is consumed,
+   *  never a bare, unhandled null. */
+  eventTime: Date | null
 }
 
 /**
@@ -56,8 +64,8 @@ export async function confirmStoryRelation(
 ): Promise<StoryRelationVerdict> {
   const model = process.env.EXTRACTION_MODEL ?? 'gpt-4o'
   const userContent = JSON.stringify({
-    storyA: { headline: current.anchorHeadline, publishedAt: current.createdAt.toISOString() },
-    storyB: { headline: candidate.anchorHeadline, publishedAt: candidate.createdAt.toISOString() },
+    storyA: { headline: current.anchorHeadline, publishedAt: eventTimeOrFallback(current).toISOString() },
+    storyB: { headline: candidate.anchorHeadline, publishedAt: eventTimeOrFallback(candidate).toISOString() },
   })
   const parsed = StoryRelationVerdictSchema.parse(
     await callJsonModel(model, SYSTEM_PROMPT, userContent, 'storyRelation')
@@ -138,6 +146,7 @@ export async function linkStoryRelations(
 export interface StoryForRelationPipeline {
   anchorHeadline: string
   createdAt: Date
+  eventTime: Date | null
   embedding: number[]
 }
 
@@ -223,6 +232,7 @@ export async function extractEntitiesAndLinkStoryRelations(
     {
       anchorHeadline: story.anchorHeadline,
       createdAt: story.createdAt,
+      eventTime: story.eventTime,
       embedding: story.embedding,
       entities,
       entityRelations,
