@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cosineSimilarity, timeDecayFactor, findBestMatch, buildEmbeddingInput } from './storyMatching.js'
+import { cosineSimilarity, findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 
 describe('cosineSimilarity', () => {
   it('returns 1 for identical vectors', () => {
@@ -24,33 +24,12 @@ describe('cosineSimilarity', () => {
   })
 })
 
-describe('timeDecayFactor', () => {
-  it('is 1.0 at age zero', () => {
-    expect(timeDecayFactor(0)).toBeCloseTo(1)
-  })
-
-  it('stays at full strength throughout the grace period, so same-day coverage from a different outlet still matches', () => {
-    expect(timeDecayFactor(12)).toBeCloseTo(1)
-    expect(timeDecayFactor(23)).toBeCloseTo(1)
-  })
-
-  it('halves one half-life past the grace period', () => {
-    expect(timeDecayFactor(48)).toBeCloseTo(0.5)
-  })
-
-  it('decreases monotonically with age once past the grace period', () => {
-    expect(timeDecayFactor(96)).toBeLessThan(timeDecayFactor(72))
-    expect(timeDecayFactor(72)).toBeLessThan(timeDecayFactor(48))
-    expect(timeDecayFactor(48)).toBeLessThan(timeDecayFactor(24))
-  })
-
-  it('treats negative age (clock skew) the same as zero rather than boosting the score', () => {
-    expect(timeDecayFactor(-5)).toBeCloseTo(1)
-  })
-})
-
 describe('findBestMatch', () => {
   const now = new Date('2026-01-02T00:00:00Z')
+
+  function hoursAgo(hours: number): Date {
+    return new Date(now.getTime() - hours * 60 * 60 * 1000)
+  }
 
   it('returns the matching candidate when similarity clears the threshold', () => {
     const candidate = {
@@ -84,24 +63,40 @@ describe('findBestMatch', () => {
     expect(findBestMatch([1, 0, 0], [], now)).toBeNull()
   })
 
-  it('still matches a same-day, high-similarity candidate published hours apart by a different outlet', () => {
-    // Regression: a flat decay with no grace period used to make even a perfect match fail
-    // after ~10 hours, well inside the 48h dedup window two outlets' morning/evening editions
-    // of the same event would realistically fall within.
-    const sameDayCandidate = {
+  // P1-7 (docs/audit.md, ADR 0025): the score used to be similarity × a multiplicative
+  // time-decay factor, which silently shrank the *effective* matchable window to ~26-34h even
+  // though DEDUP_WINDOW_HOURS declares 48h — a candidate at 47h old with perfect similarity
+  // would previously fail to clear MATCH_THRESHOLD. Score is now plain cosine similarity, so
+  // age within the window no longer affects whether a match clears the threshold at all.
+  it('matches a candidate near the edge of the window with perfect similarity, unlike the old decay-based score', () => {
+    const nearEdgeOfWindow = {
       storyId: 's1',
       analysisId: 'a1',
       analysisStatus: 'PENDING',
       anchorHeadline: 'Anchor headline',
       headline: null,
       embedding: [1, 0, 0],
-      createdAt: new Date(now.getTime() - 18 * 60 * 60 * 1000),
+      createdAt: hoursAgo(DEDUP_WINDOW_HOURS - 1),
     }
 
-    expect(findBestMatch([1, 0, 0], [sameDayCandidate], now)).toEqual(sameDayCandidate)
+    expect(findBestMatch([1, 0, 0], [nearEdgeOfWindow], now)).toEqual(nearEdgeOfWindow)
   })
 
-  it('lets time decay push an old, otherwise-perfect match below the threshold', () => {
+  it('excludes a candidate older than DEDUP_WINDOW_HOURS regardless of similarity — a hard boundary, not a discount', () => {
+    const justPastTheWindow = {
+      storyId: 's1',
+      analysisId: 'a1',
+      analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
+      headline: null,
+      embedding: [1, 0, 0],
+      createdAt: hoursAgo(DEDUP_WINDOW_HOURS + 1),
+    }
+
+    expect(findBestMatch([1, 0, 0], [justPastTheWindow], now)).toBeNull()
+  })
+
+  it('excludes a very old candidate outright, independent of the boundary case above', () => {
     const veryOld = {
       storyId: 's1',
       analysisId: 'a1',
@@ -146,5 +141,29 @@ describe('buildEmbeddingInput', () => {
 
   it('falls back to the title alone when there is no excerpt', () => {
     expect(buildEmbeddingInput({ title: 'Headline' })).toBe('Headline')
+  })
+
+  // P1-8 (docs/audit.md, ADR 0025): both call sites already went through this one function, but
+  // an RSS teaser and several sentences of Readability-extracted prose are different enough
+  // distributions that a cross-path match was systematically weaker than a same-path one.
+  it('normalizes internal whitespace/newlines in both title and excerpt', () => {
+    expect(buildEmbeddingInput({ title: '  Headline\nwith  line break', excerpt: 'a\n\nb   c' })).toBe(
+      'Headline with line break\na b c'
+    )
+  })
+
+  it('falls back to the title alone when the excerpt is a caption-style boilerplate line (a photo/video/ad caption carries no event signal)', () => {
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Foto: Popisek fotografie.' })).toBe('Headline')
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Video: Something happened.' })).toBe('Headline')
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Reklama: Buy now' })).toBe('Headline')
+  })
+
+  it('caps the excerpt length so one outlier-long excerpt cannot dominate the embedding input', () => {
+    const longExcerpt = 'x'.repeat(1000)
+
+    const result = buildEmbeddingInput({ title: 'Headline', excerpt: longExcerpt })
+
+    expect(result.length).toBeLessThan(1000)
+    expect(result).toBe(`Headline\n${'x'.repeat(400)}`)
   })
 })

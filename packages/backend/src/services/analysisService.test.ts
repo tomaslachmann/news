@@ -13,6 +13,7 @@ import * as ingestionServiceModule from './ingestionService.js'
 import * as storyRelationPassModule from './storyRelationPass.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as entityRepo from '../repositories/entity.js'
+import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import {
   createAnalysis,
   attachSeedToMatch,
@@ -37,14 +38,20 @@ vi.mock('./ingestionService.js')
 vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
 vi.mock('../repositories/entity.js')
+vi.mock('../repositories/matchDecision.js')
 
 const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
 const SEED_EMBEDDING = [1, 0, 0]
+const SEED_EMBEDDING_RESULT = {
+  vector: SEED_EMBEDDING,
+  model: 'text-embedding-3-small',
+  inputHash: 'hash-seed',
+}
 const SOURCE = { id: 'src-example', name: 'example.cz', domains: ['example.cz'], createdAt: new Date() }
 
 function stubScrapeAndEmbedding() {
   vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
-  vi.mocked(embeddingClientModule.generateEmbedding).mockResolvedValue(SEED_EMBEDDING)
+  vi.mocked(embeddingClientModule.generateEmbedding).mockResolvedValue(SEED_EMBEDDING_RESULT)
   vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([])
 }
 
@@ -75,7 +82,18 @@ describe('createAnalysis', () => {
       seedUrl: 'https://example.cz/x',
       seedHeadline: 'Headline',
       embedding: SEED_EMBEDDING,
+      embeddingModel: SEED_EMBEDDING_RESULT.model,
+      embeddingInputHash: SEED_EMBEDDING_RESULT.inputHash,
     })
+    expect(matchDecisionRepo.recordMatchDecisionSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callSite: 'submissionDedup',
+        candidateStoryId: null,
+        thresholdMatched: false,
+        llmVerdict: null,
+        decidedBy: 'THRESHOLD',
+      })
+    )
   })
 
   it('throws ExternalServiceError when scraping fails', async () => {
@@ -143,6 +161,15 @@ describe('createAnalysis', () => {
     })
     expect(analysisRepo.createAnalysis).not.toHaveBeenCalled()
     expect(keywordExtractorModule.extractKeywords).not.toHaveBeenCalled()
+    expect(matchDecisionRepo.recordMatchDecisionSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callSite: 'submissionDedup',
+        candidateStoryId: 's1',
+        thresholdMatched: true,
+        llmVerdict: true,
+        decidedBy: 'LLM',
+      })
+    )
   })
 
   it('returns the generated headline as the title when the matched Analysis is already COMPLETE', async () => {
@@ -429,6 +456,8 @@ describe('discoverSources', () => {
         createdAt: new Date(),
         anchorHeadline: 'x',
         embedding: [],
+        embeddingModel: null,
+        embeddingInputHash: null,
       },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
@@ -505,6 +534,8 @@ describe('discoverSources', () => {
         createdAt: new Date(),
         anchorHeadline: 'x',
         embedding: [],
+        embeddingModel: null,
+        embeddingInputHash: null,
       },
     })
     vi.mocked(discoveryModule.discoverCoverage).mockResolvedValue({
@@ -547,6 +578,8 @@ describe('confirmCoverages', () => {
       createdAt: new Date(),
       anchorHeadline: 'Anchor headline',
       embedding: [1, 0, 0],
+      embeddingModel: null,
+      embeddingInputHash: null,
     },
   }
 

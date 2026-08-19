@@ -17,18 +17,29 @@ export type AnalysisWithStory = Analysis & { story: Story }
  *  Analysis, anchored to the same seed headline, per ADR 0017. Accepts an optional embedding
  *  (ticket 27) so a human-seeded Story can participate in the same matching pool Ingestion's
  *  own Stories already do — before ticket 27 this was always omitted, which is why Ingestion
- *  could never recognize a human had already started investigating an event (ADR 0019). */
+ *  could never recognize a human had already started investigating an event (ADR 0019).
+ *  `embeddingModel`/`embeddingInputHash` are audit metadata (ADR 0025, P1-8) — null whenever
+ *  `embedding` itself is omitted. */
 export async function createAnalysis(data: {
   seedUrl: string
   seedHeadline: string
   embedding?: number[]
+  embeddingModel?: string
+  embeddingInputHash?: string
 }): Promise<Analysis> {
   return prisma.analysis.create({
     data: {
       seedUrl: data.seedUrl,
       seedHeadline: data.seedHeadline,
       status: 'PENDING',
-      story: { create: { anchorHeadline: data.seedHeadline, embedding: data.embedding ?? [] } },
+      story: {
+        create: {
+          anchorHeadline: data.seedHeadline,
+          embedding: data.embedding ?? [],
+          embeddingModel: data.embeddingModel,
+          embeddingInputHash: data.embeddingInputHash,
+        },
+      },
     },
   })
 }
@@ -37,13 +48,22 @@ export async function createDraftAnalysis(data: {
   seedUrl: string
   seedHeadline: string
   embedding?: number[]
+  embeddingModel?: string
+  embeddingInputHash?: string
 }): Promise<Analysis> {
   return prisma.analysis.create({
     data: {
       seedUrl: data.seedUrl,
       seedHeadline: data.seedHeadline,
       status: 'DRAFT',
-      story: { create: { anchorHeadline: data.seedHeadline, embedding: data.embedding ?? [] } },
+      story: {
+        create: {
+          anchorHeadline: data.seedHeadline,
+          embedding: data.embedding ?? [],
+          embeddingModel: data.embeddingModel,
+          embeddingInputHash: data.embeddingInputHash,
+        },
+      },
     },
   })
 }

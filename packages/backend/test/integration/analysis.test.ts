@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import {
   createAnalysis,
   findAnalysisWithDetails,
+  findAnalysisWithStory,
   findAnalysesPage,
   updateAnalysisStatus,
   completeAnalysisWithSynthesis,
@@ -42,6 +43,34 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     expect(found?.seedHeadline).toBe('Test headline')
     expect(found?.coverages).toHaveLength(1)
     expect(found?.coverages[0]?.source.name).toBe('iDnes')
+  })
+
+  it('persists embeddingModel/embeddingInputHash alongside the embedding (ADR 0025, P1-8)', async () => {
+    const analysis = await createAnalysis({
+      seedUrl: 'https://example.cz/embedding-audit',
+      seedHeadline: 'Embedding audit test',
+      embedding: [1, 0, 0],
+      embeddingModel: 'text-embedding-3-small',
+      embeddingInputHash: 'deadbeef',
+    })
+
+    const found = await findAnalysisWithStory(analysis.id)
+
+    expect(found?.story.embedding).toEqual([1, 0, 0])
+    expect(found?.story.embeddingModel).toBe('text-embedding-3-small')
+    expect(found?.story.embeddingInputHash).toBe('deadbeef')
+  })
+
+  it('leaves embeddingModel/embeddingInputHash null when omitted', async () => {
+    const analysis = await createAnalysis({
+      seedUrl: 'https://example.cz/embedding-audit-omitted',
+      seedHeadline: 'No embedding metadata',
+    })
+
+    const found = await findAnalysisWithStory(analysis.id)
+
+    expect(found?.story.embeddingModel).toBeNull()
+    expect(found?.story.embeddingInputHash).toBeNull()
   })
 
   it('lists analyses newest first, counting only OK coverages', async () => {

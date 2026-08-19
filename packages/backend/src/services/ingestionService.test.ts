@@ -8,6 +8,7 @@ import * as storyVerificationModule from './storyVerification.js'
 import * as storyRelationPassModule from './storyRelationPass.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as entityRepo from '../repositories/entity.js'
+import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import {
   runIngestionPass,
   approveDraft,
@@ -29,6 +30,7 @@ vi.mock('./storyVerification.js')
 vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
 vi.mock('../repositories/entity.js')
+vi.mock('../repositories/matchDecision.js')
 
 const RSS_ITEM = {
   sourceId: 'src-idnes',
@@ -39,13 +41,18 @@ const RSS_ITEM = {
 }
 
 const ITEM_EMBEDDING = [1, 0, 0]
+const ITEM_EMBEDDING_RESULT = {
+  vector: ITEM_EMBEDDING,
+  model: 'text-embedding-3-small',
+  inputHash: 'hash-item',
+}
 const MATCHING_EMBEDDING = [1, 0, 0] // identical vector — cosine similarity 1.0
 const UNRELATED_EMBEDDING = [0, 1, 0] // orthogonal — cosine similarity 0.0
 
 function stubCommon() {
   vi.mocked(analysisRepo.findAllSeedUrls).mockResolvedValue([])
   vi.mocked(coverageRepo.findAllArticleUrls).mockResolvedValue([])
-  vi.mocked(embeddingClientModule.generateEmbedding).mockResolvedValue(ITEM_EMBEDDING)
+  vi.mocked(embeddingClientModule.generateEmbedding).mockResolvedValue(ITEM_EMBEDDING_RESULT)
   vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([])
   // No Coverage from this Source on the matched Analysis yet — the collision check (P0-6,
   // docs/audit.md) lets the attach through. Tests exercising the duplicate-skip path override this.
@@ -85,6 +92,8 @@ describe('runIngestionPass', () => {
       seedUrl: RSS_ITEM.url,
       seedHeadline: 'Fresh headline',
       embedding: ITEM_EMBEDDING,
+      embeddingModel: ITEM_EMBEDDING_RESULT.model,
+      embeddingInputHash: ITEM_EMBEDDING_RESULT.inputHash,
     })
     expect(coverageRepo.createCoverages).toHaveBeenCalledWith([
       {
@@ -97,6 +106,15 @@ describe('runIngestionPass', () => {
       },
     ])
     expect(summary).toEqual({ checked: 1, created: 1, attached: 0, flagged: 0, skipped: 0 })
+    expect(matchDecisionRepo.recordMatchDecisionSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callSite: 'ingestion',
+        candidateStoryId: null,
+        thresholdMatched: false,
+        llmVerdict: null,
+        decidedBy: 'THRESHOLD',
+      })
+    )
   })
 
   it('lets a Story created earlier in the same poll be matched by a later item in that same poll', async () => {
@@ -172,6 +190,15 @@ describe('runIngestionPass', () => {
       25
     )
     expect(summary).toEqual({ checked: 1, created: 0, attached: 1, flagged: 0, skipped: 0 })
+    expect(matchDecisionRepo.recordMatchDecisionSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callSite: 'ingestion',
+        candidateStoryId: 'story-x',
+        thresholdMatched: true,
+        llmVerdict: null,
+        decidedBy: 'THRESHOLD',
+      })
+    )
   })
 
   it('skips attaching (without failing the pass) when the matched Analysis is already at MAX_COVERAGES_PER_ANALYSIS', async () => {
@@ -302,10 +329,13 @@ describe('runIngestionPass', () => {
     expect(summary.created).toBe(1)
   })
 
-  it('lets time decay prevent a match against an otherwise-identical but very old Story', async () => {
+  it('excludes a candidate outside DEDUP_WINDOW_HOURS from matching, even with perfect similarity', async () => {
     // A candidate with a perfect similarity score (identical embedding) but from weeks ago must
     // still fail to match — otherwise "Trump announced new tariffs" three weeks apart would keep
-    // re-attaching to the same stale Story forever. See ADR 0018.
+    // re-attaching to the same stale Story forever. The hard window filter in
+    // storyMatching.ts's scoreBestCandidate does this now (ADR 0025) — previously a
+    // multiplicative time-decay factor did, which P1-7/docs/audit.md found shrank the
+    // *effective* window well below the declared 48h even for in-window candidates.
     stubCommon()
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
     const veryOld = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -350,7 +380,7 @@ describe('runIngestionPass', () => {
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM, secondItem])
     vi.mocked(embeddingClientModule.generateEmbedding)
       .mockRejectedValueOnce(new Error('embeddings API down'))
-      .mockResolvedValueOnce(ITEM_EMBEDDING)
+      .mockResolvedValueOnce(ITEM_EMBEDDING_RESULT)
     vi.mocked(analysisRepo.createDraftAnalysis).mockResolvedValue({
       id: 'draft-4',
       storyId: 'story-4',
@@ -378,6 +408,8 @@ const DRAFT_WITH_STORY = {
     createdAt: new Date(),
     anchorHeadline: 'Anchor headline',
     embedding: [],
+    embeddingModel: null,
+    embeddingInputHash: null,
   },
 }
 
