@@ -339,7 +339,12 @@ export async function confirmCoverages(
   // queue hiccup degrades (logged, Coverage confirmation still succeeds) rather than failing this
   // whole request the way an unguarded call would.
   try {
-    await enqueueJob(JobName.EntityRelation, { analysisId, origin: 'coverage-confirmation' })
+    const eligibleCoverageIds = updated.filter((c) => c.status === 'OK' && c.extractedText).map((c) => c.id)
+    await enqueueJob(JobName.EntityRelation, {
+      analysisId,
+      origin: 'coverage-confirmation',
+      coverageIds: eligibleCoverageIds,
+    })
   } catch (err) {
     log?.error({ analysisId, err }, 'Failed to enqueue entity.extract job after Coverage confirmation')
   }

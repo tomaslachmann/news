@@ -681,6 +681,24 @@ describe('confirmCoverages', () => {
     expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
       analysisId: 'a1',
       origin: 'coverage-confirmation',
+      coverageIds: ['c1'],
+    })
+  })
+
+  it('excludes an EXTRACTION_FAILED Coverage id from coverageIds even though it is still non-excluded', async () => {
+    stubHappyPath()
+    vi.mocked(articleScraperModule.scrapeArticle).mockRejectedValue(new Error('blocked'))
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockReset()
+      .mockResolvedValueOnce([PENDING_COVERAGE])
+      .mockResolvedValueOnce([{ ...PENDING_COVERAGE, status: 'EXTRACTION_FAILED', extractedText: null }])
+
+    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
+      analysisId: 'a1',
+      origin: 'coverage-confirmation',
+      coverageIds: [],
     })
   })
 })

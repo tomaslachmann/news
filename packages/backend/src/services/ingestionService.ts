@@ -279,7 +279,11 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
       'DRAFT',
       'PENDING',
       async (tx) => {
-        await enqueueJob(JobName.EntityRelation, { analysisId, origin: 'draft-approval' }, { tx })
+        await enqueueJob(
+          JobName.EntityRelation,
+          { analysisId, origin: 'draft-approval', coverageIds: verified.map((c) => c.id) },
+          { tx }
+        )
       }
     )
   } catch (err) {

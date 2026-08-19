@@ -47,8 +47,10 @@ export interface EntityExtractionResult {
  * entity always produces the same key regardless of which call extracted it.
  *
  * Returns an empty result (skipping the LLM call) when there's no source text at all. A thrown
- * error is not caught here — callers (approveDraft, confirmCoverages) degrade gracefully on
- * failure themselves; this function's contract is "extract or throw," matching every other pass.
+ * error is not caught here — its only caller, extractAndPersistStoryEntities below, logs it with
+ * stage context and rethrows via runStageOrThrow so it propagates out of the `entity.extract` job
+ * (ticket 14) and pg-boss's retry policy actually retries it; this function's own contract is
+ * "extract or throw," matching every other pass.
  */
 export async function runEntityExtractionPass(
   sourceTexts: string[],

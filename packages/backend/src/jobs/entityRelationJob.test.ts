@@ -18,15 +18,21 @@ const STORY = {
 }
 
 function coverage(
-  overrides: Partial<{ title: string | null; extractedText: string | null; status: CoverageStatus }>
+  overrides: Partial<{
+    id: string
+    title: string | null
+    extractedText: string | null
+    status: CoverageStatus
+  }>
 ) {
-  return { title: null, extractedText: null, status: 'PENDING' as CoverageStatus, ...overrides }
+  return { id: 'c1', title: null, extractedText: null, status: 'PENDING' as CoverageStatus, ...overrides }
 }
 
 describe('deriveSourceTexts', () => {
   it('uses extractedText when present, regardless of status', () => {
     const texts = deriveSourceTexts(
-      [coverage({ extractedText: 'full text', title: 'a title', status: 'OK' })],
+      [coverage({ id: 'c1', extractedText: 'full text', title: 'a title', status: 'OK' })],
+      ['c1'],
       STORY,
       'coverage-confirmation'
     )
@@ -35,7 +41,8 @@ describe('deriveSourceTexts', () => {
 
   it('falls back to title when there is no extractedText and status is not EXTRACTION_FAILED', () => {
     const texts = deriveSourceTexts(
-      [coverage({ title: 'RSS title', status: 'PENDING' })],
+      [coverage({ id: 'c1', title: 'RSS title', status: 'PENDING' })],
+      ['c1'],
       STORY,
       'draft-approval'
     )
@@ -44,7 +51,8 @@ describe('deriveSourceTexts', () => {
 
   it('skips a Coverage with no extractedText whose status is EXTRACTION_FAILED, even if it has a title', () => {
     const texts = deriveSourceTexts(
-      [coverage({ title: 'blocked article title', status: 'EXTRACTION_FAILED' })],
+      [coverage({ id: 'c1', title: 'blocked article title', status: 'EXTRACTION_FAILED' })],
+      ['c1'],
       STORY,
       'coverage-confirmation'
     )
@@ -52,14 +60,34 @@ describe('deriveSourceTexts', () => {
   })
 
   it('prepends story.anchorHeadline only for draft-approval, never for coverage-confirmation', () => {
-    const coverages = [coverage({ extractedText: 'text' })]
-    expect(deriveSourceTexts(coverages, STORY, 'draft-approval')).toEqual([STORY.anchorHeadline, 'text'])
-    expect(deriveSourceTexts(coverages, STORY, 'coverage-confirmation')).toEqual(['text'])
+    const coverages = [coverage({ id: 'c1', extractedText: 'text' })]
+    expect(deriveSourceTexts(coverages, ['c1'], STORY, 'draft-approval')).toEqual([
+      STORY.anchorHeadline,
+      'text',
+    ])
+    expect(deriveSourceTexts(coverages, ['c1'], STORY, 'coverage-confirmation')).toEqual(['text'])
   })
 
   it('skips a Coverage with neither extractedText nor title', () => {
-    const texts = deriveSourceTexts([coverage({ status: 'PENDING' })], STORY, 'coverage-confirmation')
+    const texts = deriveSourceTexts(
+      [coverage({ id: 'c1', status: 'PENDING' })],
+      ['c1'],
+      STORY,
+      'coverage-confirmation'
+    )
     expect(texts).toEqual([])
+  })
+
+  it('ignores a Coverage not in coverageIds, even if it would otherwise be eligible', () => {
+    // Regression: a Coverage attached to the Analysis after enqueue (a concurrent Ingestion poll
+    // can attach to a PENDING/DRAFT Analysis at any time) must never leak into extraction just
+    // because it's currently non-excluded — only what was pinned at enqueue time counts.
+    const pinned = coverage({ id: 'pinned', extractedText: 'pinned text' })
+    const laterAttached = coverage({ id: 'later', title: 'never verified', status: 'PENDING' })
+
+    const texts = deriveSourceTexts([pinned, laterAttached], ['pinned'], STORY, 'draft-approval')
+
+    expect(texts).toEqual([STORY.anchorHeadline, 'pinned text'])
   })
 })
 
@@ -80,7 +108,7 @@ describe('runEntityRelationJob', () => {
     const log = { warn: vi.fn(), error: vi.fn() }
 
     await runEntityRelationJob(
-      { analysisId: 'gone', origin: 'draft-approval' },
+      { analysisId: 'gone', origin: 'draft-approval', coverageIds: [] },
       { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis },
       log as never
     )
@@ -97,7 +125,7 @@ describe('runEntityRelationJob', () => {
     mockExtractEntitiesAndLinkStoryRelations.mockResolvedValue(undefined)
 
     await runEntityRelationJob(
-      { analysisId: 'a1', origin: 'coverage-confirmation' },
+      { analysisId: 'a1', origin: 'coverage-confirmation', coverageIds: ['c1'] },
       { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis }
     )
 
@@ -117,7 +145,7 @@ describe('runEntityRelationJob', () => {
 
     await expect(
       runEntityRelationJob(
-        { analysisId: 'a1', origin: 'draft-approval' },
+        { analysisId: 'a1', origin: 'draft-approval', coverageIds: [] },
         { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis }
       )
     ).rejects.toThrow('LLM outage')
@@ -129,7 +157,7 @@ describe('runEntityRelationJob', () => {
     const log = { warn: vi.fn(), error: vi.fn() }
 
     await runEntityRelationJob(
-      { analysisId: 'gone', origin: 'draft-approval' },
+      { analysisId: 'gone', origin: 'draft-approval', coverageIds: [] },
       { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis },
       log as never
     )
@@ -144,7 +172,7 @@ describe('runEntityRelationJob', () => {
 
     await expect(
       runEntityRelationJob(
-        { analysisId: 'a1', origin: 'draft-approval' },
+        { analysisId: 'a1', origin: 'draft-approval', coverageIds: [] },
         { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis }
       )
     ).rejects.toThrow('pool exhausted')

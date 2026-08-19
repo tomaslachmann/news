@@ -29,7 +29,11 @@ describe('enqueueJob', () => {
     mockSend.mockResolvedValue('job-2')
     const tx = { $queryRawUnsafe: vi.fn() }
 
-    await enqueueJob(JobName.EntityRelation, { analysisId: 'a2', origin: 'draft-approval' }, { tx })
+    await enqueueJob(
+      JobName.EntityRelation,
+      { analysisId: 'a2', origin: 'draft-approval', coverageIds: [] },
+      { tx }
+    )
 
     const sendOptions = mockSend.mock.calls.at(-1)?.[2]
     expect(sendOptions?.db).toBeTypeOf('object')

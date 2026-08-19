@@ -611,7 +611,7 @@ describe('approveDraft', () => {
 
     expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(
       JobName.EntityRelation,
-      { analysisId: 'a1', origin: 'draft-approval' },
+      { analysisId: 'a1', origin: 'draft-approval', coverageIds: ['c1'] },
       expect.any(Object)
     )
   })

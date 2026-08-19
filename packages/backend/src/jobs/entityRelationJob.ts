@@ -13,21 +13,24 @@ export interface EntityRelationJobDeps extends EntityAndRelationPipelineDeps {
   findCoveragesForAnalysis: (analysisId: string) => Promise<CoverageWithSource[]>
 }
 
-/** Same rule for both trigger points, computed from current Coverage DB state rather than a
- *  payload snapshot (safe to re-derive on a `pg-boss` retry): use `extractedText` if present;
- *  else fall back to `title` unless this Coverage's extraction is known to have failed. This
- *  reproduces `approveDraft`'s "verified titles" (Ingestion-created Coverage sits at
- *  `status: PENDING` with only a title) and `confirmCoverages`'s "OK extractedText, everything
- *  else excluded" exactly, without either call site needing its own bespoke selection — see
- *  .scratch/backend-audit/issues/14-entity-relation-job.md. `anchorHeadline` is prepended only
- *  for the draft-approval flow, preserving today's asymmetry rather than changing what feeds
- *  extraction. */
+/** Same rule for both trigger points, applied only to the Coverage rows pinned in the job's own
+ *  `coverageIds` (never a Coverage attached to this Analysis after enqueue — see jobDefinitions.ts
+ *  for why): use `extractedText` if present; else fall back to `title` unless this Coverage's
+ *  extraction is known to have failed. This reproduces `approveDraft`'s "verified titles"
+ *  (Ingestion-created Coverage sits at `status: PENDING` with only a title) and
+ *  `confirmCoverages`'s "OK extractedText, everything else excluded" exactly, without either call
+ *  site needing its own bespoke selection — see .scratch/backend-audit/issues/14-entity-relation-job.md.
+ *  `anchorHeadline` is prepended only for the draft-approval flow, preserving today's asymmetry
+ *  rather than changing what feeds extraction. */
 export function deriveSourceTexts(
-  coverages: Pick<CoverageWithSource, 'title' | 'extractedText' | 'status'>[],
+  coverages: Pick<CoverageWithSource, 'id' | 'title' | 'extractedText' | 'status'>[],
+  coverageIds: string[],
   story: Pick<StoryForRelationPipeline, 'anchorHeadline'>,
   origin: JobPayload[typeof JobName.EntityRelation]['origin']
 ): string[] {
+  const eligibleIds = new Set(coverageIds)
   const coverageTexts = coverages
+    .filter((c) => eligibleIds.has(c.id))
     .map((c) => c.extractedText ?? (c.status === 'EXTRACTION_FAILED' ? null : c.title))
     .filter((text): text is string => Boolean(text))
   return origin === 'draft-approval' ? [story.anchorHeadline, ...coverageTexts] : coverageTexts
@@ -63,7 +66,12 @@ export async function runEntityRelationJob(
   }
 
   if (coveragesResult.status === 'rejected') throw coveragesResult.reason as Error
-  const sourceTexts = deriveSourceTexts(coveragesResult.value, analysis.story, payload.origin)
+  const sourceTexts = deriveSourceTexts(
+    coveragesResult.value,
+    payload.coverageIds,
+    analysis.story,
+    payload.origin
+  )
 
   await extractEntitiesAndLinkStoryRelations(analysis.storyId, sourceTexts, analysis.story, deps, log)
 }
