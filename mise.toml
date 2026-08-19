@@ -20,6 +20,10 @@ run = "docker compose stop db"
 description = "Opt-in local Ingestion poller (not part of `dev` — every poll can spend real OpenAI money)"
 run = "npm run ingestion:cron"
 
+[tasks.worker]
+description = "Opt-in local job-queue worker (not part of `dev` — no job handlers registered yet, see ticket 13)"
+run = "npm run worker"
+
 # ── Type checking & building ──────────────────────────────────────────────────
 
 [tasks.typecheck]

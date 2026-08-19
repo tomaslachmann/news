@@ -11,6 +11,7 @@
     "dev": "concurrently --kill-others --names \"backend,frontend\" --prefix-colors \"cyan,magenta\" \"npm run dev --workspace=packages/backend\" \"npm run dev --workspace=packages/frontend\"",
     "db": "docker compose up db",
     "ingestion:cron": "node --env-file-if-exists=.env scripts/ingestion-cron.mjs",
+    "worker": "npm run worker --workspace=packages/backend",
     "build": "npm run build --workspace=packages/frontend",
     "typecheck": "npm run typecheck --workspace=packages/backend && npm run typecheck --workspace=packages/frontend",
     "lint": "eslint .",
