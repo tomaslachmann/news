@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as llmClientModule from './llmClient.js'
 import { runEntityExtractionPass, extractAndPersistStoryEntities } from './entityExtractionPass.js'
+import { ExternalServiceError } from '../errors.js'
 
 vi.mock('./llmClient.js')
 
@@ -148,22 +149,26 @@ describe('extractAndPersistStoryEntities', () => {
     expect(result).toBeNull()
   })
 
-  it('does not call replaceStoryEntities and returns null, without throwing, when extraction fails', async () => {
+  it('rethrows as ExternalServiceError, without calling replaceStoryEntities, when the LLM call fails', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockRejectedValue(new Error('API down'))
     const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
 
-    await expect(extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)).resolves.toBeNull()
+    await expect(extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)).rejects.toThrow(
+      ExternalServiceError
+    )
 
     expect(replaceStoryEntities).not.toHaveBeenCalled()
   })
 
-  it('returns null, without throwing, when replaceStoryEntities itself fails', async () => {
+  it('rethrows as ExternalServiceError when replaceStoryEntities itself fails', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       entities: [{ mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
       entityRelations: [],
     })
     const replaceStoryEntities = vi.fn().mockRejectedValue(new Error('DB down'))
 
-    await expect(extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)).resolves.toBeNull()
+    await expect(extractAndPersistStoryEntities('story-1', ['x'], replaceStoryEntities)).rejects.toThrow(
+      ExternalServiceError
+    )
   })
 })

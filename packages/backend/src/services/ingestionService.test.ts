@@ -5,11 +5,11 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as rssModule from './rss.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as storyVerificationModule from './storyVerification.js'
-import * as storyRelationPassModule from './storyRelationPass.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
-import * as entityRepo from '../repositories/entity.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
+import * as jobsEnqueue from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 import {
   runIngestionPass,
   approveDraft,
@@ -28,11 +28,10 @@ vi.mock('../repositories/pendingAddition.js')
 vi.mock('./rss.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./storyVerification.js')
-vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
-vi.mock('../repositories/entity.js')
 vi.mock('../repositories/matchDecision.js')
 vi.mock('../repositories/ingestionRunLock.js')
+vi.mock('../jobs/enqueue.js')
 
 const RSS_ITEM = {
   sourceId: 'src-idnes',
@@ -485,7 +484,7 @@ describe('approveDraft', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(true)
-    vi.mocked(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).mockResolvedValue(undefined)
+    vi.mocked(jobsEnqueue.enqueueJob).mockResolvedValue('job-1')
   })
 
   it('flips a Draft to PENDING and excludes nothing when every Coverage verifies', async () => {
@@ -574,7 +573,7 @@ describe('approveDraft', () => {
     await expect(approveDraft('a1')).rejects.toThrow(ValidationError)
   })
 
-  it('runs the entity-extraction + story-relation pipeline with the anchor headline plus only the verified Coverage titles', async () => {
+  it('enqueues the entity.extract job with this Analysis id and the draft-approval origin', async () => {
     vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
     const good = makeCoverage('c1', 'Related to the anchor')
     const bad = makeCoverage('c2', 'Unrelated trending item')
@@ -583,19 +582,10 @@ describe('approveDraft', () => {
 
     await approveDraft('a1')
 
-    expect(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).toHaveBeenCalledWith(
-      's1',
-      ['Anchor headline', 'Related to the anchor'],
-      DRAFT_WITH_STORY.story,
-      {
-        replaceStoryEntities: entityRepo.replaceStoryEntities,
-        findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
-        countStories: entityRepo.countStories,
-        findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
-        createStoryRelation: storyRelationRepo.createStoryRelation,
-      },
-      undefined
-    )
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
+      analysisId: 'a1',
+      origin: 'draft-approval',
+    })
   })
 })
 

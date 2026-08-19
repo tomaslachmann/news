@@ -11,7 +11,11 @@ export const JobName = {
 export type JobNameValue = (typeof JobName)[keyof typeof JobName]
 
 export interface JobPayload {
-  [JobName.EntityRelation]: { analysisId: string }
+  // `origin` lets the job handler reproduce each trigger point's exact source-text selection
+  // (see .scratch/backend-audit/issues/14-entity-relation-job.md) without guessing it from
+  // Coverage DB state alone — approveDraft includes the Story's anchor headline, confirmCoverages
+  // doesn't.
+  [JobName.EntityRelation]: { analysisId: string; origin: 'draft-approval' | 'coverage-confirmation' }
   [JobName.Narrative]: { analysisId: string }
   [JobName.ThreadRecompute]: { threadId: string }
 }

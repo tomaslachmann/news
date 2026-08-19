@@ -26,7 +26,6 @@ import {
 } from './storyMatching.js'
 import { approveDraft } from './ingestionService.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
-import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
 import { runNarrativePass, type NarrativeSource, type NarrativeResult } from './narrativePass.js'
 import type { SynthesisResult as SynthesisDimensions } from './synthesisPass.js'
 import { NotFoundError, ValidationError, ExternalServiceError } from '../errors.js'
@@ -34,8 +33,9 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
-import * as entityRepo from '../repositories/entity.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
+import { enqueueJob } from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { toAnalysisDetail, toAnalysisListItem, resolveDisplayTitle, STATUS_MAP } from '../mappers/analysis.js'
 import { toRelatedEvents } from '../mappers/storyRelation.js'
@@ -258,8 +258,7 @@ export async function discoverSources(
 
 export async function confirmCoverages(
   analysisId: string,
-  body: PatchCoveragesBody,
-  log?: FastifyBaseLogger
+  body: PatchCoveragesBody
 ): Promise<CoverageInfo[]> {
   const { confirmedIds, customUrls = [], manualTexts = [] } = body
 
@@ -329,24 +328,11 @@ export async function confirmCoverages(
   const updated = await coverageRepo.findCoveragesForAnalysis(analysisId)
 
   // Entity extraction (ticket 34) + Story-relation candidate generation & confirmation (ticket
-  // 35) — human-seeded path. Runs here, not at createAnalysis, because this is the earliest
-  // point real multi-source extractedText exists for a human-seeded Story (createAnalysis only
-  // ever has the single seed article). Entirely best-effort: nothing in this pipeline is ever
-  // allowed to block this confirmation flow.
-  const okTexts = updated.filter((c) => c.status === 'OK' && c.extractedText).map((c) => c.extractedText!)
-  await extractEntitiesAndLinkStoryRelations(
-    analysis.storyId,
-    okTexts,
-    analysis.story,
-    {
-      replaceStoryEntities: entityRepo.replaceStoryEntities,
-      findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
-      countStories: entityRepo.countStories,
-      findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
-      createStoryRelation: storyRelationRepo.createStoryRelation,
-    },
-    log
-  )
+  // 35) — human-seeded path. Now runs on the `entity.extract` job (ticket 14), not inline;
+  // enqueued right after this reconciliation's writes land, not at createAnalysis, since this is
+  // the earliest point real multi-source extractedText exists for a human-seeded Story
+  // (createAnalysis only ever has the single seed article). Never blocks this confirmation flow.
+  await enqueueJob(JobName.EntityRelation, { analysisId, origin: 'coverage-confirmation' })
 
   return updated.map(toCoverageInfo)
 }
