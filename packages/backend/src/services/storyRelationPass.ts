@@ -6,6 +6,7 @@ import { callJsonModel } from './llmClient.js'
 import {
   scoreRelationCandidates,
   RELATION_CANDIDATE_WINDOW_HOURS,
+  eventTimeOrFallback,
   type RelationCandidateInput,
   type RelationCandidateStory,
 } from './storyRelationScoring.js'
@@ -47,10 +48,6 @@ interface StoryDescriptor {
    *  pre-migration Story (no backfill) — `createdAt` is the fallback wherever this is consumed,
    *  never a bare, unhandled null. */
   eventTime: Date | null
-}
-
-function eventTimeOrFallback(story: StoryDescriptor): Date {
-  return story.eventTime ?? story.createdAt
 }
 
 /**

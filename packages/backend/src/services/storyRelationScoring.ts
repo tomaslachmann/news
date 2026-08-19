@@ -2,6 +2,16 @@ import { cosineSimilarity } from './storyMatching.js'
 import type { RawRelationCandidateStory } from '../repositories/storyRelation.js'
 import type { EntityForScoring, EntityRelationForScoring } from '../repositories/entity.js'
 
+/** `eventTime` over `createdAt` wherever a Story's real-world timing matters (ticket 16, fixes
+ *  the rest of P1-11, docs/audit.md:580 — "teprve tenhle čas patří do time decay a do promptu pro
+ *  relace") — `createdAt` only as the fallback for a Story with no real event-time signal
+ *  (human-seeded, or pre-migration; see Story.eventTime's schema doc). Shared by this module's
+ *  own time-decay scoring and storyRelationPass.ts's `confirmStoryRelation` LLM payload — one
+ *  fallback rule, not two independently-maintained copies of the same one-liner. */
+export function eventTimeOrFallback(story: { eventTime: Date | null; createdAt: Date }): Date {
+  return story.eventTime ?? story.createdAt
+}
+
 // How far back a Story stays eligible as a relation candidate — deliberately much wider than
 // DEDUP_WINDOW_HOURS (48h, storyMatching.ts): that window exists to catch duplicates of the
 // SAME event, this one needs to catch a genuinely later development of a DIFFERENT event (a
@@ -10,9 +20,13 @@ export const RELATION_CANDIDATE_WINDOW_HOURS = 24 * 14
 
 /** Linear decay to zero at the edge of the window — not storyMatching.ts's exponential
  *  half-life, which is tuned for an hours-scale window and wouldn't transfer meaningfully to one
- *  measured in weeks. Clamped at zero rather than going negative for anything beyond it. */
+ *  measured in weeks. Clamped to [0, 1]: zero for anything beyond the window, and — since
+ *  `ageHours` (ticket 16) can now be negative for a Story whose `eventTime` came from an
+ *  unvalidated external timestamp (an RSS feed's `pubDate`) claiming a time after `now` —  capped
+ *  at 1 rather than let a bad future-dated timestamp inflate proximity, and the overall score,
+ *  past what a same-instant candidate would score. */
 function timeProximity(ageHours: number): number {
-  return Math.max(0, 1 - ageHours / RELATION_CANDIDATE_WINDOW_HOURS)
+  return Math.min(1, Math.max(0, 1 - ageHours / RELATION_CANDIDATE_WINDOW_HOURS))
 }
 
 /** ln((totalStories+1)/(storyCount+1)) — an entity attached to nearly every Story (e.g. "Czech
@@ -115,11 +129,7 @@ export function scoreRelationCandidates(
       currentRelationTriples,
       entityRelationTripleSet(candidateStory.entityRelations)
     )
-    // eventTime over createdAt (ticket 16, fixes the rest of P1-11, docs/audit.md:580 — "teprve
-    // tenhle čas patří do time decay") — createdAt only as the fallback for a Story with no real
-    // event-time signal (human-seeded, or pre-migration; see Story.eventTime's schema doc).
-    const ageHours =
-      (now.getTime() - (candidateStory.eventTime ?? candidateStory.createdAt).getTime()) / (60 * 60 * 1000)
+    const ageHours = (now.getTime() - eventTimeOrFallback(candidateStory).getTime()) / (60 * 60 * 1000)
 
     const score =
       EMBEDDING_WEIGHT * embeddingSimilarity +

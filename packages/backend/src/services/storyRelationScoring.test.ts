@@ -138,6 +138,17 @@ describe('scoreRelationCandidates', () => {
     expect(result.map((c) => c.storyId)).toEqual(['fresh', 'no-event-time'])
   })
 
+  it('clamps time proximity at one rather than exceeding it for an eventTime in the future (an unvalidated external timestamp, e.g. a malformed RSS pubDate)', () => {
+    const fresh = candidate({ storyId: 'fresh', createdAt: hoursAgo(1), eventTime: hoursAgo(0) })
+    const future = candidate({ storyId: 'future', createdAt: hoursAgo(1), eventTime: hoursAgo(-24) })
+
+    // Same order both ways: if timeProximity could exceed 1, `future` (negative ageHours) would
+    // score strictly higher than `fresh` and sort first despite identical everything else,
+    // letting a mistimed feed entry dominate the shortlist over a genuinely time-proximate one.
+    const result = scoreRelationCandidates(CURRENT, [fresh, future], TOTAL_STORIES, NOW)
+    expect(result.map((c) => c.storyId)).toEqual(['fresh', 'future'])
+  })
+
   it('clamps time proximity at zero rather than going negative for a candidate far beyond the window, instead of penalizing it below what a weak embedding match alone would score', () => {
     const wayTooOldWeakEmbedding = candidate({
       embedding: [0, 1, 0],
