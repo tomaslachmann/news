@@ -56,6 +56,24 @@ services:
       db:
         condition: service_healthy
 
+  # Same image as `backend`, different entrypoint — see ADR 0028 / ticket 13. No job handlers
+  # are registered yet (tickets 14/15/17), so this currently just keeps the pg-boss queues alive.
+  worker:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+    restart: unless-stopped
+    command: ['sh', '-c', 'npx prisma migrate deploy && node dist/worker.js']
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-news}:${POSTGRES_PASSWORD:-news}@db:5432/${POSTGRES_DB:-news}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gpt-4o}
+      SYNTHESIS_MODEL: ${SYNTHESIS_MODEL:-gpt-4o}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      db:
+        condition: service_healthy
+
   # Polls POST /api/ingestion/run on a timer — see ADR 0013. Not started until INGESTION_SECRET
   # is set; the endpoint itself always rejects without it, so this is safe to leave unconfigured.
   ingestion-cron:
