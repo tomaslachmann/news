@@ -14,10 +14,9 @@ export async function updateSynthesisResultNarrative(
   await prisma.synthesisResult.update({ where: { analysisId }, data: { narrative } })
 }
 
-/** Records that the most recent narrative-generation attempt failed — ADR 0026, fixes P0-5
- *  (docs/audit.md): getAnalysisDetail only re-attempts once this is null or past
- *  NARRATIVE_RETRY_TTL_HOURS, bounding the cost of a deterministically-failing Analysis instead
- *  of retrying on every unauthenticated view. */
+/** Records that the most recent narrative-generation attempt failed — an audit trail only since
+ *  ticket 15 (ADR 0028 supersedes ADR 0026): the `narrative.generate` job's own
+ *  `LLM_JOB_RETRY_POLICY` (ticket 13) is what actually retries, not a read of this field. */
 export async function markNarrativeGenerationFailed(analysisId: string): Promise<void> {
   await prisma.synthesisResult.update({
     where: { analysisId },

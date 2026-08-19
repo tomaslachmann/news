@@ -291,18 +291,33 @@ export async function disconnect(): Promise<void> {
 /** Persists the Synthesis result and the tool-authored headline (see ADR 0021) and flips the
  *  Analysis to COMPLETE, all in one transaction — there is never a window where an Analysis is
  *  COMPLETE without its headline already having been generated. `headline` is null when
- *  generation was skipped because the Agreement dimension was empty. */
+ *  generation was skipped because the Agreement dimension was empty.
+ *
+ *  `onComplete`, when given, runs inside the same transaction as the writes above (ADR 0028:
+ *  "vytvoř Draft a naplánuj jeho zpracování" is one atomic step) — used by `analysisStream.ts`
+ *  to enqueue the `narrative.generate` job (ticket 15) atomically with the COMPLETE transition,
+ *  so a queue failure rolls the transition back instead of leaving a COMPLETE Analysis with no
+ *  job ever enqueued for it. Same seam `updateAnalysisStatusIfCurrently` already established for
+ *  ticket 14's `entity.extract` enqueue — keeps job-queue concerns out of the repository layer. */
 export async function completeAnalysisWithSynthesis(
   analysisId: string,
   dimensions: Prisma.InputJsonValue,
-  headline: string | null
+  headline: string | null,
+  onComplete?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<void> {
-  await prisma.$transaction([
-    prisma.synthesisResult.upsert({
-      where: { analysisId },
-      create: { analysisId, dimensions, headline },
-      update: { dimensions, headline },
-    }),
-    prisma.analysis.update({ where: { id: analysisId }, data: { status: 'COMPLETE' } }),
-  ])
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.synthesisResult.upsert({
+        where: { analysisId },
+        create: { analysisId, dimensions, headline },
+        update: { dimensions, headline },
+      })
+      await tx.analysis.update({ where: { id: analysisId }, data: { status: 'COMPLETE' } })
+      await onComplete?.(tx)
+    },
+    // Same generous margin as updateAnalysisStatusIfCurrently, for the same reason: onComplete
+    // can enqueue a pg-boss job, and getQueueClient()'s one-time cold start risks blowing the
+    // default interactive-transaction timeout on the very first call after a (re)deploy.
+    { timeout: 10_000 }
+  )
 }

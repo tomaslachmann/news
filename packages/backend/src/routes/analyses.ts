@@ -119,7 +119,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
 
   // GET /api/analyses/:id — return analysis with its coverages
   fastify.get<{ Params: { id: string } }>('/api/analyses/:id', async (request, reply) => {
-    const response = await analysisService.getAnalysisDetail(request.params.id, request.log)
+    const response = await analysisService.getAnalysisDetail(request.params.id)
     return reply.code(200).send(response)
   })
 }
