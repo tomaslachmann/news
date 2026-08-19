@@ -133,16 +133,18 @@ describe('runNarrativeJob', () => {
     expect(baseDeps.updateSynthesisResultNarrative).not.toHaveBeenCalled()
   })
 
-  it('does not cache an empty narrative result, marking it a retryable failure instead', async () => {
+  it('does not cache an empty narrative result, logging and marking it a retryable failure instead', async () => {
     const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
     mockRunNarrativePass.mockResolvedValue({ segments: [] })
+    const log = { warn: vi.fn(), error: vi.fn() }
 
     await expect(
-      runNarrativeJob({ analysisId: 'a1' }, { ...baseDeps, findAnalysisWithDetails })
+      runNarrativeJob({ analysisId: 'a1' }, { ...baseDeps, findAnalysisWithDetails }, log as never)
     ).rejects.toThrow(ExternalServiceError)
 
     expect(baseDeps.updateSynthesisResultNarrative).not.toHaveBeenCalled()
     expect(baseDeps.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
+    expect(log.error).toHaveBeenCalledWith({ analysisId: 'a1' }, expect.any(String))
   })
 
   it('marks the failure and rethrows as retryable when persisting the generated narrative fails', async () => {

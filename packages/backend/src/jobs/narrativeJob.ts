@@ -88,8 +88,11 @@ export async function runNarrativeJob(
     )
 
     // Every segment can end up dropped by quote verification — an empty result is a failure for
-    // retry-gating purposes, not a successful "nothing to narrate" result.
+    // retry-gating purposes, not a successful "nothing to narrate" result. Logged explicitly here
+    // (not inside runStageOrThrow, since this isn't a caught exception) so it's as visible in the
+    // application log as the LLM-throw and persist-failure paths right above/below it.
     if (result.segments.length === 0) {
+      log?.error(logContext, 'Cross-Source Narrative generation produced no verifiable segments')
       throw new ExternalServiceError('Cross-Source Narrative generation produced no verifiable segments')
     }
 
