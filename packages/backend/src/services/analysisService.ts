@@ -355,6 +355,12 @@ export async function confirmCoverages(
 // share one LLM call instead of each racing to generate (and pay for) their own.
 const inFlightNarrativeGenerations = new Map<string, Promise<NarrativeResult['segments'] | null>>()
 
+// A starting point, not a tuned result — same convention as this codebase's other threshold
+// constants (MATCH_THRESHOLD, DEDUP_WINDOW_HOURS). See ADR 0026 (fixes P0-5, docs/audit.md): a
+// failed generation retries at most once per this window, instead of on every unauthenticated
+// view of the Analysis.
+const NARRATIVE_RETRY_TTL_HOURS = 24
+
 function generateAndCacheNarrative(
   analysisId: string,
   sources: NarrativeSource[],
@@ -375,12 +381,14 @@ function generateAndCacheNarrative(
           { analysisId },
           'Cross-Source Narrative generation produced no verifiable segments; serving without one'
         )
+        await synthesisResultRepo.markNarrativeGenerationFailed(analysisId)
         return null
       }
       await synthesisResultRepo.updateSynthesisResultNarrative(analysisId, narrativeResult.segments)
       return narrativeResult.segments
     } catch (err) {
       log?.warn({ analysisId, err }, 'Cross-Source Narrative generation failed; serving without one')
+      await synthesisResultRepo.markNarrativeGenerationFailed(analysisId)
       return null
     } finally {
       inFlightNarrativeGenerations.delete(analysisId)
@@ -391,6 +399,14 @@ function generateAndCacheNarrative(
   return generation
 }
 
+/** Null (never tried, or `narrative` already exists) never blocks a re-attempt; a failure
+ *  younger than NARRATIVE_RETRY_TTL_HOURS does (ADR 0026, fixes P0-5). */
+function narrativeRetryIsDue(failedAt: Date | null): boolean {
+  if (!failedAt) return true
+  const ageHours = (Date.now() - failedAt.getTime()) / (60 * 60 * 1000)
+  return ageHours >= NARRATIVE_RETRY_TTL_HOURS
+}
+
 export async function getAnalysisDetail(
   analysisId: string,
   log?: FastifyBaseLogger
@@ -398,7 +414,12 @@ export async function getAnalysisDetail(
   const analysis = await analysisRepo.findAnalysisWithDetails(analysisId)
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
 
-  if (analysis.status === 'COMPLETE' && analysis.synthesisResult && !analysis.synthesisResult.narrative) {
+  if (
+    analysis.status === 'COMPLETE' &&
+    analysis.synthesisResult &&
+    !analysis.synthesisResult.narrative &&
+    narrativeRetryIsDue(analysis.synthesisResult.narrativeGenerationFailedAt)
+  ) {
     const sources: NarrativeSource[] = analysis.coverages
       .filter((c) => c.status === 'OK' && c.extractedText)
       .map((c) => ({ outlet: c.source.name, articleUrl: c.articleUrl, fullText: c.extractedText! }))

@@ -267,18 +267,25 @@ model Coverage {
 }
 
 model SynthesisResult {
-  id         String   @id @default(cuid())
-  analysisId String   @unique
-  analysis   Analysis @relation(fields: [analysisId], references: [id])
-  dimensions Json
-  narrative  Json?
+  id                          String    @id @default(cuid())
+  analysisId                  String    @unique
+  analysis                    Analysis  @relation(fields: [analysisId], references: [id])
+  dimensions                  Json
+  narrative                   Json?
   /// Tool-authored, short Czech headline for the Article — generated once, eagerly, from only
   /// the Agreement dimension, in the same transaction that marks the Analysis COMPLETE (see
   /// ADR 0021). Distinct from Analysis.seedHeadline (the pre-completion working title, always
   /// one source's original) and Story.anchorHeadline (the internal matching anchor) — neither of
   /// those is touched by this field. Null if generation was skipped because Agreement was empty
   /// at completion time, or for any Analysis completed before this feature existed.
-  headline   String?
+  headline                    String?
+  /// Set when the most recent narrative-generation attempt failed (LLM error, or quote
+  /// verification dropping every segment) — ADR 0026, fixes P0-5 (docs/audit.md): before this,
+  /// a failed generation left `narrative` null forever, so every subsequent unauthenticated view
+  /// of the Analysis retried the full LLM call with no budget or backoff. `getAnalysisDetail`
+  /// only re-attempts once this is null or older than NARRATIVE_RETRY_TTL_HOURS. Cleared
+  /// (implicitly, by `narrative` becoming non-null) on a successful generation.
+  narrativeGenerationFailedAt DateTime?
 }
 
 /// A candidate Coverage that Ingestion found for an already-COMPLETE Analysis — surfaced for Admin
@@ -423,4 +430,26 @@ model EmbeddingCache {
   createdAt DateTime @default(now())
 
   @@id([model, inputHash])
+}
+
+/// A single-row lease preventing two runIngestionPass calls from overlapping (P2-22,
+/// docs/audit.md) — not a generic job-queue primitive (that's the deferred Etapa 5 work, see
+/// .scratch/backend-audit/issues/06-async-job-queue.md), just a lightweight claim/release
+/// scoped to this one job. The scheduler itself (docker-compose.yml's curl-then-sleep loop)
+/// structurally can't overlap its own scheduled triggers; this guards the real exposure — a
+/// manual/admin-triggered run racing an in-flight scheduled one. Deliberately a row-level lease
+/// with a stale timeout, not a raw Postgres advisory lock held for the run's duration:
+/// runIngestionPass makes many separate calls (RSS fetches, embedding API calls) that are not,
+/// and should not become, one long-lived DB transaction — a session-scoped advisory lock can't
+/// be reliably held across Prisma's pooled connections for a function shaped like that. The
+/// claim/release itself is each a single short, atomic conditional UPDATE (see
+/// repositories/ingestionRunLock.ts), matching this codebase's existing
+/// updateAnalysisStatusIfCurrently/updateStoryRelationStatusIfCurrently idiom.
+model IngestionRunLock {
+  id           String    @id
+  runningSince DateTime?
+  /// Set alongside runningSince when claimed; release only clears the row if this still matches
+  /// the releasing caller's own id — guards against a stale lease being reclaimed by a new run
+  /// and then incorrectly cleared by the old run's own (late-finishing) `finally` block.
+  runId        String?
 }

@@ -9,6 +9,7 @@ import * as storyRelationPassModule from './storyRelationPass.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as entityRepo from '../repositories/entity.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
+import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
 import {
   runIngestionPass,
   approveDraft,
@@ -31,6 +32,7 @@ vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
 vi.mock('../repositories/entity.js')
 vi.mock('../repositories/matchDecision.js')
+vi.mock('../repositories/ingestionRunLock.js')
 
 const RSS_ITEM = {
   sourceId: 'src-idnes',
@@ -58,12 +60,17 @@ function stubCommon() {
   // docs/audit.md) lets the attach through. Tests exercising the duplicate-skip path override this.
   vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
   vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: true })
+  // P2-22 (docs/audit.md): every test exercises a normal, successfully-claimed run unless it
+  // explicitly overrides this to test the lock-contention path itself.
+  vi.mocked(ingestionRunLockRepo.tryClaimIngestionLock).mockResolvedValue('run-1')
+  vi.mocked(ingestionRunLockRepo.releaseIngestionLock).mockResolvedValue(undefined)
 }
 
 describe('runIngestionPass', () => {
   beforeEach(() => vi.resetAllMocks())
 
   it('skips an RSS item whose URL is already a known Seed Article or Coverage', async () => {
+    vi.mocked(ingestionRunLockRepo.tryClaimIngestionLock).mockResolvedValue('run-1')
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])
     vi.mocked(analysisRepo.findAllSeedUrls).mockResolvedValue([RSS_ITEM.url])
     vi.mocked(coverageRepo.findAllArticleUrls).mockResolvedValue([])
@@ -72,6 +79,37 @@ describe('runIngestionPass', () => {
 
     expect(summary).toEqual({ checked: 1, created: 0, attached: 0, flagged: 0, skipped: 1 })
     expect(embeddingClientModule.generateEmbedding).not.toHaveBeenCalled()
+  })
+
+  // P2-22 (docs/audit.md): a manual/admin-triggered run racing an in-flight scheduled one.
+  it('does no work and returns an all-zero summary when the run lock is already held', async () => {
+    vi.mocked(ingestionRunLockRepo.tryClaimIngestionLock).mockResolvedValue(null)
+
+    const summary = await runIngestionPass()
+
+    expect(summary).toEqual({ checked: 0, created: 0, attached: 0, flagged: 0, skipped: 0 })
+    expect(rssModule.queryRssFeeds).not.toHaveBeenCalled()
+    expect(ingestionRunLockRepo.releaseIngestionLock).not.toHaveBeenCalled()
+  })
+
+  it('releases the run lock with its own runId after a successful pass', async () => {
+    stubCommon()
+    vi.mocked(ingestionRunLockRepo.tryClaimIngestionLock).mockResolvedValue('run-42')
+    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([])
+
+    await runIngestionPass()
+
+    expect(ingestionRunLockRepo.releaseIngestionLock).toHaveBeenCalledWith('run-42')
+  })
+
+  it('still releases the run lock when the pass itself throws', async () => {
+    stubCommon()
+    vi.mocked(ingestionRunLockRepo.tryClaimIngestionLock).mockResolvedValue('run-42')
+    vi.mocked(rssModule.queryRssFeeds).mockRejectedValue(new Error('RSS feed down'))
+
+    await expect(runIngestionPass()).rejects.toThrow('RSS feed down')
+
+    expect(ingestionRunLockRepo.releaseIngestionLock).toHaveBeenCalledWith('run-42')
   })
 
   it('creates a new Draft Analysis, seeded with only its own Coverage, when nothing matches', async () => {
