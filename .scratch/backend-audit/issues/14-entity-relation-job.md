@@ -1,7 +1,7 @@
 # 14 — Entity extraction + relation linking as a queued job
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 13
 
 ## Question
@@ -14,3 +14,22 @@ Not yet decided:
 2. Ticket 11 (chunked entity extraction, still open, split from ticket 04) and ticket 12 (salience/fuzzy search, still open) both touch `entityExtractionPass.ts` — does moving this pass onto a job change anything about their scope, or are they independent of transport (sync call vs. job) and can resolve on their own schedule regardless of this ticket's order?
 3. Idempotency: `extractAndPersistStoryEntities`/`linkStoryRelations` already degrade gracefully on failure (existing "extract or throw, caller degrades" contract) — does that contract still hold cleanly inside a `pg-boss` job with its own retry semantics, or does retry risk double-processing (e.g. `replaceStoryEntities`'s whole-set-replace behavior, ticket 04 — should be idempotent by construction, but worth confirming explicitly)?
 4. Existing unit tests (`ingestionService.test.ts`, `analysisService.test.ts`) currently assert this pipeline runs synchronously and mock its functions directly — this ticket needs to update them to assert enqueueing instead.
+
+## Answer
+
+1. **Block vs. return**: return immediately after enqueue — the entire point of moving this off the request path (ADR 0028). `approveDraft`/`confirmCoverages` enqueue `JobName.EntityRelation` and return; the Draft/Analysis has no entities/relations until the worker runs, same transient state that already exists today between approval and the (currently synchronous) pipeline finishing.
+
+2. **Tickets 11/12 scope**: no change. Both touch `entityExtractionPass.ts`'s internals (chunking the LLM call, salience/fuzzy search over persisted entities) — transport-independent. The job handler calls the same pass functions a synchronous caller would; tickets 11/12 resolve on their own schedule regardless of this ticket's order.
+
+3. **Idempotency and retry contract**: the job handler stops calling `extractAndPersistStoryEntities`/`extractEntitiesAndLinkStoryRelations` as-is (both currently swallow every error internally and never throw — calling them unchanged from a job handler would make `LLM_JOB_RETRY_POLICY`'s `retryLimit: 3`/backoff (ticket 13) dead code, since `registerJobWorker` only reports a job `failed` when the handler throws). Instead the handler calls the lower-level passes directly and splits failures into two classes, matching the audit's own worker examples (§9.5 — handlers let real failures throw straight out to `boss.work`, no wrapping) plus this codebase's existing `errors.ts` taxonomy:
+   - **Permanent** (retrying can't help): the Analysis/Story the job's `analysisId` points to no longer exists — caught as `NotFoundError`, logged, and swallowed (return without throwing) rather than spending three retries on a lookup that will never resolve.
+   - **Retryable**: LLM call failures and DB read/write failures during the pipeline — logged with stage context (`log.error({ err, stage: 'extraction' | 'relation-linking', analysisId }, ...)`, this codebase's existing `log?.warn`/`log?.error` convention, giving an application-log trail alongside pg-boss's own archive row) and rethrown as `ExternalServiceError` (already used for LLM failures elsewhere, e.g. `analysisService.ts`), so `registerJobWorker` reports `failed` and pg-boss's `LLM_JOB_RETRY_POLICY` actually retries.
+   - Data-write idempotency for a retry (of either class, or of the whole job after a partial success) is already sound: `replaceStoryEntities` is a whole-set replace under an advisory lock (safe to re-run with the same or a re-extracted entity set), and `StoryRelation`'s `@@unique([fromStoryId, toStoryId])` turns a retried duplicate `createStoryRelation` into a caught, logged no-op, not a duplicate row or a crash. One accepted cost, not fixed here: because ADR 0028/ticket 13 combined `entity.extract`+`relation.link` into one job (not the audit's original two separate job types), a retry triggered by a failure *after* entity extraction already succeeded re-runs extraction too — a redundant, billed LLM call. Bounded by `retryLimit: 3`; reopening the combined-job design is ADR 0028's call, not this ticket's.
+
+4. **Source-text derivation and job payload**: `JobPayload[JobName.EntityRelation]` (ticket 13) is `{ analysisId: string }`; extended here to `{ analysisId: string; origin: 'draft-approval' | 'coverage-confirmation' }` so the handler can reproduce each trigger point's exact current selection without guessing it from Coverage state alone. Source-text rule, computed by the handler from current DB state (not a payload snapshot, so a retry naturally reflects whatever Coverage state exists then):
+   - For each non-excluded Coverage on the Analysis: use `extractedText` if present; else use `title` unless `status === 'EXTRACTION_FAILED'`; else skip. This one rule reproduces both flows exactly — Ingestion-created Coverage sits at `status: PENDING` with only a `title` (falls through to the title branch); `confirmCoverages`'s scraped Coverage uses `extractedText` when scraping succeeded and is skipped entirely when `EXTRACTION_FAILED`, matching today's `okTexts` filter.
+   - `story.anchorHeadline` is prepended only when `origin === 'draft-approval'`, preserving today's asymmetry (`approveDraft` includes it, `confirmCoverages` doesn't) exactly — this ticket is a transport change per the audit, not an opportunity to also change what feeds extraction.
+
+5. **Test updates**: `ingestionService.test.ts` and `analysisService.test.ts` currently mock `extractEntitiesAndLinkStoryRelations` and assert it's called synchronously with the resolved title/text list — both are updated to assert `enqueueJob(JobName.EntityRelation, { analysisId, origin: ... })` instead (already flagged as this ticket's scope by ticket 13's own Answer point 5).
+
+Implemented on `ticket/audit-14-entity-relation-job`.
