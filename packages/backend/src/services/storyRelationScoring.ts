@@ -115,7 +115,11 @@ export function scoreRelationCandidates(
       currentRelationTriples,
       entityRelationTripleSet(candidateStory.entityRelations)
     )
-    const ageHours = (now.getTime() - candidateStory.createdAt.getTime()) / (60 * 60 * 1000)
+    // eventTime over createdAt (ticket 16, fixes the rest of P1-11, docs/audit.md:580 — "teprve
+    // tenhle čas patří do time decay") — createdAt only as the fallback for a Story with no real
+    // event-time signal (human-seeded, or pre-migration; see Story.eventTime's schema doc).
+    const ageHours =
+      (now.getTime() - (candidateStory.eventTime ?? candidateStory.createdAt).getTime()) / (60 * 60 * 1000)
 
     const score =
       EMBEDDING_WEIGHT * embeddingSimilarity +

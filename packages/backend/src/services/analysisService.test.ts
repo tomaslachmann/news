@@ -80,6 +80,10 @@ describe('createAnalysis', () => {
       embeddingModel: SEED_EMBEDDING_RESULT.model,
       embeddingInputHash: SEED_EMBEDDING_RESULT.inputHash,
     })
+    // No eventTime passed at all (ticket 16, amending ADR 0029): scrapeArticle extracts no
+    // structured publish date, and this is left for the repository's nullable column default
+    // rather than fabricated as submission time.
+    expect(vi.mocked(analysisRepo.createAnalysis).mock.calls[0][0].eventTime).toBeUndefined()
     expect(matchDecisionRepo.recordMatchDecisionSafe).toHaveBeenCalledWith(
       expect.objectContaining({
         callSite: 'submissionDedup',
@@ -449,6 +453,7 @@ describe('discoverSources', () => {
       story: {
         id: 's1',
         createdAt: new Date(),
+        eventTime: new Date(),
         anchorHeadline: 'x',
         embedding: [],
         embeddingModel: null,
@@ -527,6 +532,7 @@ describe('discoverSources', () => {
       story: {
         id: 's1',
         createdAt: new Date(),
+        eventTime: new Date(),
         anchorHeadline: 'x',
         embedding: [],
         embeddingModel: null,
@@ -571,6 +577,7 @@ describe('confirmCoverages', () => {
     story: {
       id: 's1',
       createdAt: new Date(),
+      eventTime: new Date(),
       anchorHeadline: 'Anchor headline',
       embedding: [1, 0, 0],
       embeddingModel: null,

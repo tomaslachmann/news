@@ -200,6 +200,9 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
     const draft = await analysisRepo.createDraftAnalysis({
       seedUrl: item.url,
       seedHeadline: item.title,
+      // item.publishedAt already unifies both of Ingestion's sourcing paths (RSS pubDate, GDELT
+      // seendate) — see Story.eventTime's schema doc comment (ticket 16).
+      eventTime: new Date(item.publishedAt),
       embedding: itemEmbedding,
       embeddingModel: embeddingResult.model,
       embeddingInputHash: embeddingResult.inputHash,

@@ -85,6 +85,21 @@ model User {
 model Story {
   id                   String                @id @default(cuid())
   createdAt            DateTime              @default(now())
+  /// When the real-world event happened/was first reported — distinct from `createdAt` (row-
+  /// insert/ingest time), which drifts from the former whenever a Draft sits in the Ingestion
+  /// review queue before approval (ADR 0029, ticket 16, fixes the rest of P1-11, docs/audit.md).
+  /// Sourced per creation path: Ingestion (`createDraftAnalysis`) uses
+  /// `CandidateArticle.publishedAt` (RSS `pubDate`, or RSS's own fetch-time fallback when a feed
+  /// omits one — Ingestion's own candidate pipeline is RSS-only; GDELT is Discovery's, a
+  /// Coverage-only path that never creates a Story). Human-seeded submission (`createAnalysis`)
+  /// leaves this `null` — `scrapeArticle` extracts no structured publish date today (see ticket
+  /// 16's Answer, amending ADR 0029's "seed article's own published date where available" to an
+  /// explicit "not attempted, stays null" for this one path), so every consumer (the
+  /// `confirmStoryRelation` payload, relation-candidate time-decay scoring) falls back to
+  /// `createdAt` at the point of use rather than a fabricated value being written here. Nullable,
+  /// no default, no backfill for Stories created before this field existed — same convention as
+  /// `embeddingModel`/`embeddingInputHash` above (ADR 0025), per ADR 0029's own consequences.
+  eventTime            DateTime?
   /// The seed/triggering article's title, fixed at creation — what every same-event
   /// verification call compares a candidate article's title against.
   anchorHeadline       String

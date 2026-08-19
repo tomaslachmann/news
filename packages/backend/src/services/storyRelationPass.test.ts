@@ -10,8 +10,16 @@ import { ExternalServiceError } from '../errors.js'
 
 vi.mock('./llmClient.js')
 
-const CURRENT = { anchorHeadline: 'Story A headline', createdAt: new Date('2026-01-15T00:00:00Z') }
-const CANDIDATE = { anchorHeadline: 'Story B headline', createdAt: new Date('2026-01-10T00:00:00Z') }
+const CURRENT = {
+  anchorHeadline: 'Story A headline',
+  createdAt: new Date('2026-01-15T00:00:00Z'),
+  eventTime: new Date('2026-01-15T00:00:00Z'),
+}
+const CANDIDATE = {
+  anchorHeadline: 'Story B headline',
+  createdAt: new Date('2026-01-10T00:00:00Z'),
+  eventTime: new Date('2026-01-10T00:00:00Z'),
+}
 
 describe('confirmStoryRelation', () => {
   beforeEach(() => vi.resetAllMocks())
@@ -32,14 +40,31 @@ describe('confirmStoryRelation', () => {
     expect(typeof systemPrompt).toBe('string')
     expect(callSite).toBe('storyRelation')
     expect(JSON.parse(userContent)).toEqual({
-      storyA: { headline: CURRENT.anchorHeadline, publishedAt: CURRENT.createdAt.toISOString() },
-      storyB: { headline: CANDIDATE.anchorHeadline, publishedAt: CANDIDATE.createdAt.toISOString() },
+      storyA: { headline: CURRENT.anchorHeadline, publishedAt: CURRENT.eventTime.toISOString() },
+      storyB: { headline: CANDIDATE.anchorHeadline, publishedAt: CANDIDATE.eventTime.toISOString() },
     })
     expect(result).toEqual({
       related: true,
       type: 'FOLLOW_UP',
       confidenceTier: 'HIGH',
       reasoning: 'Story A is a direct continuation of Story B.',
+    })
+  })
+
+  it('falls back to createdAt when eventTime is null (human-seeded or pre-migration Story)', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ related: false })
+    const noEventTime = {
+      anchorHeadline: 'Story C headline',
+      createdAt: new Date('2026-01-05T00:00:00Z'),
+      eventTime: null,
+    }
+
+    await confirmStoryRelation(CURRENT, noEventTime)
+
+    const [, , userContent] = vi.mocked(llmClientModule.callJsonModel).mock.calls[0]
+    expect(JSON.parse(userContent)).toEqual({
+      storyA: { headline: CURRENT.anchorHeadline, publishedAt: CURRENT.eventTime.toISOString() },
+      storyB: { headline: noEventTime.anchorHeadline, publishedAt: noEventTime.createdAt.toISOString() },
     })
   })
 
@@ -89,12 +114,14 @@ describe('linkStoryRelations', () => {
       entities: [],
       entityRelations: [],
       createdAt: new Date('2026-01-14T00:00:00Z'),
+      eventTime: new Date('2026-01-14T00:00:00Z'),
     }
   }
 
   const CURRENT_INPUT = {
     anchorHeadline: 'Current story',
     createdAt: new Date('2026-01-15T00:00:00Z'),
+    eventTime: new Date('2026-01-15T00:00:00Z'),
     embedding: [1, 0, 0],
     entities: [],
     entityRelations: [],
@@ -202,6 +229,7 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
   const STORY = {
     anchorHeadline: 'Current story',
     createdAt: new Date('2026-01-15T00:00:00Z'),
+    eventTime: new Date('2026-01-15T00:00:00Z'),
     embedding: [1, 0, 0],
   }
 
@@ -215,6 +243,7 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
     entities: [],
     entityRelations: [],
     createdAt: new Date('2026-01-14T00:00:00Z'),
+    eventTime: new Date('2026-01-14T00:00:00Z'),
   }
 
   it('persists freshly-extracted entities via replaceStoryEntities when extraction finds something', async () => {

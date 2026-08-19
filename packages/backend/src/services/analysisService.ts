@@ -136,6 +136,10 @@ export async function createAnalysis(
     throw new ExternalServiceError('Nepodařilo se extrahovat klíčová slova z článku')
   }
 
+  // No reliable structured publish date exists from a scraped article (ticket 16, amending
+  // ADR 0029's "seed article's own published date where available" for this one path) — left
+  // null rather than fabricated as submission time; every real consumer (confirmStoryRelation's
+  // payload, relation-candidate time-decay scoring) falls back to createdAt at the point of use.
   const analysis = await analysisRepo.createAnalysis({
     seedUrl,
     seedHeadline: scraped.title,

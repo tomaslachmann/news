@@ -137,6 +137,7 @@ describe('runIngestionPass', () => {
     expect(analysisRepo.createDraftAnalysis).toHaveBeenCalledWith({
       seedUrl: RSS_ITEM.url,
       seedHeadline: 'Fresh headline',
+      eventTime: new Date(RSS_ITEM.publishedAt),
       embedding: ITEM_EMBEDDING,
       embeddingModel: ITEM_EMBEDDING_RESULT.model,
       embeddingInputHash: ITEM_EMBEDDING_RESULT.inputHash,
@@ -452,6 +453,7 @@ const DRAFT_WITH_STORY = {
   story: {
     id: 's1',
     createdAt: new Date(),
+    eventTime: new Date(),
     anchorHeadline: 'Anchor headline',
     embedding: [],
     embeddingModel: null,

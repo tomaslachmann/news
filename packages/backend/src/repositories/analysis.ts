@@ -19,10 +19,12 @@ export type AnalysisWithStory = Analysis & { story: Story }
  *  own Stories already do — before ticket 27 this was always omitted, which is why Ingestion
  *  could never recognize a human had already started investigating an event (ADR 0019).
  *  `embeddingModel`/`embeddingInputHash` are audit metadata (ADR 0025, P1-8) — null whenever
- *  `embedding` itself is omitted. */
+ *  `embedding` itself is omitted; `eventTime` (ADR 0029, ticket 16) is null whenever the caller
+ *  has no real event-time signal to offer, same nullable-no-default convention. */
 export async function createAnalysis(data: {
   seedUrl: string
   seedHeadline: string
+  eventTime?: Date
   embedding?: number[]
   embeddingModel?: string
   embeddingInputHash?: string
@@ -35,6 +37,7 @@ export async function createAnalysis(data: {
       story: {
         create: {
           anchorHeadline: data.seedHeadline,
+          eventTime: data.eventTime,
           embedding: data.embedding ?? [],
           embeddingModel: data.embeddingModel,
           embeddingInputHash: data.embeddingInputHash,
@@ -47,6 +50,7 @@ export async function createAnalysis(data: {
 export async function createDraftAnalysis(data: {
   seedUrl: string
   seedHeadline: string
+  eventTime?: Date
   embedding?: number[]
   embeddingModel?: string
   embeddingInputHash?: string
@@ -59,6 +63,7 @@ export async function createDraftAnalysis(data: {
       story: {
         create: {
           anchorHeadline: data.seedHeadline,
+          eventTime: data.eventTime,
           embedding: data.embedding ?? [],
           embeddingModel: data.embeddingModel,
           embeddingInputHash: data.embeddingInputHash,

@@ -14,6 +14,7 @@ import { runEntityRelationJob, deriveSourceTexts } from './entityRelationJob.js'
 const STORY = {
   anchorHeadline: 'Anchor headline',
   createdAt: new Date('2026-01-15T00:00:00Z'),
+  eventTime: new Date('2026-01-15T00:00:00Z'),
   embedding: [1, 0, 0],
 }
 

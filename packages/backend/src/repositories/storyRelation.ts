@@ -18,6 +18,7 @@ export interface RawRelationCandidateStory {
   entities: EntityForScoring[]
   entityRelations: EntityRelationForScoring[]
   createdAt: Date
+  eventTime: Date | null
 }
 
 /** Stories (any Analysis status — cheap to score regardless of whether a candidate is finished
@@ -78,6 +79,7 @@ export async function findRelationCandidateStories(
         type: rel.type,
       })),
       createdAt: r.createdAt,
+      eventTime: r.eventTime,
     }))
 }
 

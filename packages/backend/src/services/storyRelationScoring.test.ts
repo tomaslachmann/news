@@ -17,6 +17,7 @@ function candidate(overrides: Partial<Parameters<typeof scoreRelationCandidates>
     entities: [],
     entityRelations: [],
     createdAt: hoursAgo(1),
+    eventTime: hoursAgo(1),
     ...overrides,
   }
 }
@@ -104,15 +105,45 @@ describe('scoreRelationCandidates', () => {
 
   it('scores a candidate at the far edge of the time window lower than a fresh one with identical similarity', () => {
     const fresh = candidate({ storyId: 'fresh', createdAt: hoursAgo(1) })
-    const old = candidate({ storyId: 'old', createdAt: hoursAgo(24 * 13) })
+    const old = candidate({ storyId: 'old', createdAt: hoursAgo(24 * 13), eventTime: hoursAgo(24 * 13) })
 
     const result = scoreRelationCandidates(CURRENT, [fresh, old], TOTAL_STORIES, NOW)
 
     expect(result.map((c) => c.storyId)).toEqual(['fresh', 'old'])
   })
 
+  it('ages by eventTime, not createdAt, when both are present and differ (ticket 16, fixes the rest of P1-11)', () => {
+    // A Draft that sat in the Ingestion queue for a long time before approval — createdAt is
+    // recent (row inserted late), but the real event, per eventTime, is old.
+    const staleDraft = candidate({ storyId: 'stale', createdAt: hoursAgo(1), eventTime: hoursAgo(24 * 13) })
+    const genuinelyFresh = candidate({ storyId: 'fresh', createdAt: hoursAgo(1), eventTime: hoursAgo(1) })
+
+    const result = scoreRelationCandidates(CURRENT, [staleDraft, genuinelyFresh], TOTAL_STORIES, NOW)
+
+    expect(result.map((c) => c.storyId)).toEqual(['fresh', 'stale'])
+  })
+
+  it('falls back to createdAt when eventTime is null (human-seeded or pre-migration Story)', () => {
+    const noEventTime = candidate({
+      storyId: 'no-event-time',
+      createdAt: hoursAgo(24 * 13),
+      eventTime: null,
+    })
+    const genuinelyFresh = candidate({ storyId: 'fresh', createdAt: hoursAgo(1), eventTime: hoursAgo(1) })
+
+    const result = scoreRelationCandidates(CURRENT, [noEventTime, genuinelyFresh], TOTAL_STORIES, NOW)
+
+    // If the null eventTime were treated as age-zero instead of falling back to createdAt, both
+    // candidates would score identically and this ordering assertion would fail.
+    expect(result.map((c) => c.storyId)).toEqual(['fresh', 'no-event-time'])
+  })
+
   it('clamps time proximity at zero rather than going negative for a candidate far beyond the window, instead of penalizing it below what a weak embedding match alone would score', () => {
-    const wayTooOldWeakEmbedding = candidate({ embedding: [0, 1, 0], createdAt: hoursAgo(24 * 60) })
+    const wayTooOldWeakEmbedding = candidate({
+      embedding: [0, 1, 0],
+      createdAt: hoursAgo(24 * 60),
+      eventTime: hoursAgo(24 * 60),
+    })
 
     const result = scoreRelationCandidates(CURRENT, [wayTooOldWeakEmbedding], TOTAL_STORIES, NOW)
 
@@ -124,7 +155,7 @@ describe('scoreRelationCandidates', () => {
 
   it(`caps the result at ${RELATION_CANDIDATE_POOL_SIZE} candidates, keeping the highest-scoring ones`, () => {
     const candidates = Array.from({ length: RELATION_CANDIDATE_POOL_SIZE + 5 }, (_, i) =>
-      candidate({ storyId: `c${i}`, createdAt: hoursAgo(i) })
+      candidate({ storyId: `c${i}`, createdAt: hoursAgo(i), eventTime: hoursAgo(i) })
     )
 
     const result = scoreRelationCandidates(CURRENT, candidates, TOTAL_STORIES, NOW)
