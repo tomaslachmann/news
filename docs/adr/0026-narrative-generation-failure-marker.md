@@ -1,0 +1,20 @@
+# ADR 0026 — Narrative generation: a durable failure marker with TTL-bounded retry
+
+## Status
+Accepted
+
+## Context
+`docs/audit.md` P0-5 (folded into the wayfinder map's [Async job queue](../../.scratch/backend-audit/issues/06-async-job-queue.md)) found that `getAnalysisDetail` (`analysisService.ts`) regenerates a completed Analysis's Cross-Source Narrative on first view, guarded only by `inFlightNarrativeGenerations` — an in-memory `Map` that dedupes *simultaneous* concurrent requests for the same `analysisId`. It does not survive a process restart and would not dedupe across multiple backend instances (not a concern at today's single-instance deployment, but not the actual bug either).
+
+Reading `getAnalysisDetail` closely: the real exposure is broader than concurrent-request racing. The regeneration condition is `analysis.status === 'COMPLETE' && analysis.synthesisResult && !analysis.synthesisResult.narrative` — and a *failed* generation (the LLM call throwing, or quote verification dropping every segment down to zero, per `quoteVerification.ts`) leaves `narrative` `null` and persists nothing. Since reading a completed Analysis is deliberately unauthenticated (`CONTEXT.md`'s Auth Boundary — a separate, intentional decision this ADR does not revisit), every subsequent view of that same Analysis — from any visitor, sequentially, no concurrency required — re-triggers a fresh, full LLM narrative-generation call. A deterministic failure (an Analysis whose Coverage will never pass quote verification) behaves as if it were transient, retried forever, with no budget and no backoff.
+
+## Decision
+`SynthesisResult` gains `narrativeGenerationFailedAt DateTime?`. Both failure paths inside `generateAndCacheNarrative` — the LLM call throwing, and quote verification dropping every segment — persist this timestamp instead of just logging and returning `null`. `getAnalysisDetail`'s regeneration condition becomes: attempt generation only when `narrative` is still `null` **and** either `narrativeGenerationFailedAt` is `null` (never tried) or older than `NARRATIVE_RETRY_TTL_HOURS` (24h).
+
+Retry is TTL-only — no new authenticated "regenerate" endpoint. A transient failure (an LLM hiccup, not a genuine content issue) self-heals on the next view after the TTL elapses, without requiring an Admin to notice and act; a genuinely-unfixable Analysis (content that will never pass quote verification) still retries every 24h rather than being permanently marked dead, since nothing today can reliably distinguish "transient" from "this Coverage's content will never verify" ahead of time. This bounds the cost exposure to at most one LLM attempt per Analysis per TTL window, regardless of view volume — down from unbounded.
+
+## Consequences
+- A reader who views a never-successfully-narrated Analysis sees "no narrative available" for up to 24h at a time between attempts, instead of every view silently paying for a fresh LLM call. This is a visible behavior change worth knowing about when debugging "why doesn't this Analysis have a narrative yet."
+- `narrativeGenerationFailedAt` is nullable and absent-by-default — every `SynthesisResult` row created before this ticket has `null`, which the regeneration condition already treats as "never tried, attempt now," so no backfill is needed.
+- This does not address `inFlightNarrativeGenerations`' multi-instance non-durability — irrelevant at today's single-instance deployment (`docker-compose.yml` runs one `backend` service), and the audit's own real fix (moving generation to a job, §6) is deferred along with the rest of the async-queue work this ticket declined to build now. If multi-instance deployment ever happens before the queue does, this in-memory map would need revisiting on its own.
+- The TTL constant (24h) is a starting point, not a tuned result, matching this codebase's existing convention for its other threshold constants (`MATCH_THRESHOLD`, `DEDUP_WINDOW_HOURS`) — revisit once there's real data on how often generation actually fails and how often a retry succeeds.
