@@ -95,6 +95,14 @@ model Story {
   /// scores above the match threshold, so such a Story is simply never matched, not a broken
   /// state.
   embedding            Float[]               @default([])
+  /// Which EMBEDDING_MODEL produced `embedding`, and the content hash of the canonical input
+  /// that fed it (buildEmbeddingInput, storyMatching.ts) — audit trail for P1-8
+  /// (docs/audit.md, ADR 0025): before this, a mid-flight EMBEDDING_MODEL change would silently
+  /// mix incomparable vectors into the same matching pool with no way to detect it after the
+  /// fact. Nullable: every Story created before this ticket has neither. Not used to gate
+  /// matching itself — EmbeddingCache (below) is the actual idempotence mechanism.
+  embeddingModel       String?
+  embeddingInputHash   String?
   analysis             Analysis?
   relationsFrom        StoryRelation[]       @relation("StoryRelationFrom")
   relationsTo          StoryRelation[]       @relation("StoryRelationTo")
@@ -349,4 +357,70 @@ model LlmCallLog {
   /// to parse as JSON.
   error           String?
   createdAt       DateTime @default(now())
+}
+
+enum MatchDecidedBy {
+  THRESHOLD
+  LLM
+}
+
+/// One row per same-event matching decision (findBestMatch, storyMatching.ts) — Ingestion's
+/// per-item attach check and human-seeded submission's dedup check both write here (ADR 0025's
+/// sibling ticket, docs/audit.md §7.5/§8.7). Exists purely for future threshold calibration —
+/// MATCH_THRESHOLD's own comment admits it's "a starting point, not a tuned result" — never read
+/// by any product surface, inspected via Prisma Studio like LlmCallLog. Deliberately no FK to
+/// Story/Analysis (same reasoning as LlmCallLog, ADR 0020): purely observational. Deliberately
+/// scoped to same-event matching only, not StoryRelation candidate scoring — a structurally
+/// different decision (links two already-distinct Stories, different feature set and cost
+/// profile) whose calibration would only be muddied by sharing one table/threshold-sweep with
+/// this one.
+model MatchDecision {
+  id                  String         @id @default(cuid())
+  createdAt           DateTime       @default(now())
+  /// 'ingestion' | 'submissionDedup' — same values as EmbeddingCallSite (embeddingClient.ts).
+  callSite            String
+  /// The single best-scoring candidate the threshold stage considered, if the pool was
+  /// non-empty and at least one candidate fell within the hard time window. Null alongside a
+  /// null `score` means "nothing to compare against," distinct from "a candidate existed but
+  /// scored below threshold."
+  candidateStoryId    String?
+  candidateAnalysisId String?
+  /// The raw cosineSimilarity score that drove `thresholdMatched` — findBestMatch's score is
+  /// pure similarity as of ADR 0025/P1-9's fix (no time-decay). Null exactly when
+  /// candidateStoryId is null.
+  score               Float?
+  /// What MATCH_THRESHOLD alone decided, independent of whatever the LLM later says.
+  thresholdMatched    Boolean
+  /// sameEvent from verifySameStoryLogged, when the human-seeded path's confirmation actually
+  /// ran (only possible when thresholdMatched=true on that path) — null on every Ingestion row
+  /// (ADR 0018: Ingestion's own attach decision never gets an LLM call) and on any human-seeded
+  /// row where thresholdMatched was already false.
+  llmVerdict          Boolean?
+  /// 'THRESHOLD' when nothing overrode the threshold stage's own verdict (no LLM ran, or none
+  /// was eligible to); 'LLM' when the human-seeded confirmation call's verdict is what actually
+  /// decided the outcome.
+  decidedBy           MatchDecidedBy
+  /// Bump whenever storyMatching.ts's scoring math changes, so a future calibration query can
+  /// segment rows by which formula actually produced them.
+  scorerVersion       String
+
+  @@index([callSite, createdAt])
+}
+
+/// Content-addressed cache: the same (model, inputHash) always produces the same vector
+/// (deterministic given a fixed model), so a cache hit here skips the embeddings API call
+/// entirely — checked inside generateEmbedding() itself (embeddingClient.ts), transparent to
+/// every caller (ADR 0025). A hit never writes to LlmCallLog: no LLM call happened, and
+/// LlmCallLog is specifically a record of one (ADR 0020). Storing the raw vector here is not in
+/// tension with ADR 0023 (which kept the vector out of LlmCallLog specifically as a *debug log*
+/// with ~no per-byte debugging value) — here the vector is the cache's entire payload, not a
+/// byproduct of a call worth debugging. Unbounded, no pruning, same accepted posture as
+/// LlmCallLog.
+model EmbeddingCache {
+  model     String
+  inputHash String
+  embedding Float[]
+  createdAt DateTime @default(now())
+
+  @@id([model, inputHash])
 }

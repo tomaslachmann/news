@@ -17,8 +17,13 @@ import { discoverCoverage } from './discovery.js'
 import { resolveSourceByUrl } from './sourceResolver.js'
 import { isBlockedContent } from './blockedContent.js'
 import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVerification.js'
-import { generateEmbedding } from './embeddingClient.js'
-import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
+import { generateEmbedding, type EmbeddingResult } from './embeddingClient.js'
+import {
+  evaluateMatch,
+  buildEmbeddingInput,
+  MATCH_SCORER_VERSION,
+  DEDUP_WINDOW_HOURS,
+} from './storyMatching.js'
 import { approveDraft } from './ingestionService.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
 import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
@@ -30,6 +35,7 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as entityRepo from '../repositories/entity.js'
+import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { toAnalysisDetail, toAnalysisListItem, resolveDisplayTitle, STATUS_MAP } from '../mappers/analysis.js'
 import { toRelatedEvents } from '../mappers/storyRelation.js'
@@ -60,27 +66,45 @@ export async function createAnalysis(
   // per-item retry-next-poll safety net, there's no "next poll" for a one-off human action to
   // fall back on, and a Story without an embedding is no worse off than every human-seeded
   // Story was before this ticket.
-  let embedding: number[] = []
+  let embeddingResult: EmbeddingResult | null = null
   try {
-    embedding = await generateEmbedding(
+    const result = await generateEmbedding(
       buildEmbeddingInput({ title: scraped.title, excerpt: scraped.excerpt }),
       'submissionDedup'
     )
+    // generateEmbedding only ever throws on a missing vector, not an empty one (an unusual but
+    // not-impossible API/cache response shape) — treated as "no usable embedding," same as a
+    // thrown error, rather than proceeding with a vector that can never score above zero
+    // (cosineSimilarity's own zero-length guard) yet would still get written into
+    // embeddingModel/embeddingInputHash as if a real embedding existed.
+    if (result.vector.length > 0) embeddingResult = result
   } catch (err) {
     log?.warn({ seedUrl, err }, 'Could not generate embedding for seed article; skipping dedup check')
   }
+  const embedding = embeddingResult?.vector ?? []
 
-  if (!opts.force && embedding.length > 0) {
+  if (!opts.force && embeddingResult) {
     const candidates = await analysisRepo.findRecentStoriesForMatching(DEDUP_WINDOW_HOURS)
-    const match = findBestMatch(embedding, candidates, new Date())
+    const { best, thresholdMatched, match } = evaluateMatch(embedding, candidates, new Date())
+
     // A FAILED match is treated as no match at all — unlike Ingestion's own "already seen,
     // don't recreate" handling of a FAILED match, a human explicitly submitting a URL deserves
     // a fresh attempt, not a silent no-op.
     if (match && match.analysisStatus !== 'FAILED') {
       const verdict = await verifySameStoryLogged(scraped.title, match.anchorHeadline, log)
+      await matchDecisionRepo.recordMatchDecisionSafe({
+        callSite: 'submissionDedup',
+        candidateStoryId: match.storyId,
+        candidateAnalysisId: match.analysisId,
+        score: best?.score ?? null,
+        thresholdMatched: true,
+        llmVerdict: verdict.sameEvent,
+        decidedBy: 'LLM',
+        scorerVersion: MATCH_SCORER_VERSION,
+      })
       if (verdict.sameEvent) {
         // findRecentStoriesForMatching only ever produces Prisma's AnalysisStatus enum values;
-        // findBestMatch's StoryCandidate type widens analysisStatus to `string` since it's
+        // evaluateMatch's StoryCandidate type widens analysisStatus to `string` since it's
         // shared with Ingestion's use, which doesn't need the narrower type. The `!== 'FAILED'`
         // guard above already rules out STATUS_MAP ever producing 'failed' here.
         const status = match.analysisStatus as analysisRepo.AnalysisStatus
@@ -91,6 +115,20 @@ export async function createAnalysis(
           matchedStatus: STATUS_MAP[status] as CreateAnalysisMatched['matchedStatus'],
         }
       }
+    } else {
+      // No LLM stage ran either because nothing scored above threshold, or the one candidate
+      // above threshold was FAILED (treated as no match) — the threshold stage's own verdict is
+      // what decided the outcome either way.
+      await matchDecisionRepo.recordMatchDecisionSafe({
+        callSite: 'submissionDedup',
+        candidateStoryId: best?.candidate.storyId ?? null,
+        candidateAnalysisId: best?.candidate.analysisId ?? null,
+        score: best?.score ?? null,
+        thresholdMatched,
+        llmVerdict: null,
+        decidedBy: 'THRESHOLD',
+        scorerVersion: MATCH_SCORER_VERSION,
+      })
     }
   }
 
@@ -101,7 +139,13 @@ export async function createAnalysis(
     throw new ExternalServiceError('Nepodařilo se extrahovat klíčová slova z článku')
   }
 
-  const analysis = await analysisRepo.createAnalysis({ seedUrl, seedHeadline: scraped.title, embedding })
+  const analysis = await analysisRepo.createAnalysis({
+    seedUrl,
+    seedHeadline: scraped.title,
+    embedding,
+    embeddingModel: embeddingResult?.model,
+    embeddingInputHash: embeddingResult?.inputHash,
+  })
 
   return { outcome: 'created', id: analysis.id, seedHeadline: analysis.seedHeadline, keywords }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cosineSimilarity, timeDecayFactor, findBestMatch, buildEmbeddingInput } from './storyMatching.js'
+import { cosineSimilarity, evaluateMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 
 describe('cosineSimilarity', () => {
   it('returns 1 for identical vectors', () => {
@@ -24,33 +24,12 @@ describe('cosineSimilarity', () => {
   })
 })
 
-describe('timeDecayFactor', () => {
-  it('is 1.0 at age zero', () => {
-    expect(timeDecayFactor(0)).toBeCloseTo(1)
-  })
-
-  it('stays at full strength throughout the grace period, so same-day coverage from a different outlet still matches', () => {
-    expect(timeDecayFactor(12)).toBeCloseTo(1)
-    expect(timeDecayFactor(23)).toBeCloseTo(1)
-  })
-
-  it('halves one half-life past the grace period', () => {
-    expect(timeDecayFactor(48)).toBeCloseTo(0.5)
-  })
-
-  it('decreases monotonically with age once past the grace period', () => {
-    expect(timeDecayFactor(96)).toBeLessThan(timeDecayFactor(72))
-    expect(timeDecayFactor(72)).toBeLessThan(timeDecayFactor(48))
-    expect(timeDecayFactor(48)).toBeLessThan(timeDecayFactor(24))
-  })
-
-  it('treats negative age (clock skew) the same as zero rather than boosting the score', () => {
-    expect(timeDecayFactor(-5)).toBeCloseTo(1)
-  })
-})
-
-describe('findBestMatch', () => {
+describe('evaluateMatch', () => {
   const now = new Date('2026-01-02T00:00:00Z')
+
+  function hoursAgo(hours: number): Date {
+    return new Date(now.getTime() - hours * 60 * 60 * 1000)
+  }
 
   it('returns the matching candidate when similarity clears the threshold', () => {
     const candidate = {
@@ -63,10 +42,14 @@ describe('findBestMatch', () => {
       createdAt: now,
     }
 
-    expect(findBestMatch([1, 0, 0], [candidate], now)).toEqual(candidate)
+    const result = evaluateMatch([1, 0, 0], [candidate], now)
+
+    expect(result.match).toEqual(candidate)
+    expect(result.thresholdMatched).toBe(true)
+    expect(result.best).toEqual({ candidate, score: 1 })
   })
 
-  it('returns null when no candidate clears the threshold', () => {
+  it('returns a null match, but still a non-null best, when similarity does not clear the threshold', () => {
     const candidate = {
       storyId: 's1',
       analysisId: 'a1',
@@ -77,31 +60,61 @@ describe('findBestMatch', () => {
       createdAt: now,
     }
 
-    expect(findBestMatch([1, 0, 0], [candidate], now)).toBeNull()
+    const result = evaluateMatch([1, 0, 0], [candidate], now)
+
+    expect(result.match).toBeNull()
+    expect(result.thresholdMatched).toBe(false)
+    // The below-threshold candidate is still surfaced via `best` — MatchDecision (ADR 0025)
+    // needs below-threshold examples to ever calibrate MATCH_THRESHOLD against real data.
+    expect(result.best).toEqual({ candidate, score: 0 })
   })
 
-  it('returns null for an empty candidate list', () => {
-    expect(findBestMatch([1, 0, 0], [], now)).toBeNull()
+  it('returns a null match and a null best for an empty candidate list', () => {
+    const result = evaluateMatch([1, 0, 0], [], now)
+
+    expect(result.match).toBeNull()
+    expect(result.best).toBeNull()
+    expect(result.thresholdMatched).toBe(false)
   })
 
-  it('still matches a same-day, high-similarity candidate published hours apart by a different outlet', () => {
-    // Regression: a flat decay with no grace period used to make even a perfect match fail
-    // after ~10 hours, well inside the 48h dedup window two outlets' morning/evening editions
-    // of the same event would realistically fall within.
-    const sameDayCandidate = {
+  // P1-7 (docs/audit.md, ADR 0025): the score used to be similarity × a multiplicative
+  // time-decay factor, which silently shrank the *effective* matchable window to ~26-34h even
+  // though DEDUP_WINDOW_HOURS declares 48h — a candidate at 47h old with perfect similarity
+  // would previously fail to clear MATCH_THRESHOLD. Score is now plain cosine similarity, so
+  // age within the window no longer affects whether a match clears the threshold at all.
+  it('matches a candidate near the edge of the window with perfect similarity, unlike the old decay-based score', () => {
+    const nearEdgeOfWindow = {
       storyId: 's1',
       analysisId: 'a1',
       analysisStatus: 'PENDING',
       anchorHeadline: 'Anchor headline',
       headline: null,
       embedding: [1, 0, 0],
-      createdAt: new Date(now.getTime() - 18 * 60 * 60 * 1000),
+      createdAt: hoursAgo(DEDUP_WINDOW_HOURS - 1),
     }
 
-    expect(findBestMatch([1, 0, 0], [sameDayCandidate], now)).toEqual(sameDayCandidate)
+    expect(evaluateMatch([1, 0, 0], [nearEdgeOfWindow], now).match).toEqual(nearEdgeOfWindow)
   })
 
-  it('lets time decay push an old, otherwise-perfect match below the threshold', () => {
+  it('excludes a candidate older than DEDUP_WINDOW_HOURS regardless of similarity — a hard boundary, not a discount', () => {
+    const justPastTheWindow = {
+      storyId: 's1',
+      analysisId: 'a1',
+      analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
+      headline: null,
+      embedding: [1, 0, 0],
+      createdAt: hoursAgo(DEDUP_WINDOW_HOURS + 1),
+    }
+
+    const result = evaluateMatch([1, 0, 0], [justPastTheWindow], now)
+
+    expect(result.match).toBeNull()
+    // Excluded entirely, not just below threshold — `best` must also be null.
+    expect(result.best).toBeNull()
+  })
+
+  it('excludes a very old candidate outright, independent of the boundary case above', () => {
     const veryOld = {
       storyId: 's1',
       analysisId: 'a1',
@@ -112,7 +125,24 @@ describe('findBestMatch', () => {
       createdAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
     }
 
-    expect(findBestMatch([1, 0, 0], [veryOld], now)).toBeNull()
+    expect(evaluateMatch([1, 0, 0], [veryOld], now).match).toBeNull()
+  })
+
+  it('excludes a candidate with a corrupt createdAt (non-finite age) rather than scoring it on similarity alone', () => {
+    const corrupted = {
+      storyId: 's1',
+      analysisId: 'a1',
+      analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
+      headline: null,
+      embedding: [1, 0, 0],
+      createdAt: new Date(NaN),
+    }
+
+    const result = evaluateMatch([1, 0, 0], [corrupted], now)
+
+    expect(result.match).toBeNull()
+    expect(result.best).toBeNull()
   })
 
   it('picks the highest-scoring candidate among several', () => {
@@ -135,7 +165,7 @@ describe('findBestMatch', () => {
       createdAt: now,
     }
 
-    expect(findBestMatch([1, 0, 0], [weak, strong], now)).toEqual(strong)
+    expect(evaluateMatch([1, 0, 0], [weak, strong], now).match).toEqual(strong)
   })
 })
 
@@ -146,5 +176,44 @@ describe('buildEmbeddingInput', () => {
 
   it('falls back to the title alone when there is no excerpt', () => {
     expect(buildEmbeddingInput({ title: 'Headline' })).toBe('Headline')
+  })
+
+  // P1-8 (docs/audit.md, ADR 0025): both call sites already went through this one function, but
+  // an RSS teaser and several sentences of Readability-extracted prose are different enough
+  // distributions that a cross-path match was systematically weaker than a same-path one.
+  it('normalizes internal whitespace/newlines in both title and excerpt', () => {
+    expect(buildEmbeddingInput({ title: '  Headline\nwith  line break', excerpt: 'a\n\nb   c' })).toBe(
+      'Headline with line break\na b c'
+    )
+  })
+
+  it('strips a leading caption-style boilerplate label but preserves real content that follows it on the same line', () => {
+    // Regression: an earlier version of the stripping regex matched greedily to the end of the
+    // line and discarded everything, not just the label — silently throwing away exactly the
+    // real lead content P1-8 was meant to preserve, for any RSS item shaped like
+    // "caption label: real lead paragraph".
+    expect(
+      buildEmbeddingInput({
+        title: 'Headline',
+        excerpt: 'Foto: Muž byl zatčen. Policie ve čtvrtek oznámila zatčení podezřelého.',
+      })
+    ).toBe('Headline\nMuž byl zatčen. Policie ve čtvrtek oznámila zatčení podezřelého.')
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Video: Something happened next.' })).toBe(
+      'Headline\nSomething happened next.'
+    )
+  })
+
+  it('falls back to the title alone when the excerpt is nothing but the boilerplate label itself', () => {
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Foto:' })).toBe('Headline')
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Reklama:' })).toBe('Headline')
+  })
+
+  it('caps the excerpt length so one outlier-long excerpt cannot dominate the embedding input', () => {
+    const longExcerpt = 'x'.repeat(1000)
+
+    const result = buildEmbeddingInput({ title: 'Headline', excerpt: longExcerpt })
+
+    expect(result.length).toBeLessThan(1000)
+    expect(result).toBe(`Headline\n${'x'.repeat(400)}`)
   })
 })

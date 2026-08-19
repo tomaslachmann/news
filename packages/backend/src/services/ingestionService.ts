@@ -9,8 +9,13 @@ import type {
 import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
 import { fetchPage } from '../pagination.js'
 import { queryRssFeeds } from './rss.js'
-import { generateEmbedding } from './embeddingClient.js'
-import { findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
+import { generateEmbedding, type EmbeddingResult } from './embeddingClient.js'
+import {
+  evaluateMatch,
+  buildEmbeddingInput,
+  MATCH_SCORER_VERSION,
+  DEDUP_WINDOW_HOURS,
+} from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
@@ -20,6 +25,7 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as entityRepo from '../repositories/entity.js'
+import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
 import { toPendingStoryRelationItem } from '../mappers/storyRelation.js'
@@ -62,16 +68,35 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
 
     // No scrape, no keyword extraction, no LLM call — the item's own RSS title/excerpt is
     // enough to embed and match cheaply. See ADR 0018.
-    let itemEmbedding: number[]
+    let embeddingResult: EmbeddingResult
     try {
-      itemEmbedding = await generateEmbedding(buildEmbeddingInput(item), 'ingestion')
+      embeddingResult = await generateEmbedding(buildEmbeddingInput(item), 'ingestion')
+      // generateEmbedding only throws on a missing vector, not an empty one (an unusual but
+      // not-impossible API/cache response shape) — treated as a failure the same way, rather
+      // than proceeding to create a Draft with an embedding that can never be matched again and
+      // an embeddingModel/embeddingInputHash implying a real one exists.
+      if (embeddingResult.vector.length === 0) throw new Error('Embedding API returned an empty vector')
     } catch (err) {
       log?.warn({ url: item.url, err }, 'Ingestion: could not generate embedding, skipping this item')
       summary.skipped++
       continue
     }
+    const itemEmbedding = embeddingResult.vector
 
-    const match = findBestMatch(itemEmbedding, candidates, new Date())
+    const { best, thresholdMatched, match } = evaluateMatch(itemEmbedding, candidates, new Date())
+
+    // Ingestion's own attach decision never gets an LLM call (ADR 0018) — the threshold stage
+    // alone always decides the outcome here, unlike human-seeded submission's dedup check.
+    await matchDecisionRepo.recordMatchDecisionSafe({
+      callSite: 'ingestion',
+      candidateStoryId: best?.candidate.storyId ?? null,
+      candidateAnalysisId: best?.candidate.analysisId ?? null,
+      score: best?.score ?? null,
+      thresholdMatched,
+      llmVerdict: null,
+      decidedBy: 'THRESHOLD',
+      scorerVersion: MATCH_SCORER_VERSION,
+    })
 
     if (match) {
       if (match.analysisStatus === 'PENDING' || match.analysisStatus === 'DRAFT') {
@@ -140,6 +165,8 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
       seedUrl: item.url,
       seedHeadline: item.title,
       embedding: itemEmbedding,
+      embeddingModel: embeddingResult.model,
+      embeddingInputHash: embeddingResult.inputHash,
     })
     candidates.push({
       storyId: draft.storyId,
