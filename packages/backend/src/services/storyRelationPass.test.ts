@@ -6,6 +6,7 @@ import {
   extractEntitiesAndLinkStoryRelations,
   RELATION_SHORTLIST_SIZE,
 } from './storyRelationPass.js'
+import { ExternalServiceError } from '../errors.js'
 
 vi.mock('./llmClient.js')
 
@@ -282,7 +283,7 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(1)
   })
 
-  it('never throws, even when the candidate-pool fetch fails', async () => {
+  it('rethrows as ExternalServiceError when the candidate-pool fetch fails', async () => {
     const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
     const findStoryEntitiesForScoring = vi.fn().mockResolvedValue(NO_PERSISTED_ENTITIES)
     const countStories = vi.fn().mockResolvedValue(10)
@@ -297,8 +298,29 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
         findRelationCandidateStories,
         createStoryRelation,
       })
-    ).resolves.toBeUndefined()
+    ).rejects.toThrow(ExternalServiceError)
 
     expect(createStoryRelation).not.toHaveBeenCalled()
+  })
+
+  it('rethrows as ExternalServiceError when entity extraction itself fails, without attempting relation-linking', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockRejectedValue(new Error('LLM outage'))
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const findStoryEntitiesForScoring = vi.fn().mockResolvedValue(NO_PERSISTED_ENTITIES)
+    const countStories = vi.fn().mockResolvedValue(10)
+    const findRelationCandidateStories = vi.fn().mockResolvedValue([])
+    const createStoryRelation = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      extractEntitiesAndLinkStoryRelations('story-1', ['some article text'], STORY, {
+        replaceStoryEntities,
+        findStoryEntitiesForScoring,
+        countStories,
+        findRelationCandidateStories,
+        createStoryRelation,
+      })
+    ).rejects.toThrow(ExternalServiceError)
+
+    expect(findStoryEntitiesForScoring).not.toHaveBeenCalled()
   })
 })

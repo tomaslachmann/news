@@ -17,14 +17,14 @@ import {
   DEDUP_WINDOW_HOURS,
 } from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
-import { extractEntitiesAndLinkStoryRelations } from './storyRelationPass.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
+import { enqueueJob } from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
-import * as entityRepo from '../repositories/entity.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
@@ -261,30 +261,35 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
     await coverageRepo.excludeCoverageIds(failedIds)
   }
 
-  // Entity extraction (ticket 34) + Story-relation candidate generation & confirmation (ticket
-  // 35), run once immediately, searching backward against already-visible recent Stories only.
-  // Uses only the titles that survived the quality gate above, not every originally-attached
-  // title, so an excluded wrong-event Coverage doesn't pollute this Story's entity signal.
-  // Entirely best-effort: nothing in this pipeline is ever allowed to block this Draft's
-  // approval.
-  const titles = [analysis.story.anchorHeadline, ...verified.map((c) => c.title)]
-  await extractEntitiesAndLinkStoryRelations(
-    analysis.storyId,
-    titles,
-    analysis.story,
-    {
-      replaceStoryEntities: entityRepo.replaceStoryEntities,
-      findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
-      countStories: entityRepo.countStories,
-      findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
-      createStoryRelation: storyRelationRepo.createStoryRelation,
-    },
-    log
-  )
-
   // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during
-  // the verification pass above; if so, this must not resurrect it back to PENDING.
-  const transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(analysisId, 'DRAFT', 'PENDING')
+  // the verification pass above; if so, this must not resurrect it back to PENDING, and there's
+  // no point enqueueing extraction for a Draft that just got rejected.
+  //
+  // Entity extraction (ticket 34) + Story-relation candidate generation & confirmation (ticket
+  // 35) now run on the `entity.extract` job (ticket 14), not inline — enqueued inside the same
+  // transaction as the DRAFT→PENDING write (ADR 0028: never a Draft approved without its job),
+  // so a queue failure rolls the status transition back rather than leaving this Draft stuck in
+  // PENDING with no job ever enqueued for it. Logged explicitly before rethrowing — unlike a
+  // plain propagated exception, this way the failure's cause (e.g. a queue timeout) survives in
+  // the application log, not just as a bare 500 to the caller.
+  let transitioned: boolean
+  try {
+    transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(
+      analysisId,
+      'DRAFT',
+      'PENDING',
+      async (tx) => {
+        await enqueueJob(
+          JobName.EntityRelation,
+          { analysisId, origin: 'draft-approval', coverageIds: verified.map((c) => c.id) },
+          { tx }
+        )
+      }
+    )
+  } catch (err) {
+    log?.error({ analysisId, err }, 'Failed to transition Draft to PENDING and enqueue entity.extract')
+    throw err
+  }
   if (!transitioned) {
     log?.warn(
       { analysisId },

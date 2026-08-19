@@ -40,6 +40,11 @@ wasteful, and it mixes already-reviewed code back into every later pass. Committ
 round scopes the next review to just what changed since. Only re-review the full branch diff when
 that's explicitly what's needed (e.g. one final pre-merge pass).
 
+The `code-review` skill already auto-scopes this: it diffs against the full branch (vs. `main`) the
+first time it's run on a branch, and against the last commit it reviewed on every run after that —
+you don't need to pass an explicit diff target (`git diff main`, a specific SHA) in the invocation
+yourself except when deliberately forcing a full-branch pass (e.g. the final pre-merge check).
+
 ## Finishing a ticket
 
 Once every acceptance criterion is checked off and the review above is clean, run:

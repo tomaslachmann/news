@@ -5,6 +5,7 @@ import { registerAnalysesRoutes } from './routes/analyses.js'
 import { registerAdminUsersRoutes } from './routes/adminUsers.js'
 import { registerIngestionRoutes } from './routes/ingestion.js'
 import { seedAdminUser } from './seed.js'
+import { getQueueClient } from './jobs/queueClient.js'
 import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
 
 if (!process.env.JWT_SECRET) {
@@ -44,6 +45,17 @@ const start = async () => {
     registerIngestionRoutes(server)
 
     await seedAdminUser()
+
+    // Pre-warms the shared pg-boss client (schema setup + declaring every queue) outside of any
+    // request or transaction — approveDraft (ticket 14) enqueues entity.extract inside a Prisma
+    // transaction, and paying pg-boss's one-time cold-start cost there risks the interactive-
+    // transaction timeout on the very first Draft approved after a (re)deploy. Not fatal if it
+    // fails here: getQueueClient() retries lazily on the next call that needs it.
+    try {
+      await getQueueClient()
+    } catch (err) {
+      server.log.warn({ err }, 'Failed to pre-warm the job queue client at startup; will retry on first use')
+    }
 
     const port = parseInt(process.env.PORT ?? '3001', 10)
     const host = process.env.HOST ?? '0.0.0.0'

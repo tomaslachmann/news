@@ -10,10 +10,10 @@ import * as narrativePassModule from './narrativePass.js'
 import * as storyVerificationModule from './storyVerification.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as ingestionServiceModule from './ingestionService.js'
-import * as storyRelationPassModule from './storyRelationPass.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
-import * as entityRepo from '../repositories/entity.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
+import * as jobsEnqueue from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 import {
   createAnalysis,
   attachSeedToMatch,
@@ -35,9 +35,8 @@ vi.mock('./narrativePass.js')
 vi.mock('./storyVerification.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./ingestionService.js')
-vi.mock('./storyRelationPass.js')
 vi.mock('../repositories/storyRelation.js')
-vi.mock('../repositories/entity.js')
+vi.mock('../jobs/enqueue.js')
 vi.mock('../repositories/matchDecision.js')
 
 const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
@@ -563,7 +562,7 @@ describe('discoverSources', () => {
 describe('confirmCoverages', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    vi.mocked(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).mockResolvedValue(undefined)
+    vi.mocked(jobsEnqueue.enqueueJob).mockResolvedValue('job-1')
   })
 
   const ANALYSIS = {
@@ -664,7 +663,7 @@ describe('confirmCoverages', () => {
     expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('c1', { extractedText: fullText, status: 'OK' })
   })
 
-  it("runs the entity-extraction + story-relation pipeline with every OK Coverage's full extracted text and this Story", async () => {
+  it('enqueues the entity.extract job with this Analysis id and the coverage-confirmation origin', async () => {
     stubHappyPath()
     const fullText = 'A perfectly ordinary article body with plenty of real content in it. '.repeat(10)
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
@@ -679,19 +678,28 @@ describe('confirmCoverages', () => {
 
     await confirmCoverages('a1', { confirmedIds: ['c1'] })
 
-    expect(storyRelationPassModule.extractEntitiesAndLinkStoryRelations).toHaveBeenCalledWith(
-      's1',
-      [fullText],
-      ANALYSIS.story,
-      {
-        replaceStoryEntities: entityRepo.replaceStoryEntities,
-        findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
-        countStories: entityRepo.countStories,
-        findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
-        createStoryRelation: storyRelationRepo.createStoryRelation,
-      },
-      undefined
-    )
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
+      analysisId: 'a1',
+      origin: 'coverage-confirmation',
+      coverageIds: ['c1'],
+    })
+  })
+
+  it('excludes an EXTRACTION_FAILED Coverage id from coverageIds even though it is still non-excluded', async () => {
+    stubHappyPath()
+    vi.mocked(articleScraperModule.scrapeArticle).mockRejectedValue(new Error('blocked'))
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockReset()
+      .mockResolvedValueOnce([PENDING_COVERAGE])
+      .mockResolvedValueOnce([{ ...PENDING_COVERAGE, status: 'EXTRACTION_FAILED', extractedText: null }])
+
+    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
+      analysisId: 'a1',
+      origin: 'coverage-confirmation',
+      coverageIds: [],
+    })
   })
 })
 

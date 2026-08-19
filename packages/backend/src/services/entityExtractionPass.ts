@@ -10,6 +10,7 @@ import {
   type ExtractedEntity,
   type ExtractedEntityRelation,
 } from './entityTypes.js'
+import { runStageOrThrow } from './pipelineStage.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/entityExtraction.txt'), 'utf8')
 
@@ -46,8 +47,10 @@ export interface EntityExtractionResult {
  * entity always produces the same key regardless of which call extracted it.
  *
  * Returns an empty result (skipping the LLM call) when there's no source text at all. A thrown
- * error is not caught here — callers (approveDraft, confirmCoverages) degrade gracefully on
- * failure themselves; this function's contract is "extract or throw," matching every other pass.
+ * error is not caught here — its only caller, extractAndPersistStoryEntities below, logs it with
+ * stage context and rethrows via runStageOrThrow so it propagates out of the `entity.extract` job
+ * (ticket 14) and pg-boss's retry policy actually retries it; this function's own contract is
+ * "extract or throw," matching every other pass.
  */
 export async function runEntityExtractionPass(
   sourceTexts: string[],
@@ -112,16 +115,20 @@ export async function runEntityExtractionPass(
   return { entities, entityRelations }
 }
 
-/** Extracts entities/entityRelations for a Story and persists them, degrading gracefully on any
- *  failure (LLM error, or nothing extracted) rather than throwing or clobbering prior data.
- *  Shared by both pipeline trigger points (approveDraft, confirmCoverages — ticket 34) so the
- *  try/catch and empty-result guard live in exactly one place. Takes `replaceStoryEntities` as a
- *  dependency rather than importing the repository directly, keeping this pass module decoupled
- *  from persistence and easy to unit-test without mocking the repository layer.
+/** Extracts entities/entityRelations for a Story and persists them. "Nothing extracted" (no
+ *  source texts, or the model found no entities) is not an error — it returns null rather than
+ *  clobbering whatever a previous, more successful pass already persisted for this Story. A
+ *  genuine failure (LLM call error, persistence error) is logged with stage context and rethrown
+ *  as `ExternalServiceError` rather than swallowed — this runs inside the `entity.extract` job
+ *  (ticket 14) now, where a thrown error is what makes `pg-boss`'s retry policy do anything;
+ *  swallowing it here would make that retry policy dead code (see pipelineStage.ts). Takes
+ *  `replaceStoryEntities` as a dependency rather than importing the repository directly, keeping
+ *  this pass module decoupled from persistence and easy to unit-test without mocking the
+ *  repository layer.
  *
- *  Returns what was persisted (or null if extraction failed or produced nothing) so a caller that
- *  immediately needs this Story's own entities/entityRelations — ticket 35's relation-candidate
- *  scoring — doesn't have to re-fetch the Story it was just written to. */
+ *  Returns what was persisted (or null if nothing was extracted) so a caller that immediately
+ *  needs this Story's own entities/entityRelations — ticket 35's relation-candidate scoring —
+ *  doesn't have to re-fetch the Story it was just written to. */
 export async function extractAndPersistStoryEntities(
   storyId: string,
   sourceTexts: string[],
@@ -132,16 +139,17 @@ export async function extractAndPersistStoryEntities(
   ) => Promise<void>,
   log?: FastifyBaseLogger
 ): Promise<EntityExtractionResult | null> {
-  try {
-    const extraction = await runEntityExtractionPass(sourceTexts, log)
-    // Nothing extracted is not the same as "clear whatever was there before" — e.g. a Review Step
-    // confirmation call that ends up with no OK Coverage this round must not wipe out a Story's
-    // previously-extracted entities from an earlier, more successful pass.
-    if (extraction.entities.length === 0) return null
-    await replaceStoryEntities(storyId, extraction.entities, extraction.entityRelations)
-    return extraction
-  } catch (err) {
-    log?.warn({ storyId, err }, "Entity extraction failed; leaving this Story's entities unchanged")
-    return null
-  }
+  const extraction = await runStageOrThrow(storyId, 'Entity extraction', log, () =>
+    runEntityExtractionPass(sourceTexts, log)
+  )
+
+  // Nothing extracted is not the same as "clear whatever was there before" — e.g. a Review Step
+  // confirmation call that ends up with no OK Coverage this round must not wipe out a Story's
+  // previously-extracted entities from an earlier, more successful pass.
+  if (extraction.entities.length === 0) return null
+
+  await runStageOrThrow(storyId, 'Persisting extracted entities', log, () =>
+    replaceStoryEntities(storyId, extraction.entities, extraction.entityRelations)
+  )
+  return extraction
 }

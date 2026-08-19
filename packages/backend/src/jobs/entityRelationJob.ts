@@ -1,0 +1,77 @@
+import type { FastifyBaseLogger } from 'fastify'
+import {
+  extractEntitiesAndLinkStoryRelations,
+  type EntityAndRelationPipelineDeps,
+  type StoryForRelationPipeline,
+} from '../services/storyRelationPass.js'
+import type { AnalysisWithStory } from '../repositories/analysis.js'
+import type { CoverageWithSource } from '../repositories/coverage.js'
+import { JobName, type JobPayload } from './jobDefinitions.js'
+
+export interface EntityRelationJobDeps extends EntityAndRelationPipelineDeps {
+  findAnalysisWithStory: (analysisId: string) => Promise<AnalysisWithStory | null>
+  findCoveragesForAnalysis: (analysisId: string) => Promise<CoverageWithSource[]>
+}
+
+/** Same rule for both trigger points, applied only to the Coverage rows pinned in the job's own
+ *  `coverageIds` (never a Coverage attached to this Analysis after enqueue — see jobDefinitions.ts
+ *  for why): use `extractedText` if present; else fall back to `title` unless this Coverage's
+ *  extraction is known to have failed. This reproduces `approveDraft`'s "verified titles"
+ *  (Ingestion-created Coverage sits at `status: PENDING` with only a title) and
+ *  `confirmCoverages`'s "OK extractedText, everything else excluded" exactly, without either call
+ *  site needing its own bespoke selection — see .scratch/backend-audit/issues/14-entity-relation-job.md.
+ *  `anchorHeadline` is prepended only for the draft-approval flow, preserving today's asymmetry
+ *  rather than changing what feeds extraction. */
+export function deriveSourceTexts(
+  coverages: Pick<CoverageWithSource, 'id' | 'title' | 'extractedText' | 'status'>[],
+  coverageIds: string[],
+  story: Pick<StoryForRelationPipeline, 'anchorHeadline'>,
+  origin: JobPayload[typeof JobName.EntityRelation]['origin']
+): string[] {
+  const eligibleIds = new Set(coverageIds)
+  const coverageTexts = coverages
+    .filter((c) => eligibleIds.has(c.id))
+    .map((c) => c.extractedText ?? (c.status === 'EXTRACTION_FAILED' ? null : c.title))
+    .filter((text): text is string => Boolean(text))
+  return origin === 'draft-approval' ? [story.anchorHeadline, ...coverageTexts] : coverageTexts
+}
+
+/** Handler for the `entity.extract` job (ticket 14): looks up the Analysis this job's `analysisId`
+ *  points to, derives source text from current Coverage state, then runs the same
+ *  extraction+relation-linking pipeline `approveDraft`/`confirmCoverages` used to run inline. The
+ *  Analysis no longer existing is a permanent condition — retrying a lookup that will never
+ *  resolve wastes the job's retry budget for nothing, so it's logged and swallowed rather than
+ *  thrown. Every other failure this pipeline can hit is retryable and left to propagate (see
+ *  extractEntitiesAndLinkStoryRelations). */
+export async function runEntityRelationJob(
+  payload: JobPayload[typeof JobName.EntityRelation],
+  deps: EntityRelationJobDeps,
+  log?: FastifyBaseLogger
+): Promise<void> {
+  // Run together, not sequentially — findCoveragesForAnalysis only needs payload.analysisId, not
+  // the Analysis lookup's result, so there's no reason to serialize them on the common
+  // (Analysis-exists) path. allSettled, not all: a Coverage-fetch failure must not turn the
+  // "Analysis genuinely gone" permanent case into a thrown, retried job — Promise.all would
+  // reject before the `!analysis` check below ever ran if both happened to fail together.
+  const [analysisResult, coveragesResult] = await Promise.allSettled([
+    deps.findAnalysisWithStory(payload.analysisId),
+    deps.findCoveragesForAnalysis(payload.analysisId),
+  ])
+  if (analysisResult.status === 'rejected') throw analysisResult.reason as Error
+
+  const analysis = analysisResult.value
+  if (!analysis) {
+    log?.warn({ analysisId: payload.analysisId }, 'entity.extract job: Analysis no longer exists, skipping')
+    return
+  }
+
+  if (coveragesResult.status === 'rejected') throw coveragesResult.reason as Error
+  const sourceTexts = deriveSourceTexts(
+    coveragesResult.value,
+    payload.coverageIds,
+    analysis.story,
+    payload.origin
+  )
+
+  await extractEntitiesAndLinkStoryRelations(analysis.storyId, sourceTexts, analysis.story, deps, log)
+}

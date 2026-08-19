@@ -13,6 +13,7 @@ import { extractAndPersistStoryEntities } from './entityExtractionPass.js'
 import type { ExtractedEntity, ExtractedEntityRelation } from './entityTypes.js'
 import type { RawRelationCandidateStory } from '../repositories/storyRelation.js'
 import type { EntityForScoring, EntityRelationForScoring } from '../repositories/entity.js'
+import { runStageOrThrow } from './pipelineStage.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/storyRelation.txt'), 'utf8')
 
@@ -164,15 +165,42 @@ export interface EntityAndRelationPipelineDeps {
   createStoryRelation: (data: CreateStoryRelationData) => Promise<unknown>
 }
 
+interface RelationCandidatePool {
+  entities: EntityForScoring[]
+  entityRelations: EntityRelationForScoring[]
+  rawCandidates: RawRelationCandidateStory[]
+  totalStories: number
+}
+
+/** The candidate-pool half of extractEntitiesAndLinkStoryRelations, split out so its
+ *  try/log/rethrow (via the shared runStageOrThrow, see pipelineStage.ts) doesn't need four
+ *  pre-declared `let`s destructured out of a try block. */
+async function fetchRelationCandidatePool(
+  storyId: string,
+  createdAt: Date,
+  deps: EntityAndRelationPipelineDeps,
+  log?: FastifyBaseLogger
+): Promise<RelationCandidatePool> {
+  return runStageOrThrow(storyId, 'Story relation candidate-pool fetch', log, async () => {
+    const [{ entities, entityRelations }, rawCandidates, totalStories] = await Promise.all([
+      deps.findStoryEntitiesForScoring(storyId),
+      deps.findRelationCandidateStories(storyId, createdAt, RELATION_CANDIDATE_WINDOW_HOURS),
+      deps.countStories(),
+    ])
+    return { entities, entityRelations, rawCandidates, totalStories }
+  })
+}
+
 /**
  * The full ticket 34 + ticket 35 pipeline for one Story: extract & persist entities, then read
  * back this Story's authoritative entity set — whatever this round's extraction just wrote, or
  * whatever an earlier pass already persisted if this round found nothing new — to generate and
- * persist Story relations. Shared by both trigger points (approveDraft, confirmCoverages) so this
- * sequencing lives in exactly one place rather than being reimplemented at each call site. Never
- * throws: entity extraction degrades gracefully on its own (extractAndPersistStoryEntities), and
- * everything from the candidate-pool fetch onward is caught here — nothing in this pipeline is
- * allowed to block the caller's own flow.
+ * persist Story relations. Runs inside the `entity.extract` job (ticket 14) now, so a genuine
+ * failure (entity extraction, or the candidate-pool fetch above) is logged with stage context and
+ * left to propagate rather than swallowed — that's what makes `pg-boss`'s retry policy do
+ * anything. Per-candidate confirmation/persistence failures still degrade individually inside
+ * `linkStoryRelations`, which never throws — one bad candidate must never sink the rest of the
+ * shortlist.
  */
 export async function extractEntitiesAndLinkStoryRelations(
   storyId: string,
@@ -183,28 +211,25 @@ export async function extractEntitiesAndLinkStoryRelations(
 ): Promise<void> {
   await extractAndPersistStoryEntities(storyId, sourceTexts, deps.replaceStoryEntities, log)
 
-  try {
-    const [{ entities, entityRelations }, rawCandidates, totalStories] = await Promise.all([
-      deps.findStoryEntitiesForScoring(storyId),
-      deps.findRelationCandidateStories(storyId, story.createdAt, RELATION_CANDIDATE_WINDOW_HOURS),
-      deps.countStories(),
-    ])
+  const { entities, entityRelations, rawCandidates, totalStories } = await fetchRelationCandidatePool(
+    storyId,
+    story.createdAt,
+    deps,
+    log
+  )
 
-    await linkStoryRelations(
-      storyId,
-      {
-        anchorHeadline: story.anchorHeadline,
-        createdAt: story.createdAt,
-        embedding: story.embedding,
-        entities,
-        entityRelations,
-      },
-      rawCandidates,
-      totalStories,
-      { createStoryRelation: deps.createStoryRelation },
-      log
-    )
-  } catch (err) {
-    log?.warn({ storyId, err }, 'Story relation candidate generation failed; no relations created')
-  }
+  await linkStoryRelations(
+    storyId,
+    {
+      anchorHeadline: story.anchorHeadline,
+      createdAt: story.createdAt,
+      embedding: story.embedding,
+      entities,
+      entityRelations,
+    },
+    rawCandidates,
+    totalStories,
+    { createStoryRelation: deps.createStoryRelation },
+    log
+  )
 }

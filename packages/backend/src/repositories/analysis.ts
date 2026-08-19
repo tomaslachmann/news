@@ -251,17 +251,36 @@ export async function setAnalysisCreatedAtForTesting(id: string, createdAt: Date
 /** Like updateAnalysisStatus, but only writes if the row is still `fromStatus` — returns
  *  whether the transition actually happened. Used after a slow async gap (e.g. LLM
  *  verification) to avoid clobbering a status change (like a concurrent rejection) that landed
- *  in the meantime. See ticket 24. */
+ *  in the meantime. See ticket 24.
+ *
+ *  `onTransition`, when the transition actually happens, runs inside the same transaction as the
+ *  status write (ADR 0028: "vytvoř Draft a naplánuj jeho zpracování" is one atomic step) — used
+ *  by approveDraft (ticket 14) to enqueue the `entity.extract` job atomically with the DRAFT→
+ *  PENDING transition, so a queue failure rolls back the transition instead of leaving a Draft
+ *  stuck in PENDING with no job ever enqueued for it. */
 export async function updateAnalysisStatusIfCurrently(
   id: string,
   fromStatus: AnalysisStatus,
-  toStatus: AnalysisStatus
+  toStatus: AnalysisStatus,
+  onTransition?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<boolean> {
-  const result = await prisma.analysis.updateMany({
-    where: { id, status: fromStatus },
-    data: { status: toStatus },
-  })
-  return result.count > 0
+  return prisma.$transaction(
+    async (tx) => {
+      const result = await tx.analysis.updateMany({
+        where: { id, status: fromStatus },
+        data: { status: toStatus },
+      })
+      if (result.count === 0) return false
+      await onTransition?.(tx)
+      return true
+    },
+    // A generous margin over Prisma's 5s default: onTransition can enqueue a pg-boss job, and
+    // getQueueClient()'s one-time cold start (schema setup + declaring every queue) risks blowing
+    // the default interactive-transaction timeout on the very first call after a (re)deploy. The
+    // API process pre-warms the queue client at startup (index.ts) specifically to avoid paying
+    // that cost inside a transaction at all — this is a defensive margin, not the primary fix.
+    { timeout: 10_000 }
+  )
 }
 
 /** Closes the underlying Prisma connection pool — for test teardown only. */
