@@ -3,6 +3,7 @@ import { JobName, JOB_RETRY_POLICY } from './jobDefinitions.js'
 
 let boss: PgBoss | null = null
 let starting: Promise<PgBoss> | null = null
+let stopping: Promise<void> | null = null
 
 function requireDatabaseUrl(): string {
   const url = process.env.DATABASE_URL
@@ -17,19 +18,27 @@ export async function getQueueClient(): Promise<PgBoss> {
   if (boss) return boss
   if (!starting) {
     starting = (async () => {
-      const client = new PgBoss(requireDatabaseUrl())
-      await client.start()
-      await Promise.all(
-        Object.values(JobName).map((name) => client.createQueue(name, JOB_RETRY_POLICY[name]))
-      )
-      boss = client
-      return client
+      try {
+        const client = new PgBoss(requireDatabaseUrl())
+        await client.start()
+        await Promise.all(
+          Object.values(JobName).map((name) => client.createQueue(name, JOB_RETRY_POLICY[name]))
+        )
+        boss = client
+        return client
+      } catch (err) {
+        // A transient startup failure (DB briefly unreachable, etc.) must not wedge every future
+        // call behind this rejected promise forever — clear it so the next call retries cleanly.
+        starting = null
+        throw err
+      }
     })()
   }
   return starting
 }
 
 export async function stopQueueClient(): Promise<void> {
+  if (stopping) return stopping
   if (!boss) {
     starting = null
     return
@@ -37,5 +46,8 @@ export async function stopQueueClient(): Promise<void> {
   const client = boss
   boss = null
   starting = null
-  await client.stop()
+  stopping = client.stop().finally(() => {
+    stopping = null
+  })
+  return stopping
 }

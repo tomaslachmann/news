@@ -14,8 +14,13 @@ const start = async () => {
 }
 
 const shutdown = async () => {
-  await stopQueueClient()
-  process.exit(0)
+  try {
+    await stopQueueClient()
+    process.exit(0)
+  } catch (err) {
+    console.error(err)
+    process.exit(1)
+  }
 }
 
 process.on('SIGTERM', () => void shutdown())
