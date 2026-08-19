@@ -45,13 +45,18 @@ export async function runEntityRelationJob(
   deps: EntityRelationJobDeps,
   log?: FastifyBaseLogger
 ): Promise<void> {
-  const analysis = await deps.findAnalysisWithStory(payload.analysisId)
+  // Run together, not sequentially — findCoveragesForAnalysis only needs payload.analysisId, not
+  // the Analysis lookup's result, so there's no reason to serialize them on the common
+  // (Analysis-exists) path. The rare not-found path pays for a Coverage query it then discards.
+  const [analysis, coverages] = await Promise.all([
+    deps.findAnalysisWithStory(payload.analysisId),
+    deps.findCoveragesForAnalysis(payload.analysisId),
+  ])
   if (!analysis) {
     log?.warn({ analysisId: payload.analysisId }, 'entity.extract job: Analysis no longer exists, skipping')
     return
   }
 
-  const coverages = await deps.findCoveragesForAnalysis(payload.analysisId)
   const sourceTexts = deriveSourceTexts(coverages, analysis.story, payload.origin)
 
   await extractEntitiesAndLinkStoryRelations(analysis.storyId, sourceTexts, analysis.story, deps, log)

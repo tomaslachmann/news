@@ -1,21 +1,14 @@
-import type { FastifyBaseLogger } from 'fastify'
 import { getQueueClient, stopQueueClient } from './jobs/queueClient.js'
 import { registerJobWorker } from './jobs/registerWorker.js'
 import { JobName } from './jobs/jobDefinitions.js'
 import { runEntityRelationJob } from './jobs/entityRelationJob.js'
+import { makeConsoleLogger } from './jobs/consoleLogger.js'
 import * as analysisRepo from './repositories/analysis.js'
 import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
 import * as storyRelationRepo from './repositories/storyRelation.js'
 
-// No Fastify app runs in this process, so there's no request-scoped logger to reuse — a thin
-// console-backed adapter satisfying just the levels the job pipeline actually calls (warn/error)
-// gives job failures an application-log trail alongside pg-boss's own archive row, without adding
-// a direct pino dependency this process would otherwise need only for this.
-const workerLog = {
-  warn: (obj: unknown, msg?: string) => console.warn(msg ?? '', obj),
-  error: (obj: unknown, msg?: string) => console.error(msg ?? '', obj),
-} as unknown as FastifyBaseLogger
+const workerLog = makeConsoleLogger()
 
 // Tickets 15/17 each add their own handler via registerJobWorker() alongside this one.
 const start = async () => {

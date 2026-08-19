@@ -258,7 +258,8 @@ export async function discoverSources(
 
 export async function confirmCoverages(
   analysisId: string,
-  body: PatchCoveragesBody
+  body: PatchCoveragesBody,
+  log?: FastifyBaseLogger
 ): Promise<CoverageInfo[]> {
   const { confirmedIds, customUrls = [], manualTexts = [] } = body
 
@@ -331,8 +332,16 @@ export async function confirmCoverages(
   // 35) — human-seeded path. Now runs on the `entity.extract` job (ticket 14), not inline;
   // enqueued right after this reconciliation's writes land, not at createAnalysis, since this is
   // the earliest point real multi-source extractedText exists for a human-seeded Story
-  // (createAnalysis only ever has the single seed article). Never blocks this confirmation flow.
-  await enqueueJob(JobName.EntityRelation, { analysisId, origin: 'coverage-confirmation' })
+  // (createAnalysis only ever has the single seed article). Unlike approveDraft, there's no single
+  // terminal write here to enqueue atomically with — the scrape loop above is already a
+  // best-effort Promise.allSettled over many Coverage rows, not one write. Caught explicitly so a
+  // queue hiccup degrades (logged, Coverage confirmation still succeeds) rather than failing this
+  // whole request the way an unguarded call would.
+  try {
+    await enqueueJob(JobName.EntityRelation, { analysisId, origin: 'coverage-confirmation' })
+  } catch (err) {
+    log?.error({ analysisId, err }, 'Failed to enqueue entity.extract job after Coverage confirmation')
+  }
 
   return updated.map(toCoverageInfo)
 }

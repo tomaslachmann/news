@@ -483,7 +483,14 @@ function makeTitlelessCoverage(id: string) {
 describe('approveDraft', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(true)
+    // Matches the real repo's contract: onTransition runs (with the transactional client) only
+    // when the transition actually happens — see repositories/analysis.ts.
+    vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockImplementation(
+      async (_id, _from, _to, onTransition) => {
+        await onTransition?.({} as never)
+        return true
+      }
+    )
     vi.mocked(jobsEnqueue.enqueueJob).mockResolvedValue('job-1')
   })
 
@@ -501,7 +508,12 @@ describe('approveDraft', () => {
       undefined
     )
     expect(coverageRepo.excludeCoverageIds).not.toHaveBeenCalled()
-    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
+      'a1',
+      'DRAFT',
+      'PENDING',
+      expect.any(Function)
+    )
   })
 
   it('excludes only the specific Coverage that fails verification and proceeds to PENDING with the remainder', async () => {
@@ -514,7 +526,12 @@ describe('approveDraft', () => {
     await approveDraft('a1')
 
     expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c2'])
-    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
+      'a1',
+      'DRAFT',
+      'PENDING',
+      expect.any(Function)
+    )
   })
 
   it('still proceeds to PENDING when every Coverage fails verification, without throwing', async () => {
@@ -526,7 +543,12 @@ describe('approveDraft', () => {
     await approveDraft('a1')
 
     expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c1', 'c2'])
-    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
+      'a1',
+      'DRAFT',
+      'PENDING',
+      expect.any(Function)
+    )
   })
 
   it('never sends a title-less Coverage to verification, treating it as unverifiable', async () => {
@@ -555,7 +577,12 @@ describe('approveDraft', () => {
 
     await expect(approveDraft('a1')).resolves.toBeUndefined()
 
-    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith('a1', 'DRAFT', 'PENDING')
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
+      'a1',
+      'DRAFT',
+      'PENDING',
+      expect.any(Function)
+    )
   })
 
   it('throws NotFoundError when the Analysis does not exist', async () => {
@@ -582,10 +609,11 @@ describe('approveDraft', () => {
 
     await approveDraft('a1')
 
-    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
-      analysisId: 'a1',
-      origin: 'draft-approval',
-    })
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(
+      JobName.EntityRelation,
+      { analysisId: 'a1', origin: 'draft-approval' },
+      expect.any(Object)
+    )
   })
 })
 

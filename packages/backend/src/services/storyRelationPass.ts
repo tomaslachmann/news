@@ -176,6 +176,34 @@ export interface EntityAndRelationPipelineDeps {
  * `linkStoryRelations`, which never throws — one bad candidate must never sink the rest of the
  * shortlist.
  */
+interface RelationCandidatePool {
+  entities: EntityForScoring[]
+  entityRelations: EntityRelationForScoring[]
+  rawCandidates: RawRelationCandidateStory[]
+  totalStories: number
+}
+
+async function fetchRelationCandidatePool(
+  storyId: string,
+  createdAt: Date,
+  deps: EntityAndRelationPipelineDeps,
+  log?: FastifyBaseLogger
+): Promise<RelationCandidatePool> {
+  try {
+    const [{ entities, entityRelations }, rawCandidates, totalStories] = await Promise.all([
+      deps.findStoryEntitiesForScoring(storyId),
+      deps.findRelationCandidateStories(storyId, createdAt, RELATION_CANDIDATE_WINDOW_HOURS),
+      deps.countStories(),
+    ])
+    return { entities, entityRelations, rawCandidates, totalStories }
+  } catch (err) {
+    log?.error({ storyId, err }, 'Story relation candidate-pool fetch failed')
+    throw new ExternalServiceError(`Story relation candidate-pool fetch failed for Story ${storyId}`, {
+      cause: err,
+    })
+  }
+}
+
 export async function extractEntitiesAndLinkStoryRelations(
   storyId: string,
   sourceTexts: string[],
@@ -185,20 +213,12 @@ export async function extractEntitiesAndLinkStoryRelations(
 ): Promise<void> {
   await extractAndPersistStoryEntities(storyId, sourceTexts, deps.replaceStoryEntities, log)
 
-  let entities: EntityForScoring[]
-  let entityRelations: EntityRelationForScoring[]
-  let rawCandidates: RawRelationCandidateStory[]
-  let totalStories: number
-  try {
-    ;[{ entities, entityRelations }, rawCandidates, totalStories] = await Promise.all([
-      deps.findStoryEntitiesForScoring(storyId),
-      deps.findRelationCandidateStories(storyId, story.createdAt, RELATION_CANDIDATE_WINDOW_HOURS),
-      deps.countStories(),
-    ])
-  } catch (err) {
-    log?.error({ storyId, err }, 'Story relation candidate-pool fetch failed')
-    throw new ExternalServiceError(`Story relation candidate-pool fetch failed for Story ${storyId}`)
-  }
+  const { entities, entityRelations, rawCandidates, totalStories } = await fetchRelationCandidatePool(
+    storyId,
+    story.createdAt,
+    deps,
+    log
+  )
 
   await linkStoryRelations(
     storyId,

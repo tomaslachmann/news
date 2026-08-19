@@ -76,7 +76,7 @@ describe('runEntityRelationJob', () => {
 
   it('logs and returns without calling extractEntitiesAndLinkStoryRelations when the Analysis no longer exists', async () => {
     const findAnalysisWithStory = vi.fn().mockResolvedValue(null)
-    const findCoveragesForAnalysis = vi.fn()
+    const findCoveragesForAnalysis = vi.fn().mockResolvedValue([])
     const log = { warn: vi.fn(), error: vi.fn() }
 
     await runEntityRelationJob(
@@ -85,7 +85,6 @@ describe('runEntityRelationJob', () => {
       log as never
     )
 
-    expect(findCoveragesForAnalysis).not.toHaveBeenCalled()
     expect(mockExtractEntitiesAndLinkStoryRelations).not.toHaveBeenCalled()
     expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ analysisId: 'gone' }), expect.any(String))
   })

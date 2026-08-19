@@ -261,16 +261,24 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
     await coverageRepo.excludeCoverageIds(failedIds)
   }
 
-  // Entity extraction (ticket 34) + Story-relation candidate generation & confirmation (ticket
-  // 35) now run on the `entity.extract` job (ticket 14), not inline — enqueued right after the
-  // exclusion write above, since the excluded Coverage rows above are exactly what the job's own
-  // source-text derivation reads back (excluded rows are skipped there too). Never blocks this
-  // Draft's approval.
-  await enqueueJob(JobName.EntityRelation, { analysisId, origin: 'draft-approval' })
-
   // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during
-  // the verification pass above; if so, this must not resurrect it back to PENDING.
-  const transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(analysisId, 'DRAFT', 'PENDING')
+  // the verification pass above; if so, this must not resurrect it back to PENDING, and there's
+  // no point enqueueing extraction for a Draft that just got rejected.
+  //
+  // Entity extraction (ticket 34) + Story-relation candidate generation & confirmation (ticket
+  // 35) now run on the `entity.extract` job (ticket 14), not inline — enqueued inside the same
+  // transaction as the DRAFT→PENDING write (ADR 0028: never a Draft approved without its job),
+  // so a queue failure rolls the status transition back rather than leaving this Draft stuck in
+  // PENDING with no job ever enqueued for it.
+  const transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(
+    analysisId,
+    'DRAFT',
+    'PENDING',
+    (tx) =>
+      enqueueJob(JobName.EntityRelation, { analysisId, origin: 'draft-approval' }, { tx }).then(
+        () => undefined
+      )
+  )
   if (!transitioned) {
     log?.warn(
       { analysisId },

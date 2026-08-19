@@ -13,8 +13,8 @@ export class ValidationError extends Error {
 }
 
 export class ExternalServiceError extends Error {
-  constructor(message: string) {
-    super(message)
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
     this.name = 'ExternalServiceError'
   }
 }

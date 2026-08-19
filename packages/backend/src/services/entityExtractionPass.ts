@@ -126,6 +126,23 @@ export async function runEntityExtractionPass(
  *  Returns what was persisted (or null if nothing was extracted) so a caller that immediately
  *  needs this Story's own entities/entityRelations — ticket 35's relation-candidate scoring —
  *  doesn't have to re-fetch the Story it was just written to. */
+// Shared by both stages below so a genuine failure always gets the same treatment: logged with
+// which stage it was, then rethrown as ExternalServiceError so it propagates out of the
+// `entity.extract` job instead of being swallowed (see the doc comment above).
+async function runStageOrThrow<T>(
+  storyId: string,
+  stage: string,
+  log: FastifyBaseLogger | undefined,
+  run: () => Promise<T>
+): Promise<T> {
+  try {
+    return await run()
+  } catch (err) {
+    log?.error({ storyId, err }, `${stage} failed`)
+    throw new ExternalServiceError(`${stage} failed for Story ${storyId}`, { cause: err })
+  }
+}
+
 export async function extractAndPersistStoryEntities(
   storyId: string,
   sourceTexts: string[],
@@ -136,24 +153,17 @@ export async function extractAndPersistStoryEntities(
   ) => Promise<void>,
   log?: FastifyBaseLogger
 ): Promise<EntityExtractionResult | null> {
-  let extraction: EntityExtractionResult
-  try {
-    extraction = await runEntityExtractionPass(sourceTexts, log)
-  } catch (err) {
-    log?.error({ storyId, err }, 'Entity extraction LLM call failed')
-    throw new ExternalServiceError(`Entity extraction failed for Story ${storyId}`)
-  }
+  const extraction = await runStageOrThrow(storyId, 'Entity extraction', log, () =>
+    runEntityExtractionPass(sourceTexts, log)
+  )
 
   // Nothing extracted is not the same as "clear whatever was there before" — e.g. a Review Step
   // confirmation call that ends up with no OK Coverage this round must not wipe out a Story's
   // previously-extracted entities from an earlier, more successful pass.
   if (extraction.entities.length === 0) return null
 
-  try {
-    await replaceStoryEntities(storyId, extraction.entities, extraction.entityRelations)
-  } catch (err) {
-    log?.error({ storyId, err }, 'Persisting extracted entities failed')
-    throw new ExternalServiceError(`Persisting extracted entities failed for Story ${storyId}`)
-  }
+  await runStageOrThrow(storyId, 'Persisting extracted entities', log, () =>
+    replaceStoryEntities(storyId, extraction.entities, extraction.entityRelations)
+  )
   return extraction
 }
