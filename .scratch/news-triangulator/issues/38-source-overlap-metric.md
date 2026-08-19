@@ -1,0 +1,29 @@
+# 38 — Source Overlap: a counted byline metric, not a truth score
+
+**What to build:** Every completed Analysis gains two pieces of byline metadata that the design system (ticket 39) treats as load-bearing: a **source-overlap percentage**, computed deterministically from the Synthesis result's own attributions, and a **categorical agreement judgement** the Synthesis model returns alongside the four dimensions. The percentage is counted, never generated — it summarises how much of the agreed-upon core of a story is backed by how many outlets, which is a statement about the corpus, not about who is right. The category is the model's story-level read, and it is categorical for exactly the reason ADR 0022 gave for `StoryRelation.confidenceTier`: a raw LLM-generated float invites being read as credibility.
+
+This exists because the design system's `.byline` — described in `DESIGN-SYSTEM.md` as "nosný prvek celého produktu" — is built around a share-with-a-gauge, and nothing in the current data model produces one. See ADR 0030 for what the number is, what it is not, and why it is derived rather than asked for.
+
+**Blocked by:** None — can start immediately. Ticket 39 does *not* wait on this; it renders the byline without the gauge until this lands.
+
+**Status:** ready-for-agent
+
+- [ ] `SynthesisResultSchema` (`services/synthesisPass.ts`) gains one new required field alongside the four dimensions: a story-level `agreementCategory`, a closed enum of `CONFIRMED` / `PARTIAL` / `DISPUTED`. Closed enum validated by zod — an out-of-enum value is rejected, never coerced
+- [ ] `prompts/synthesis.txt` gains a section defining that field: one judgement for the whole Analysis (never per dimension item, never per claim), with an explicit instruction that it describes **how much the sources overlap in what they report**, not how truthful or reliable any source is. No extra LLM call — the same structured-output call carries it, so per-call cost is unchanged and existing `LlmCallLog` coverage (ADR 0020) applies with no new wiring
+- [ ] A new pure, deterministic function computes the source-overlap percentage from an `AnalysisDimensions` plus the Analysis's non-excluded, non-failed `Coverage` count. Definition: for each `agreement` item, count the distinct outlets among its `attributions`; the metric is the mean of those counts divided by the total source count, expressed as a whole-number percentage. No LLM involvement, no randomness — the same Synthesis result always yields the same number
+- [ ] The percentage is **nullable**, and null means "undefined for this Analysis", not "not computed yet": an Analysis whose `agreement` dimension is empty has no overlap to measure. This is a genuine runtime state, distinct from the absent-backfill case below, and the UI must distinguish it from zero
+- [ ] `SynthesisResult` gains the two columns (nullable percentage, non-null category) via a Prisma migration. **No backfill path is written** — the table is empty at authoring time (verified: `SynthesisResult` has 0 rows), so no historical rows exist to migrate. If that is no longer true when this is picked up, stop and raise it rather than writing a silent default
+- [ ] The 85 / 65 interpretation thresholds from `DESIGN-SYSTEM.md` §3.3 exist in the codebase **exactly once**, as named constants next to the derivation function — not duplicated into the frontend, not re-typed into a CSS class name. The frontend consumes the already-interpreted result
+- [ ] A named constant gates gauge display below 5 sources (`DESIGN-SYSTEM.md`'s ten-segment gauge cannot honestly represent a three-source Analysis, where one outlet moves the bar by a third). Below it, the API still returns the percentage; the *frontend* is what withholds the gauge — the backend does not silently null out a value it computed
+- [ ] The derivation function is unit-tested directly as a pure function, no mocking: empty agreement, single source, all-sources-confirm-everything, and the below-threshold source count
+- [ ] The Synthesis pass's new field is tested by mocking `callJsonModel`, matching `synthesisPass.test.ts`'s existing pattern — including that an out-of-enum category is rejected by the schema
+- [ ] `docs/adr/0030-source-overlap-not-truth-score.md` written and referenced from the code that computes the metric
+- [ ] `CONTEXT.md` gains a **Source Overlap** entry, cross-referenced from **Analysis Dimensions**
+
+## Notes
+
+Scoped in a grilling session (2026-08-19) that started from "the design has a `shoda 62 %` gauge, add it to the backend" and narrowed to this. Decisions settled there and recorded in ADR 0030:
+
+- **The percentage is derived, not model-generated.** The proposal on the table was to have Synthesis emit it directly — one more key in a schema that already exists, no extra call, negligible cost. Rejected because `attributions` already states exactly what the percentage would summarise, and because Synthesis today runs a programmatic verification-and-repair loop over every `czechQuote` (ticket 17, ADR 0014): a model-emitted percentage would be the only figure in the product that nothing can check.
+- **The category is model-generated, and categorical.** The model sees agreement that counting cannot — two outlets saying the same thing in different words. That judgement is worth having; expressing it as a float is not. Same reasoning as ADR 0022.
+- **Reader-facing label is "překryv zdrojů", not "shoda".** The one deliberate wording change against `DESIGN-SYSTEM.md`. "Shoda" reads as *this is probably true*; "překryv zdrojů" reads as *this is how much the sources share*, which is what the number can actually support.
