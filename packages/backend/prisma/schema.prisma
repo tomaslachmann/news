@@ -280,11 +280,13 @@ model SynthesisResult {
   /// at completion time, or for any Analysis completed before this feature existed.
   headline                    String?
   /// Set when the most recent narrative-generation attempt failed (LLM error, or quote
-  /// verification dropping every segment) — ADR 0026, fixes P0-5 (docs/audit.md): before this,
-  /// a failed generation left `narrative` null forever, so every subsequent unauthenticated view
-  /// of the Analysis retried the full LLM call with no budget or backoff. `getAnalysisDetail`
-  /// only re-attempts once this is null or older than NARRATIVE_RETRY_TTL_HOURS. Cleared
-  /// (implicitly, by `narrative` becoming non-null) on a successful generation.
+  /// verification dropping every segment). Originally a live TTL-retry gate for
+  /// `getAnalysisDetail` (ADR 0026, fixes P0-5, docs/audit.md); since ticket 15 (ADR 0028),
+  /// generation happens once via the `narrative.generate` job, enqueued atomically when the
+  /// Analysis reaches COMPLETE, and this field is a pure audit trail — nothing reads it back to
+  /// gate a retry any more. `pg-boss`'s own `LLM_JOB_RETRY_POLICY` (ticket 13) is the only retry
+  /// mechanism now. Cleared (implicitly, by `narrative` becoming non-null) on a successful
+  /// generation.
   narrativeGenerationFailedAt DateTime?
 }
 

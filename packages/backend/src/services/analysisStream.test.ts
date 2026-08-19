@@ -7,6 +7,8 @@ import * as synthesisPassModule from './synthesisPass.js'
 import * as headlinePassModule from './headlinePass.js'
 import { runAnalysisStream } from './analysisStream.js'
 import { NotFoundError } from '../errors.js'
+import { enqueueJob } from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 import type { SseEvent } from '@news-triangulator/shared'
 
 vi.mock('../repositories/analysis.js')
@@ -18,6 +20,7 @@ vi.mock('./extractionPass.js', async (importOriginal) => {
 })
 vi.mock('./synthesisPass.js')
 vi.mock('./headlinePass.js')
+vi.mock('../jobs/enqueue.js')
 
 const ANALYSIS = {
   id: 'a1',
@@ -101,8 +104,39 @@ describe('runAnalysisStream', () => {
     expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith(
       'a1',
       synthesis,
-      'Vláda schválila rozpočet'
+      'Vláda schválila rozpočet',
+      expect.any(Function)
     )
+  })
+
+  it('enqueues the narrative.generate job for this Analysis inside the COMPLETE transaction', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockImplementation((_id, opts) =>
+      Promise.resolve(
+        opts?.onlyStatus === 'OK'
+          ? [{ ...BASE_COVERAGE, extractionResult: VALID_EXTRACTION }]
+          : [{ ...BASE_COVERAGE, extractionResult: null }]
+      )
+    )
+    vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
+    vi.mocked(extractionPassModule.runExtractionPass).mockResolvedValue(VALID_EXTRACTION)
+    vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue({
+      agreement: [{ prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] }],
+      contradiction: [],
+      uniqueReporting: [],
+      framing: [],
+    })
+    vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue('Headline')
+    const tx = {} as never
+    vi.mocked(analysisRepo.completeAnalysisWithSynthesis).mockImplementation(
+      async (_id, _dims, _headline, onComplete) => {
+        await onComplete?.(tx)
+      }
+    )
+
+    await runAnalysisStream('a1', { onReady: vi.fn(), send: vi.fn(), onClientClose: () => {} })
+
+    expect(enqueueJob).toHaveBeenCalledWith(JobName.Narrative, { analysisId: 'a1' }, { tx })
   })
 
   it('completes the Analysis with a null headline when the Agreement dimension is empty', async () => {
@@ -127,7 +161,12 @@ describe('runAnalysisStream', () => {
     const send = vi.fn()
     await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {} })
 
-    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith('a1', expect.anything(), null)
+    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith(
+      'a1',
+      expect.anything(),
+      null,
+      expect.any(Function)
+    )
   })
 
   it('does not complete the Analysis when headline generation fails, same as any other Synthesis-stage failure', async () => {

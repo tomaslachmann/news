@@ -1,12 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
-import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import * as articleScraperModule from './articleScraper.js'
 import * as keywordExtractorModule from './keywordExtractor.js'
 import * as discoveryModule from './discovery.js'
 import * as sourceResolverModule from './sourceResolver.js'
-import * as narrativePassModule from './narrativePass.js'
 import * as storyVerificationModule from './storyVerification.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as ingestionServiceModule from './ingestionService.js'
@@ -26,12 +24,10 @@ import { ExternalServiceError, NotFoundError, ValidationError } from '../errors.
 
 vi.mock('../repositories/analysis.js')
 vi.mock('../repositories/coverage.js')
-vi.mock('../repositories/synthesisResult.js')
 vi.mock('./articleScraper.js')
 vi.mock('./keywordExtractor.js')
 vi.mock('./discovery.js')
 vi.mock('./sourceResolver.js')
-vi.mock('./narrativePass.js')
 vi.mock('./storyVerification.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./ingestionService.js')
@@ -788,74 +784,7 @@ describe('getAnalysisDetail', () => {
     ])
   })
 
-  it('generates and caches the narrative when the Analysis is complete and has no narrative yet', async () => {
-    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'https://example.cz/x',
-      seedHeadline: 'Headline',
-      status: 'COMPLETE',
-      createdAt: new Date('2025-01-01T00:00:00Z'),
-      coverages: [OK_COVERAGE],
-      synthesisResult: {
-        id: 's1',
-        analysisId: 'a1',
-        dimensions: DIMENSIONS,
-        narrative: null,
-        headline: null,
-        narrativeGenerationFailedAt: null,
-      },
-    })
-    const segments = [
-      {
-        prose: 'Kombinovaná zpráva.',
-        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
-      },
-    ]
-    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments })
-
-    const result = await getAnalysisDetail('a1')
-
-    expect(narrativePassModule.runNarrativePass).toHaveBeenCalledWith(
-      [{ outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku.' }],
-      DIMENSIONS,
-      undefined
-    )
-    expect(synthesisResultRepo.updateSynthesisResultNarrative).toHaveBeenCalledWith('a1', segments)
-    expect(result.narrative).toEqual(segments)
-  })
-
-  it('does not cache an empty narrative result, so the next view can retry generation', async () => {
-    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'https://example.cz/x',
-      seedHeadline: 'Headline',
-      status: 'COMPLETE',
-      createdAt: new Date('2025-01-01T00:00:00Z'),
-      coverages: [OK_COVERAGE],
-      synthesisResult: {
-        id: 's1',
-        analysisId: 'a1',
-        dimensions: DIMENSIONS,
-        narrative: null,
-        headline: null,
-        narrativeGenerationFailedAt: null,
-      },
-    })
-    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments: [] })
-
-    const result = await getAnalysisDetail('a1')
-
-    expect(synthesisResultRepo.updateSynthesisResultNarrative).not.toHaveBeenCalled()
-    expect(result.narrative).toBeUndefined()
-    // ADR 0026 (fixes P0-5): an empty-segments result is a failure for retry-gating purposes,
-    // not just "nothing to cache" — must be marked so the next unauthenticated view doesn't
-    // immediately retry the same LLM call.
-    expect(synthesisResultRepo.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
-  })
-
-  it('does not regenerate the narrative when one is already cached', async () => {
+  it("returns the cached narrative verbatim — generation is the narrative.generate job's job (ticket 15), not this read path", async () => {
     const cachedSegments = [
       {
         prose: 'Uloženo v mezipaměti.',
@@ -882,11 +811,10 @@ describe('getAnalysisDetail', () => {
 
     const result = await getAnalysisDetail('a1')
 
-    expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
     expect(result.narrative).toEqual(cachedSegments)
   })
 
-  it('serves the Analysis without a narrative if narrative generation fails', async () => {
+  it('returns no narrative, without attempting generation, when none has been cached yet (pending or failed job alike)', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',
       storyId: 's1',
@@ -901,126 +829,13 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         narrative: null,
         headline: null,
-        narrativeGenerationFailedAt: null,
-      },
-    })
-    vi.mocked(narrativePassModule.runNarrativePass).mockRejectedValue(new Error('LLM down'))
-
-    const result = await getAnalysisDetail('a1')
-
-    expect(result.narrative).toBeUndefined()
-    expect(result.status).toBe('complete')
-    expect(synthesisResultRepo.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
-  })
-
-  it('does not retry generation when a previous failure is still within NARRATIVE_RETRY_TTL_HOURS', async () => {
-    const recentFailure = new Date(Date.now() - 1 * 60 * 60 * 1000) // 1h ago
-    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'https://example.cz/x',
-      seedHeadline: 'Headline',
-      status: 'COMPLETE',
-      createdAt: new Date('2025-01-01T00:00:00Z'),
-      coverages: [OK_COVERAGE],
-      synthesisResult: {
-        id: 's1',
-        analysisId: 'a1',
-        dimensions: DIMENSIONS,
-        narrative: null,
-        headline: null,
-        narrativeGenerationFailedAt: recentFailure,
+        narrativeGenerationFailedAt: new Date('2025-01-01T00:00:00Z'),
       },
     })
 
     const result = await getAnalysisDetail('a1')
 
-    expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
     expect(result.narrative).toBeUndefined()
-  })
-
-  it('retries generation once a previous failure is older than NARRATIVE_RETRY_TTL_HOURS', async () => {
-    const staleFailure = new Date(Date.now() - 25 * 60 * 60 * 1000) // 25h ago, past the 24h TTL
-    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'https://example.cz/x',
-      seedHeadline: 'Headline',
-      status: 'COMPLETE',
-      createdAt: new Date('2025-01-01T00:00:00Z'),
-      coverages: [OK_COVERAGE],
-      synthesisResult: {
-        id: 's1',
-        analysisId: 'a1',
-        dimensions: DIMENSIONS,
-        narrative: null,
-        headline: null,
-        narrativeGenerationFailedAt: staleFailure,
-      },
-    })
-    const segments = [
-      {
-        prose: 'Kombinovaná zpráva.',
-        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
-      },
-    ]
-    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments })
-
-    const result = await getAnalysisDetail('a1')
-
-    expect(narrativePassModule.runNarrativePass).toHaveBeenCalled()
-    expect(result.narrative).toEqual(segments)
-  })
-
-  it('deduplicates concurrent narrative generation for the same Analysis', async () => {
-    const freshAnalysis = () => ({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'https://example.cz/x',
-      seedHeadline: 'Headline',
-      status: 'COMPLETE' as const,
-      createdAt: new Date('2025-01-01T00:00:00Z'),
-      coverages: [OK_COVERAGE],
-      synthesisResult: {
-        id: 's1',
-        analysisId: 'a1',
-        dimensions: DIMENSIONS,
-        narrative: null,
-        headline: null,
-        narrativeGenerationFailedAt: null,
-      },
-    })
-    vi.mocked(analysisRepo.findAnalysisWithDetails).mockImplementation(() => Promise.resolve(freshAnalysis()))
-    const segments = [
-      {
-        prose: 'Kombinovaná zpráva.',
-        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
-      },
-    ]
-    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments })
-
-    const [resultA, resultB] = await Promise.all([getAnalysisDetail('a1'), getAnalysisDetail('a1')])
-
-    expect(narrativePassModule.runNarrativePass).toHaveBeenCalledTimes(1)
-    expect(resultA.narrative).toEqual(segments)
-    expect(resultB.narrative).toEqual(segments)
-  })
-
-  it('does not attempt narrative generation when the Analysis is not complete', async () => {
-    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
-      id: 'a1',
-      storyId: 's1',
-      seedUrl: 'https://example.cz/x',
-      seedHeadline: 'Headline',
-      status: 'PENDING',
-      createdAt: new Date('2025-01-01T00:00:00Z'),
-      coverages: [OK_COVERAGE],
-      synthesisResult: null,
-    })
-
-    await getAnalysisDetail('a1')
-
-    expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
   })
 
   it('does not fetch related events when the Analysis is not COMPLETE, since AnalysisPage never shows them for a non-COMPLETE Analysis', async () => {

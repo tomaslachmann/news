@@ -181,7 +181,7 @@ async function fetchRelationCandidatePool(
   deps: EntityAndRelationPipelineDeps,
   log?: FastifyBaseLogger
 ): Promise<RelationCandidatePool> {
-  return runStageOrThrow(storyId, 'Story relation candidate-pool fetch', log, async () => {
+  return runStageOrThrow({ storyId }, 'Story relation candidate-pool fetch', log, async () => {
     const [{ entities, entityRelations }, rawCandidates, totalStories] = await Promise.all([
       deps.findStoryEntitiesForScoring(storyId),
       deps.findRelationCandidateStories(storyId, createdAt, RELATION_CANDIDATE_WINDOW_HOURS),

@@ -139,7 +139,7 @@ export async function extractAndPersistStoryEntities(
   ) => Promise<void>,
   log?: FastifyBaseLogger
 ): Promise<EntityExtractionResult | null> {
-  const extraction = await runStageOrThrow(storyId, 'Entity extraction', log, () =>
+  const extraction = await runStageOrThrow({ storyId }, 'Entity extraction', log, () =>
     runEntityExtractionPass(sourceTexts, log)
   )
 
@@ -148,7 +148,7 @@ export async function extractAndPersistStoryEntities(
   // previously-extracted entities from an earlier, more successful pass.
   if (extraction.entities.length === 0) return null
 
-  await runStageOrThrow(storyId, 'Persisting extracted entities', log, () =>
+  await runStageOrThrow({ storyId }, 'Persisting extracted entities', log, () =>
     replaceStoryEntities(storyId, extraction.entities, extraction.entityRelations)
   )
   return extraction
