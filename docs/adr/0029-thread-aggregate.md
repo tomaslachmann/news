@@ -1,0 +1,28 @@
+# ADR 0029 — `Thread`: a materialized connected component over `FOLLOW_UP` edges
+
+## Status
+Accepted
+
+## Context
+`StoryRelation` (tickets 34–37, ADR 0022) links Stories pairwise. `docs/audit.md` §7.4 argues this solves event-linking only locally: A→B and B→C never tell a reader that A, B, C form one continuous story arc (a detention, then an official's statement, then the other side's response), and `RELATION_CANDIDATE_WINDOW_HOURS = 336` (14 days) means a case that develops over months fragments across many disconnected `StoryRelation` edges, since relations are generated once, at Story visibility, and never recomputed.
+
+Ticket 07's grilling session confirmed the underlying pattern is real (observed directly in source material the project tracks), even though it hasn't yet manifested inside this system's own stored data — the dev database is pruned regularly, so nothing has run long enough, undisturbed, to show it. Lowest-priority item in the audit's own staging (Etapa 6) does not mean low-value; it means least urgent relative to correctness bugs fixed in tickets 01–06. Accepted now specifically because the underlying pattern is confirmed, not speculative.
+
+## Decision
+`Thread`/`ThreadMember`, per the audit's schema (§7.4/§8.6) and Prisma-mapped to this project's conventions:
+
+- `Thread`: `id`, `title` (derived from Agreement across members, not one Coverage's headline — same non-single-source principle ADR 0021 already applies to the tool-authored headline), `slug`, `firstEventAt`, `lastEventAt`, `status` (`ACTIVE` / `DORMANT` / `CLOSED`), `memberCount`.
+- `ThreadMember`: `threadId`, `storyId` (unique — a Story belongs to at most one Thread), `position` (ordered by `eventTime`, never `createdAt` — see below), `role` (`ORIGIN` / `DEVELOPMENT` / `REACTION` / `RESOLUTION`), `addedAt`.
+
+`Thread` is a derived read model, not a source of truth: `StoryRelation`'s `FOLLOW_UP` edges remain the actual data; `Thread`/`ThreadMember` are a materialized connected component over them, rebuilt by `thread.recompute` (ADR 0028) using the audit's recursive CTE (`UNION`, not `UNION ALL` — cycles must dedupe or the recursion never terminates; depth-capped at 50 as a pathological-graph safeguard).
+
+**`Story.eventTime`** is added as a prerequisite, not a Thread-only convenience: the audit is explicit that ordering members by `createdAt` (ingest time) reintroduces P1-11's exact distortion — a Draft sitting in the Ingestion review queue for days would order and role-infer wrong, and re-ordering would silently drift purely because of when a Draft happened to get approved, not when the underlying event happened. `eventTime` is populated at Story creation from the seed article's own published date where available, ingest time as a fallback for Ingestion-originated Stories with no reliable published date. This also fixes P1-11's second half (`storyRelationPass.ts` sending `createdAt` to the LLM under the name `publishedAt` when confirming `RELATED` vs. `FOLLOW_UP`) — the same field now feeds both consumers, rather than each accumulating its own workaround.
+
+**`DORMANT → ACTIVE` revival** matches a new Story against a dormant Thread's *entity configuration* (IDF-weighted containment, ADR 0024) rather than requiring the `RELATION_CANDIDATE_WINDOW_HOURS` itself to stretch to months — this is what ticket 04's entity table (already shipped, for its own reasons) makes possible; ticket 04 wasn't built to enable this, but its side effect is what removes what would otherwise be a hard blocker here.
+
+## Consequences
+- A reader viewing any Article that's part of a `Thread` can navigate the full arc, not just its immediate pairwise neighbors — the actual reader-facing problem this ADR exists to solve.
+- `ThreadMember.storyId` being unique means a Story belongs to at most one Thread — two `FOLLOW_UP` chains that later turn out to be the same underlying arc merge into one Thread on recompute (the connected-component query naturally does this), never split a Story across two.
+- `thread.recompute` depends on ADR 0028 (pg-boss) — Thread cannot ship before the queue does, since the audit's own design has no synchronous fallback the way P0-5/P2-22 did.
+- `Story.eventTime` is nullable-at-the-database-level but always populated going forward from its own migration onward; no backfill for Stories created before it exists, matching this project's established no-backfill convention for additive fields (ADR 0022's entity JSON, ADR 0025's `embeddingModel`/`embeddingInputHash`).
+- The `CAUSES`/causal-relation-type question ADR 0022 already declined is unaffected — `Thread` groups Stories by `FOLLOW_UP` succession (a reader-verifiable chronological/topical fact), never asserts that one member *caused* the next. A reader navigating a Thread's arc still draws their own causal conclusions, exactly as ADR 0012 requires everywhere else in this tool.
