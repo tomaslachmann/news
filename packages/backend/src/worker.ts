@@ -16,32 +16,36 @@ const workerLog = makeConsoleLogger()
 const start = async () => {
   try {
     await getQueueClient()
-    await registerJobWorker(JobName.EntityRelation, (payload) =>
-      runEntityRelationJob(
-        payload,
-        {
-          findAnalysisWithStory: analysisRepo.findAnalysisWithStory,
-          findCoveragesForAnalysis: coverageRepo.findCoveragesForAnalysis,
-          replaceStoryEntities: entityRepo.replaceStoryEntities,
-          findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
-          countStories: entityRepo.countStories,
-          findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
-          createStoryRelation: storyRelationRepo.createStoryRelation,
-        },
-        workerLog
-      )
-    )
-    await registerJobWorker(JobName.Narrative, (payload) =>
-      runNarrativeJob(
-        payload,
-        {
-          findAnalysisWithDetails: analysisRepo.findAnalysisWithDetails,
-          updateSynthesisResultNarrative: synthesisResultRepo.updateSynthesisResultNarrative,
-          markNarrativeGenerationFailedSafe: synthesisResultRepo.markNarrativeGenerationFailedSafe,
-        },
-        workerLog
-      )
-    )
+    // The two queues are independent — registered concurrently so their pg-boss declaration
+    // latencies don't add up on every process start/restart.
+    await Promise.all([
+      registerJobWorker(JobName.EntityRelation, (payload) =>
+        runEntityRelationJob(
+          payload,
+          {
+            findAnalysisWithStory: analysisRepo.findAnalysisWithStory,
+            findCoveragesForAnalysis: coverageRepo.findCoveragesForAnalysis,
+            replaceStoryEntities: entityRepo.replaceStoryEntities,
+            findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
+            countStories: entityRepo.countStories,
+            findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
+            createStoryRelation: storyRelationRepo.createStoryRelation,
+          },
+          workerLog
+        )
+      ),
+      registerJobWorker(JobName.Narrative, (payload) =>
+        runNarrativeJob(
+          payload,
+          {
+            findAnalysisWithDetails: analysisRepo.findAnalysisWithDetails,
+            updateSynthesisResultNarrative: synthesisResultRepo.updateSynthesisResultNarrative,
+            markNarrativeGenerationFailedSafe: synthesisResultRepo.markNarrativeGenerationFailedSafe,
+          },
+          workerLog
+        )
+      ),
+    ])
     console.log('Worker started; entity.extract and narrative.generate handlers registered.')
   } catch (err) {
     console.error(err)

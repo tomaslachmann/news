@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify'
 import { runNarrativePass, type NarrativeSource, type NarrativeResult } from '../services/narrativePass.js'
 import type { SynthesisResult as SynthesisDimensions } from '../services/synthesisPass.js'
+import { runStageOrThrow } from '../services/pipelineStage.js'
 import type { AnalysisWithDetails } from '../repositories/analysis.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
 import { ExternalServiceError } from '../errors.js'
@@ -31,14 +32,22 @@ export function buildNarrativeSources(
 
 /** Handler for the `narrative.generate` job (ticket 15, supersedes ADR 0026): looks up the
  *  Analysis this job's `analysisId` points to and generates its Cross-Source Narrative from the
- *  already-completed Synthesis Dimensions plus the full text of every OK Coverage. The Analysis
- *  (or its SynthesisResult) no longer existing and there being no eligible source text are both
- *  permanent conditions a retry can't fix — logged and swallowed rather than thrown, same
- *  reasoning as `entity.extract`'s job (ticket 14). An actual generation failure (the LLM call
- *  throwing, or quote verification dropping every segment — see quoteVerification.ts) is
- *  retryable: marked via markNarrativeGenerationFailedSafe as an audit trail, then rethrown as
- *  ExternalServiceError so `registerJobWorker` reports `failed` and `LLM_JOB_RETRY_POLICY`
- *  (ticket 13) actually retries. */
+ *  already-completed Synthesis Dimensions plus the full text of every OK Coverage.
+ *
+ *  Three conditions short-circuit before any LLM call, none of them retryable: the Analysis (or
+ *  its SynthesisResult) no longer existing, a narrative already present (pg-boss's at-least-once
+ *  delivery can redeliver a job whose prior attempt already succeeded and persisted — this must
+ *  not pay for a second LLM call and silently overwrite it with a different result), and no
+ *  eligible source text (can't happen on the real enqueue path, defensive only — see ticket 15's
+ *  Answer). All are logged and swallowed rather than thrown, same reasoning as `entity.extract`'s
+ *  job (ticket 14).
+ *
+ *  Everything after that — the LLM call, quote verification dropping every segment (see
+ *  quoteVerification.ts), and persisting the result — is retryable: any failure there is marked
+ *  via markNarrativeGenerationFailedSafe as an audit trail, then rethrown so `registerJobWorker`
+ *  reports `failed` and `LLM_JOB_RETRY_POLICY` (ticket 13) actually retries. Uses the same shared
+ *  `runStageOrThrow` (pipelineStage.ts) `entity.extract`'s pipeline stages use, rather than a
+ *  bespoke try/log/rethrow, so both LLM-calling jobs classify failures the same way. */
 export async function runNarrativeJob(
   payload: JobPayload[typeof JobName.Narrative],
   deps: NarrativeJobDeps,
@@ -53,6 +62,14 @@ export async function runNarrativeJob(
     return
   }
 
+  if (analysis.synthesisResult.narrative) {
+    log?.warn(
+      { analysisId: payload.analysisId },
+      'narrative.generate job: narrative already present (redelivered job?), skipping'
+    )
+    return
+  }
+
   const sources = buildNarrativeSources(analysis.coverages)
   if (sources.length === 0) {
     log?.warn(
@@ -63,26 +80,24 @@ export async function runNarrativeJob(
   }
 
   const dimensions = analysis.synthesisResult.dimensions as unknown as SynthesisDimensions
+  const logContext = { analysisId: payload.analysisId }
 
-  let result
   try {
-    result = await runNarrativePass(sources, dimensions, log)
-  } catch (err) {
-    log?.error({ err, analysisId: payload.analysisId }, 'narrative.generate job: generation failed')
-    await deps.markNarrativeGenerationFailedSafe(payload.analysisId)
-    throw new ExternalServiceError('Cross-Source Narrative generation failed', { cause: err })
-  }
-
-  // Every segment can end up dropped by quote verification (see quoteVerification.ts) — an empty
-  // result is a failure for retry-gating purposes, not a successful "nothing to narrate" result.
-  if (result.segments.length === 0) {
-    log?.error(
-      { analysisId: payload.analysisId },
-      'narrative.generate job: generation produced no verifiable segments'
+    const result = await runStageOrThrow(logContext, 'Cross-Source Narrative generation', log, () =>
+      runNarrativePass(sources, dimensions, log)
     )
-    await deps.markNarrativeGenerationFailedSafe(payload.analysisId)
-    throw new ExternalServiceError('Cross-Source Narrative generation produced no verifiable segments')
-  }
 
-  await deps.updateSynthesisResultNarrative(payload.analysisId, result.segments)
+    // Every segment can end up dropped by quote verification — an empty result is a failure for
+    // retry-gating purposes, not a successful "nothing to narrate" result.
+    if (result.segments.length === 0) {
+      throw new ExternalServiceError('Cross-Source Narrative generation produced no verifiable segments')
+    }
+
+    await runStageOrThrow(logContext, 'Persisting the Cross-Source Narrative', log, () =>
+      deps.updateSynthesisResultNarrative(payload.analysisId, result.segments)
+    )
+  } catch (err) {
+    await deps.markNarrativeGenerationFailedSafe(payload.analysisId)
+    throw err
+  }
 }

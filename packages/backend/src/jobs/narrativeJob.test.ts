@@ -81,6 +81,25 @@ describe('runNarrativeJob', () => {
     expect(log.warn).toHaveBeenCalled()
   })
 
+  it('logs and returns without regenerating when a narrative is already present (redelivered job)', async () => {
+    const findAnalysisWithDetails = vi.fn().mockResolvedValue(
+      analysis({
+        synthesisResult: {
+          analysisId: 'a1',
+          dimensions: DIMENSIONS,
+          narrative: [{ prose: 'already there', attributions: [] }],
+        },
+      })
+    )
+    const log = { warn: vi.fn(), error: vi.fn() }
+
+    await runNarrativeJob({ analysisId: 'a1' }, { ...baseDeps, findAnalysisWithDetails }, log as never)
+
+    expect(mockRunNarrativePass).not.toHaveBeenCalled()
+    expect(baseDeps.updateSynthesisResultNarrative).not.toHaveBeenCalled()
+    expect(log.warn).toHaveBeenCalled()
+  })
+
   it('generates and persists the narrative from Coverage text and cached Dimensions', async () => {
     const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
     const segments = [
@@ -123,6 +142,24 @@ describe('runNarrativeJob', () => {
     ).rejects.toThrow(ExternalServiceError)
 
     expect(baseDeps.updateSynthesisResultNarrative).not.toHaveBeenCalled()
+    expect(baseDeps.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
+  })
+
+  it('marks the failure and rethrows as retryable when persisting the generated narrative fails', async () => {
+    const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
+    const segments = [
+      { prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }] },
+    ]
+    mockRunNarrativePass.mockResolvedValue({ segments })
+    const updateSynthesisResultNarrative = vi.fn().mockRejectedValue(new Error('DB down'))
+
+    await expect(
+      runNarrativeJob(
+        { analysisId: 'a1' },
+        { ...baseDeps, findAnalysisWithDetails, updateSynthesisResultNarrative }
+      )
+    ).rejects.toThrow(ExternalServiceError)
+
     expect(baseDeps.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
   })
 })
