@@ -19,9 +19,8 @@ import { isBlockedContent } from './blockedContent.js'
 import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVerification.js'
 import { generateEmbedding, type EmbeddingResult } from './embeddingClient.js'
 import {
-  scoreBestCandidate,
+  evaluateMatch,
   buildEmbeddingInput,
-  MATCH_THRESHOLD,
   MATCH_SCORER_VERSION,
   DEDUP_WINDOW_HOURS,
 } from './storyMatching.js'
@@ -69,10 +68,16 @@ export async function createAnalysis(
   // Story was before this ticket.
   let embeddingResult: EmbeddingResult | null = null
   try {
-    embeddingResult = await generateEmbedding(
+    const result = await generateEmbedding(
       buildEmbeddingInput({ title: scraped.title, excerpt: scraped.excerpt }),
       'submissionDedup'
     )
+    // generateEmbedding only ever throws on a missing vector, not an empty one (an unusual but
+    // not-impossible API/cache response shape) — treated as "no usable embedding," same as a
+    // thrown error, rather than proceeding with a vector that can never score above zero
+    // (cosineSimilarity's own zero-length guard) yet would still get written into
+    // embeddingModel/embeddingInputHash as if a real embedding existed.
+    if (result.vector.length > 0) embeddingResult = result
   } catch (err) {
     log?.warn({ seedUrl, err }, 'Could not generate embedding for seed article; skipping dedup check')
   }
@@ -80,20 +85,18 @@ export async function createAnalysis(
 
   if (!opts.force && embeddingResult) {
     const candidates = await analysisRepo.findRecentStoriesForMatching(DEDUP_WINDOW_HOURS)
-    const best = scoreBestCandidate(embedding, candidates, new Date())
-    const thresholdMatched = best !== null && best.score >= MATCH_THRESHOLD
+    const { best, thresholdMatched, match } = evaluateMatch(embedding, candidates, new Date())
 
     // A FAILED match is treated as no match at all — unlike Ingestion's own "already seen,
     // don't recreate" handling of a FAILED match, a human explicitly submitting a URL deserves
     // a fresh attempt, not a silent no-op.
-    if (thresholdMatched && best && best.candidate.analysisStatus !== 'FAILED') {
-      const match = best.candidate
+    if (match && match.analysisStatus !== 'FAILED') {
       const verdict = await verifySameStoryLogged(scraped.title, match.anchorHeadline, log)
       await matchDecisionRepo.recordMatchDecisionSafe({
         callSite: 'submissionDedup',
         candidateStoryId: match.storyId,
         candidateAnalysisId: match.analysisId,
-        score: best.score,
+        score: best?.score ?? null,
         thresholdMatched: true,
         llmVerdict: verdict.sameEvent,
         decidedBy: 'LLM',
@@ -101,7 +104,7 @@ export async function createAnalysis(
       })
       if (verdict.sameEvent) {
         // findRecentStoriesForMatching only ever produces Prisma's AnalysisStatus enum values;
-        // scoreBestCandidate's StoryCandidate type widens analysisStatus to `string` since it's
+        // evaluateMatch's StoryCandidate type widens analysisStatus to `string` since it's
         // shared with Ingestion's use, which doesn't need the narrower type. The `!== 'FAILED'`
         // guard above already rules out STATUS_MAP ever producing 'failed' here.
         const status = match.analysisStatus as analysisRepo.AnalysisStatus

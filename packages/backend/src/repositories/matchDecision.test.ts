@@ -9,7 +9,7 @@ vi.mock('../db.js', () => ({
 import { recordMatchDecision, recordMatchDecisionSafe } from './matchDecision.js'
 
 const DECISION = {
-  callSite: 'ingestion',
+  callSite: 'ingestion' as const,
   candidateStoryId: 'story-1',
   candidateAnalysisId: 'analysis-1',
   score: 0.42,

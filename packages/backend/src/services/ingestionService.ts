@@ -11,9 +11,8 @@ import { fetchPage } from '../pagination.js'
 import { queryRssFeeds } from './rss.js'
 import { generateEmbedding, type EmbeddingResult } from './embeddingClient.js'
 import {
-  scoreBestCandidate,
+  evaluateMatch,
   buildEmbeddingInput,
-  MATCH_THRESHOLD,
   MATCH_SCORER_VERSION,
   DEDUP_WINDOW_HOURS,
 } from './storyMatching.js'
@@ -72,6 +71,11 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
     let embeddingResult: EmbeddingResult
     try {
       embeddingResult = await generateEmbedding(buildEmbeddingInput(item), 'ingestion')
+      // generateEmbedding only throws on a missing vector, not an empty one (an unusual but
+      // not-impossible API/cache response shape) — treated as a failure the same way, rather
+      // than proceeding to create a Draft with an embedding that can never be matched again and
+      // an embeddingModel/embeddingInputHash implying a real one exists.
+      if (embeddingResult.vector.length === 0) throw new Error('Embedding API returned an empty vector')
     } catch (err) {
       log?.warn({ url: item.url, err }, 'Ingestion: could not generate embedding, skipping this item')
       summary.skipped++
@@ -79,9 +83,7 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
     }
     const itemEmbedding = embeddingResult.vector
 
-    const best = scoreBestCandidate(itemEmbedding, candidates, new Date())
-    const thresholdMatched = best !== null && best.score >= MATCH_THRESHOLD
-    const match = thresholdMatched && best ? best.candidate : null
+    const { best, thresholdMatched, match } = evaluateMatch(itemEmbedding, candidates, new Date())
 
     // Ingestion's own attach decision never gets an LLM call (ADR 0018) — the threshold stage
     // alone always decides the outcome here, unlike human-seeded submission's dedup check.

@@ -57,10 +57,10 @@ export interface ScoredMatch {
 /**
  * Ranks every candidate within DEDUP_WINDOW_HOURS by plain cosine similarity and returns the
  * single highest-scoring one — candidate plus its raw score — regardless of whether it clears
- * MATCH_THRESHOLD. `findBestMatch` below is a thin wrapper applying that threshold; this
- * function exists separately so a caller that needs to log what was actually considered
- * (MatchDecision, ADR 0025) has the score even on a below-threshold result, which calibrating a
- * threshold specifically needs examples of.
+ * MATCH_THRESHOLD. `evaluateMatch` below applies that threshold; this function exists
+ * separately so a caller that needs to log what was actually considered (MatchDecision, ADR
+ * 0025) has the score even on a below-threshold result, which calibrating a threshold
+ * specifically needs examples of.
  *
  * A candidate older than DEDUP_WINDOW_HOURS is excluded outright, never merely discounted. This
  * used to be a multiplicative time-decay factor on the score instead (halving every 24h past a
@@ -72,6 +72,13 @@ export interface ScoredMatch {
  * a real, hard property of this function itself rather than an incidental side effect of decay
  * math, so a caller that ever hands this function an un-pre-filtered candidate list still gets
  * the right answer. See ADR 0025.
+ *
+ * A candidate whose `createdAt` produces a non-finite age (a corrupt/invalid Date, which
+ * shouldn't happen given Prisma's DateTime typing but isn't structurally impossible) is
+ * excluded the same as one past the window, rather than falling through to be scored on
+ * similarity alone — the old time-decay math made this safe by accident (similarity * NaN is
+ * NaN, and NaN can never win the `>` comparison against bestScore), and this hard filter
+ * preserves that guarantee explicitly instead of leaving it to be an accident again.
  */
 export function scoreBestCandidate(
   itemEmbedding: number[],
@@ -83,7 +90,7 @@ export function scoreBestCandidate(
 
   for (const candidate of candidates) {
     const ageHours = (now.getTime() - candidate.createdAt.getTime()) / (60 * 60 * 1000)
-    if (ageHours > DEDUP_WINDOW_HOURS) continue
+    if (!Number.isFinite(ageHours) || ageHours > DEDUP_WINDOW_HOURS) continue
 
     const score = cosineSimilarity(itemEmbedding, candidate.embedding)
     if (score > bestScore) {
@@ -95,16 +102,29 @@ export function scoreBestCandidate(
   return best ? { candidate: best, score: bestScore } : null
 }
 
-/** scoreBestCandidate, thresholded — null when there's no candidate at all, or the
- *  best-scoring one doesn't clear MATCH_THRESHOLD. The caller treats null exactly like "no
- *  Story found". */
-export function findBestMatch(
+export interface EvaluatedMatch {
+  /** The raw top-scoring candidate, if the pool was non-empty — regardless of threshold. What
+   *  a MatchDecision row's candidate/score fields come from. */
+  best: ScoredMatch | null
+  /** What MATCH_THRESHOLD alone decided. */
+  thresholdMatched: boolean
+  /** `best.candidate` when thresholdMatched, otherwise null — the caller treats null exactly
+   *  like "no Story found". Equivalent to the old findBestMatch's return value. */
+  match: StoryCandidate | null
+}
+
+/** scoreBestCandidate, plus the threshold comparison, in one call — both real call sites
+ *  (ingestionService.ts, analysisService.ts) need `best` for their MatchDecision log row *and*
+ *  the thresholded `match` for control flow, so this avoids each computing the threshold
+ *  comparison itself from a separately-held `best`. */
+export function evaluateMatch(
   itemEmbedding: number[],
   candidates: StoryCandidate[],
   now: Date
-): StoryCandidate | null {
+): EvaluatedMatch {
   const best = scoreBestCandidate(itemEmbedding, candidates, now)
-  return best && best.score >= MATCH_THRESHOLD ? best.candidate : null
+  const thresholdMatched = best !== null && best.score >= MATCH_THRESHOLD
+  return { best, thresholdMatched, match: thresholdMatched && best ? best.candidate : null }
 }
 
 // Length cap on the lead/excerpt half of the embedding input — long enough to carry real
@@ -112,9 +132,13 @@ export function findBestMatch(
 // vector. See ADR 0025.
 const LEAD_MAX_CHARS = 400
 
-// RSS teasers routinely open with a caption label rather than prose — these carry ~no semantic
-// signal about the event itself and would otherwise pollute the embedding input.
-const BOILERPLATE_PREFIX = /^(Foto|Video|Ilustrační snímek|Reklama)[:\s].*/i
+// RSS teasers routinely open with a caption label ("Foto: ...") rather than prose. Strips only
+// the label itself, not the rest of the line: some feeds prepend a caption label to an
+// otherwise-real lead sentence ("Foto: Muž byl zatčen. Policie ve čtvrtek oznámila...") — an
+// earlier, greedier version of this regex (`[:\s].*`) matched to the end of the string and
+// wiped that real content along with the label, discarding exactly the signal P1-8 added this
+// function to preserve. `[:\s]+` only consumes the separator after the label.
+const BOILERPLATE_PREFIX = /^(Foto|Video|Ilustrační snímek|Reklama)[:\s]+/i
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()

@@ -3,8 +3,16 @@ import { prisma } from '../db.js'
 
 export type { MatchDecidedBy, MatchDecision }
 
+/** Mirrors embeddingClient.ts's EmbeddingCallSite ('ingestion' | 'submissionDedup') — duplicated
+ *  here rather than imported, since repositories/ don't import from services/ (ADR 0010; same
+ *  convention as entityTypes.ts being kept out of repositories/storyRelation.ts). A real union
+ *  instead of a bare `string` so a typo or a future third call site can't silently fragment
+ *  MatchDecision rows by inconsistent spelling, which would corrupt the per-callSite
+ *  calibration this table exists for. */
+export type MatchDecisionCallSite = 'ingestion' | 'submissionDedup'
+
 export interface NewMatchDecision {
-  callSite: string
+  callSite: MatchDecisionCallSite
   candidateStoryId: string | null
   candidateAnalysisId: string | null
   score: number | null
@@ -14,8 +22,8 @@ export interface NewMatchDecision {
   scorerVersion: string
 }
 
-/** Records one same-event matching decision (findBestMatch, storyMatching.ts) — see ADR 0025 /
- *  docs/audit.md P1-9. Never read by any product surface; exists purely so MATCH_THRESHOLD can
+/** Records one same-event matching decision (evaluateMatch, storyMatching.ts) — see ADR 0025 /
+ *  docs/audit.md P1-7. Never read by any product surface; exists purely so MATCH_THRESHOLD can
  *  eventually be calibrated against real data instead of the guess its own comment admits it
  *  is. */
 export async function recordMatchDecision(data: NewMatchDecision): Promise<MatchDecision> {

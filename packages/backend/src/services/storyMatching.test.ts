@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cosineSimilarity, findBestMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
+import { cosineSimilarity, evaluateMatch, buildEmbeddingInput, DEDUP_WINDOW_HOURS } from './storyMatching.js'
 
 describe('cosineSimilarity', () => {
   it('returns 1 for identical vectors', () => {
@@ -24,7 +24,7 @@ describe('cosineSimilarity', () => {
   })
 })
 
-describe('findBestMatch', () => {
+describe('evaluateMatch', () => {
   const now = new Date('2026-01-02T00:00:00Z')
 
   function hoursAgo(hours: number): Date {
@@ -42,10 +42,14 @@ describe('findBestMatch', () => {
       createdAt: now,
     }
 
-    expect(findBestMatch([1, 0, 0], [candidate], now)).toEqual(candidate)
+    const result = evaluateMatch([1, 0, 0], [candidate], now)
+
+    expect(result.match).toEqual(candidate)
+    expect(result.thresholdMatched).toBe(true)
+    expect(result.best).toEqual({ candidate, score: 1 })
   })
 
-  it('returns null when no candidate clears the threshold', () => {
+  it('returns a null match, but still a non-null best, when similarity does not clear the threshold', () => {
     const candidate = {
       storyId: 's1',
       analysisId: 'a1',
@@ -56,11 +60,21 @@ describe('findBestMatch', () => {
       createdAt: now,
     }
 
-    expect(findBestMatch([1, 0, 0], [candidate], now)).toBeNull()
+    const result = evaluateMatch([1, 0, 0], [candidate], now)
+
+    expect(result.match).toBeNull()
+    expect(result.thresholdMatched).toBe(false)
+    // The below-threshold candidate is still surfaced via `best` — MatchDecision (ADR 0025)
+    // needs below-threshold examples to ever calibrate MATCH_THRESHOLD against real data.
+    expect(result.best).toEqual({ candidate, score: 0 })
   })
 
-  it('returns null for an empty candidate list', () => {
-    expect(findBestMatch([1, 0, 0], [], now)).toBeNull()
+  it('returns a null match and a null best for an empty candidate list', () => {
+    const result = evaluateMatch([1, 0, 0], [], now)
+
+    expect(result.match).toBeNull()
+    expect(result.best).toBeNull()
+    expect(result.thresholdMatched).toBe(false)
   })
 
   // P1-7 (docs/audit.md, ADR 0025): the score used to be similarity × a multiplicative
@@ -79,7 +93,7 @@ describe('findBestMatch', () => {
       createdAt: hoursAgo(DEDUP_WINDOW_HOURS - 1),
     }
 
-    expect(findBestMatch([1, 0, 0], [nearEdgeOfWindow], now)).toEqual(nearEdgeOfWindow)
+    expect(evaluateMatch([1, 0, 0], [nearEdgeOfWindow], now).match).toEqual(nearEdgeOfWindow)
   })
 
   it('excludes a candidate older than DEDUP_WINDOW_HOURS regardless of similarity — a hard boundary, not a discount', () => {
@@ -93,7 +107,11 @@ describe('findBestMatch', () => {
       createdAt: hoursAgo(DEDUP_WINDOW_HOURS + 1),
     }
 
-    expect(findBestMatch([1, 0, 0], [justPastTheWindow], now)).toBeNull()
+    const result = evaluateMatch([1, 0, 0], [justPastTheWindow], now)
+
+    expect(result.match).toBeNull()
+    // Excluded entirely, not just below threshold — `best` must also be null.
+    expect(result.best).toBeNull()
   })
 
   it('excludes a very old candidate outright, independent of the boundary case above', () => {
@@ -107,7 +125,24 @@ describe('findBestMatch', () => {
       createdAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
     }
 
-    expect(findBestMatch([1, 0, 0], [veryOld], now)).toBeNull()
+    expect(evaluateMatch([1, 0, 0], [veryOld], now).match).toBeNull()
+  })
+
+  it('excludes a candidate with a corrupt createdAt (non-finite age) rather than scoring it on similarity alone', () => {
+    const corrupted = {
+      storyId: 's1',
+      analysisId: 'a1',
+      analysisStatus: 'PENDING',
+      anchorHeadline: 'Anchor headline',
+      headline: null,
+      embedding: [1, 0, 0],
+      createdAt: new Date(NaN),
+    }
+
+    const result = evaluateMatch([1, 0, 0], [corrupted], now)
+
+    expect(result.match).toBeNull()
+    expect(result.best).toBeNull()
   })
 
   it('picks the highest-scoring candidate among several', () => {
@@ -130,7 +165,7 @@ describe('findBestMatch', () => {
       createdAt: now,
     }
 
-    expect(findBestMatch([1, 0, 0], [weak, strong], now)).toEqual(strong)
+    expect(evaluateMatch([1, 0, 0], [weak, strong], now).match).toEqual(strong)
   })
 })
 
@@ -152,10 +187,25 @@ describe('buildEmbeddingInput', () => {
     )
   })
 
-  it('falls back to the title alone when the excerpt is a caption-style boilerplate line (a photo/video/ad caption carries no event signal)', () => {
-    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Foto: Popisek fotografie.' })).toBe('Headline')
-    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Video: Something happened.' })).toBe('Headline')
-    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Reklama: Buy now' })).toBe('Headline')
+  it('strips a leading caption-style boilerplate label but preserves real content that follows it on the same line', () => {
+    // Regression: an earlier version of the stripping regex matched greedily to the end of the
+    // line and discarded everything, not just the label — silently throwing away exactly the
+    // real lead content P1-8 was meant to preserve, for any RSS item shaped like
+    // "caption label: real lead paragraph".
+    expect(
+      buildEmbeddingInput({
+        title: 'Headline',
+        excerpt: 'Foto: Muž byl zatčen. Policie ve čtvrtek oznámila zatčení podezřelého.',
+      })
+    ).toBe('Headline\nMuž byl zatčen. Policie ve čtvrtek oznámila zatčení podezřelého.')
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Video: Something happened next.' })).toBe(
+      'Headline\nSomething happened next.'
+    )
+  })
+
+  it('falls back to the title alone when the excerpt is nothing but the boilerplate label itself', () => {
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Foto:' })).toBe('Headline')
+    expect(buildEmbeddingInput({ title: 'Headline', excerpt: 'Reklama:' })).toBe('Headline')
   })
 
   it('caps the excerpt length so one outlier-long excerpt cannot dominate the embedding input', () => {
