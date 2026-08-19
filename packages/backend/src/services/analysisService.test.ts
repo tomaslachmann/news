@@ -795,6 +795,7 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         narrative: null,
         headline: null,
+        narrativeGenerationFailedAt: null,
       },
     })
     const segments = [
@@ -831,6 +832,7 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         narrative: null,
         headline: null,
+        narrativeGenerationFailedAt: null,
       },
     })
     vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments: [] })
@@ -839,6 +841,10 @@ describe('getAnalysisDetail', () => {
 
     expect(synthesisResultRepo.updateSynthesisResultNarrative).not.toHaveBeenCalled()
     expect(result.narrative).toBeUndefined()
+    // ADR 0026 (fixes P0-5): an empty-segments result is a failure for retry-gating purposes,
+    // not just "nothing to cache" — must be marked so the next unauthenticated view doesn't
+    // immediately retry the same LLM call.
+    expect(synthesisResultRepo.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
   })
 
   it('does not regenerate the narrative when one is already cached', async () => {
@@ -862,6 +868,7 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         narrative: cachedSegments,
         headline: null,
+        narrativeGenerationFailedAt: null,
       },
     })
 
@@ -886,6 +893,7 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         narrative: null,
         headline: null,
+        narrativeGenerationFailedAt: null,
       },
     })
     vi.mocked(narrativePassModule.runNarrativePass).mockRejectedValue(new Error('LLM down'))
@@ -894,6 +902,66 @@ describe('getAnalysisDetail', () => {
 
     expect(result.narrative).toBeUndefined()
     expect(result.status).toBe('complete')
+    expect(synthesisResultRepo.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
+  })
+
+  it('does not retry generation when a previous failure is still within NARRATIVE_RETRY_TTL_HOURS', async () => {
+    const recentFailure = new Date(Date.now() - 1 * 60 * 60 * 1000) // 1h ago
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: null,
+        headline: null,
+        narrativeGenerationFailedAt: recentFailure,
+      },
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(narrativePassModule.runNarrativePass).not.toHaveBeenCalled()
+    expect(result.narrative).toBeUndefined()
+  })
+
+  it('retries generation once a previous failure is older than NARRATIVE_RETRY_TTL_HOURS', async () => {
+    const staleFailure = new Date(Date.now() - 25 * 60 * 60 * 1000) // 25h ago, past the 24h TTL
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        narrative: null,
+        headline: null,
+        narrativeGenerationFailedAt: staleFailure,
+      },
+    })
+    const segments = [
+      {
+        prose: 'Kombinovaná zpráva.',
+        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
+      },
+    ]
+    vi.mocked(narrativePassModule.runNarrativePass).mockResolvedValue({ segments })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(narrativePassModule.runNarrativePass).toHaveBeenCalled()
+    expect(result.narrative).toEqual(segments)
   })
 
   it('deduplicates concurrent narrative generation for the same Analysis', async () => {
@@ -911,6 +979,7 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         narrative: null,
         headline: null,
+        narrativeGenerationFailedAt: null,
       },
     })
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockImplementation(() => Promise.resolve(freshAnalysis()))
@@ -979,6 +1048,7 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         narrative: null,
         headline: 'Generated headline',
+        narrativeGenerationFailedAt: null,
       },
     })
     expect((await getAnalysisDetail('a1')).title).toBe('Generated headline')

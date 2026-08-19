@@ -26,6 +26,7 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as entityRepo from '../repositories/entity.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
+import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
 import { toPendingStoryRelationItem } from '../mappers/storyRelation.js'
@@ -41,7 +42,42 @@ const MIN_VISIBLE_SOURCE_COUNT = 2
 // P0-2, ticket 03).
 const KNOWN_URL_LOOKBACK_HOURS = 30 * 24
 
+// Well past any realistic pass duration (the scheduler's own curl gives up after 600s) — lets a
+// later trigger reclaim the lease if a previous run crashed without releasing it (P2-22,
+// docs/audit.md). See repositories/ingestionRunLock.ts.
+const INGESTION_LOCK_STALE_AFTER_MINUTES = 30
+
+/**
+ * Runs one Ingestion pass, guarded by IngestionRunLock so a manual/admin-triggered run can never
+ * overlap an in-flight scheduled one (P2-22, docs/audit.md) — the scheduler itself
+ * (docker-compose.yml's curl-then-sleep loop) already can't overlap its own scheduled triggers
+ * structurally, but nothing previously stopped a second, independently-triggered call. A
+ * skipped run (lock already held) returns a summary of all zeros rather than throwing — this is
+ * a routine "someone else is already doing this," not a failure.
+ */
 export async function runIngestionPass(log?: FastifyBaseLogger): Promise<IngestionRunSummary> {
+  const runId = await ingestionRunLockRepo.tryClaimIngestionLock(INGESTION_LOCK_STALE_AFTER_MINUTES)
+  if (!runId) {
+    log?.info('Ingestion: another run is already in progress, skipping this trigger')
+    return { checked: 0, created: 0, attached: 0, flagged: 0, skipped: 0 }
+  }
+
+  try {
+    return await runIngestionPassLocked(log)
+  } finally {
+    // A release failure must never mask whatever runIngestionPassLocked itself threw — standard
+    // JS try/finally semantics would otherwise let a throw here silently replace the real error
+    // (e.g. "RSS feed down") with an unrelated one, hiding the actual root cause from logs/ops.
+    // A stuck lease still self-heals via staleAfterMinutes on the next trigger.
+    try {
+      await ingestionRunLockRepo.releaseIngestionLock(runId)
+    } catch (err) {
+      log?.error({ runId, err }, 'Ingestion: failed to release the run lock; it will self-heal once stale')
+    }
+  }
+}
+
+async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<IngestionRunSummary> {
   const summary: IngestionRunSummary = { checked: 0, created: 0, attached: 0, flagged: 0, skipped: 0 }
 
   const items = await queryRssFeeds(log)
