@@ -844,7 +844,7 @@ describe('getAnalysisDetail', () => {
     // ADR 0026 (fixes P0-5): an empty-segments result is a failure for retry-gating purposes,
     // not just "nothing to cache" — must be marked so the next unauthenticated view doesn't
     // immediately retry the same LLM call.
-    expect(synthesisResultRepo.markNarrativeGenerationFailed).toHaveBeenCalledWith('a1')
+    expect(synthesisResultRepo.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
   })
 
   it('does not regenerate the narrative when one is already cached', async () => {
@@ -902,7 +902,7 @@ describe('getAnalysisDetail', () => {
 
     expect(result.narrative).toBeUndefined()
     expect(result.status).toBe('complete')
-    expect(synthesisResultRepo.markNarrativeGenerationFailed).toHaveBeenCalledWith('a1')
+    expect(synthesisResultRepo.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
   })
 
   it('does not retry generation when a previous failure is still within NARRATIVE_RETRY_TTL_HOURS', async () => {

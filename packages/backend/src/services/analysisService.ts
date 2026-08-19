@@ -381,14 +381,14 @@ function generateAndCacheNarrative(
           { analysisId },
           'Cross-Source Narrative generation produced no verifiable segments; serving without one'
         )
-        await synthesisResultRepo.markNarrativeGenerationFailed(analysisId)
+        await synthesisResultRepo.markNarrativeGenerationFailedSafe(analysisId)
         return null
       }
       await synthesisResultRepo.updateSynthesisResultNarrative(analysisId, narrativeResult.segments)
       return narrativeResult.segments
     } catch (err) {
       log?.warn({ analysisId, err }, 'Cross-Source Narrative generation failed; serving without one')
-      await synthesisResultRepo.markNarrativeGenerationFailed(analysisId)
+      await synthesisResultRepo.markNarrativeGenerationFailedSafe(analysisId)
       return null
     } finally {
       inFlightNarrativeGenerations.delete(analysisId)

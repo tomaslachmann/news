@@ -112,6 +112,15 @@ describe('runIngestionPass', () => {
     expect(ingestionRunLockRepo.releaseIngestionLock).toHaveBeenCalledWith('run-42')
   })
 
+  it("propagates the pass's own error, not a release failure, when both fail — a release failure must never mask the real root cause", async () => {
+    stubCommon()
+    vi.mocked(ingestionRunLockRepo.tryClaimIngestionLock).mockResolvedValue('run-42')
+    vi.mocked(rssModule.queryRssFeeds).mockRejectedValue(new Error('RSS feed down'))
+    vi.mocked(ingestionRunLockRepo.releaseIngestionLock).mockRejectedValue(new Error('DB down'))
+
+    await expect(runIngestionPass()).rejects.toThrow('RSS feed down')
+  })
+
   it('creates a new Draft Analysis, seeded with only its own Coverage, when nothing matches', async () => {
     stubCommon()
     vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([RSS_ITEM])

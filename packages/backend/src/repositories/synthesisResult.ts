@@ -24,3 +24,16 @@ export async function markNarrativeGenerationFailed(analysisId: string): Promise
     data: { narrativeGenerationFailedAt: new Date() },
   })
 }
+
+/** markNarrativeGenerationFailed, but a failure to record the marker must never itself turn a
+ *  graceful "serve the Analysis without a narrative" degrade into a hard error for the whole
+ *  unauthenticated GET — same convention as llmCallLog.ts's recordLlmCallSafe and
+ *  matchDecision.ts's recordMatchDecisionSafe ("a logging failure must never break the actual
+ *  call it's recording"). Used by every real call site (analysisService.ts). */
+export async function markNarrativeGenerationFailedSafe(analysisId: string): Promise<void> {
+  try {
+    await markNarrativeGenerationFailed(analysisId)
+  } catch (err) {
+    console.error('Failed to record narrative generation failure marker', err)
+  }
+}

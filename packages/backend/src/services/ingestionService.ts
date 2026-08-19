@@ -65,7 +65,15 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
   try {
     return await runIngestionPassLocked(log)
   } finally {
-    await ingestionRunLockRepo.releaseIngestionLock(runId)
+    // A release failure must never mask whatever runIngestionPassLocked itself threw — standard
+    // JS try/finally semantics would otherwise let a throw here silently replace the real error
+    // (e.g. "RSS feed down") with an unrelated one, hiding the actual root cause from logs/ops.
+    // A stuck lease still self-heals via staleAfterMinutes on the next trigger.
+    try {
+      await ingestionRunLockRepo.releaseIngestionLock(runId)
+    } catch (err) {
+      log?.error({ runId, err }, 'Ingestion: failed to release the run lock; it will self-heal once stale')
+    }
   }
 }
 
