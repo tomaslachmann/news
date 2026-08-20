@@ -177,19 +177,31 @@ model Entity {
   relationsFrom StoryEntityRelation[] @relation("EntityRelationFrom")
   relationsTo   StoryEntityRelation[] @relation("EntityRelationTo")
 
+  /// Fuzzy name search over `canonicalName` (ticket 12) is a trigram GIN index
+  /// (`entity_canonicalName_trgm_idx`, requires the `pg_trgm` extension), written by hand in this
+  /// migration — Prisma's schema DSL can't express an operator-class index without extra preview
+  /// features this project doesn't otherwise need, same convention as Coverage's partial unique
+  /// index and StoryEntityRelation's CHECK constraint.
   @@index([type])
 }
 
-/// Join row: this Story's coverage mentions this Entity, at this confidence. The Story-scoped
-/// evidence itself (ADR 0022's entity-resolution-avoidance reasoning is unaffected by ADR 0024's
-/// storage-shape change) — `confidence` is the extraction pass's own per-entity confidence,
-/// carried over unchanged from the JSON form this replaces.
+/// Join row: this Story's coverage mentions this Entity, at this confidence/salience. The
+/// Story-scoped evidence itself (ADR 0022's entity-resolution-avoidance reasoning is unaffected by
+/// ADR 0024's storage-shape change) — `confidence` is the extraction pass's own per-entity
+/// confidence, carried over unchanged from the JSON form this replaces.
 model StoryEntity {
   storyId    String
   story      Story  @relation(fields: [storyId], references: [id])
   entityId   String
   entity     Entity @relation(fields: [entityId], references: [id])
   confidence Float
+  /// Fraction of this Story's source-text fragments that mention this entity, 0 to 1 (ticket 12) —
+  /// a structural "how central is this entity to this Story" signal, computed once at extraction
+  /// time from the model's own per-entity `source_indices` output (entityExtractionPass.ts).
+  /// Stored now; not yet read by storyRelationScoring.ts's IDF-weighted containment formula —
+  /// wiring it in is a deliberate follow-up (see the ticket's own Answer), not part of this
+  /// migration.
+  salience   Float  @default(0)
 
   @@id([storyId, entityId])
   /// The query a JSON column could never do: "all Stories mentioning entity X" (ADR 0024).

@@ -3,6 +3,7 @@ import { createAnalysis, disconnect } from '../../src/repositories/analysis.js'
 import {
   replaceStoryEntities,
   findStoryEntitiesForScoring,
+  findStoryEntity,
   countStories,
 } from '../../src/repositories/entity.js'
 
@@ -20,7 +21,7 @@ describe('Entity repository against a real Postgres instance', () => {
 
     await replaceStoryEntities(
       storyId,
-      [{ key: 'person:entity-test-1', name: 'Donald Tusk', type: 'PERSON', confidence: 0.9 }],
+      [{ key: 'person:entity-test-1', name: 'Donald Tusk', type: 'PERSON', confidence: 0.9, salience: 0.5 }],
       []
     )
 
@@ -28,10 +29,37 @@ describe('Entity repository against a real Postgres instance', () => {
     expect(result.entities).toEqual([{ key: 'person:entity-test-1', storyCount: 1 }])
   })
 
+  it('persists salience alongside confidence', async () => {
+    const { storyId } = await createAnalysis({ seedUrl: 'https://example.cz/entity-e1b', seedHeadline: 'x' })
+
+    await replaceStoryEntities(
+      storyId,
+      [
+        {
+          key: 'person:entity-test-1b',
+          name: 'Donald Tusk',
+          type: 'PERSON',
+          confidence: 0.9,
+          salience: 0.75,
+        },
+      ],
+      []
+    )
+
+    const storyEntity = await findStoryEntity(storyId, 'person:entity-test-1b')
+    expect(storyEntity?.salience).toBe(0.75)
+  })
+
   it('increments storyCount when a second, different Story attaches the same entity key', async () => {
     const first = await createAnalysis({ seedUrl: 'https://example.cz/entity-e2', seedHeadline: 'x' })
     const second = await createAnalysis({ seedUrl: 'https://example.cz/entity-e3', seedHeadline: 'x' })
-    const entity = { key: 'country:entity-test-2', name: 'Poland', type: 'COUNTRY' as const, confidence: 0.9 }
+    const entity = {
+      key: 'country:entity-test-2',
+      name: 'Poland',
+      type: 'COUNTRY' as const,
+      confidence: 0.9,
+      salience: 1,
+    }
 
     await replaceStoryEntities(first.storyId, [entity], [])
     await replaceStoryEntities(second.storyId, [entity], [])
@@ -42,7 +70,13 @@ describe('Entity repository against a real Postgres instance', () => {
 
   it('does not double-count when the same Story re-extracts and re-includes an already-attached entity', async () => {
     const { storyId } = await createAnalysis({ seedUrl: 'https://example.cz/entity-e4', seedHeadline: 'x' })
-    const entity = { key: 'place:entity-test-3', name: 'Prague', type: 'PLACE' as const, confidence: 0.8 }
+    const entity = {
+      key: 'place:entity-test-3',
+      name: 'Prague',
+      type: 'PLACE' as const,
+      confidence: 0.8,
+      salience: 1,
+    }
 
     await replaceStoryEntities(storyId, [entity], [])
     await replaceStoryEntities(storyId, [entity], [])
@@ -53,7 +87,13 @@ describe('Entity repository against a real Postgres instance', () => {
 
   it('does not double-count storyCount when two calls for the same Story race concurrently', async () => {
     const { storyId } = await createAnalysis({ seedUrl: 'https://example.cz/entity-e4b', seedHeadline: 'x' })
-    const entity = { key: 'place:entity-test-3b', name: 'Prague', type: 'PLACE' as const, confidence: 0.8 }
+    const entity = {
+      key: 'place:entity-test-3b',
+      name: 'Prague',
+      type: 'PLACE' as const,
+      confidence: 0.8,
+      salience: 1,
+    }
 
     // Both calls see the same pre-write state if unserialized — the pg_advisory_xact_lock in
     // replaceStoryEntities must force one to wait for the other rather than both incrementing.
@@ -74,8 +114,15 @@ describe('Entity repository against a real Postgres instance', () => {
       name: 'United Nations',
       type: 'ORGANIZATION' as const,
       confidence: 0.9,
+      salience: 1,
     }
-    const kept = { key: 'place:entity-test-5', name: 'New York', type: 'PLACE' as const, confidence: 0.9 }
+    const kept = {
+      key: 'place:entity-test-5',
+      name: 'New York',
+      type: 'PLACE' as const,
+      confidence: 0.9,
+      salience: 1,
+    }
 
     await replaceStoryEntities(dropping.storyId, [dropped], [])
     await replaceStoryEntities(stillAttached.storyId, [dropped], [])
@@ -97,8 +144,15 @@ describe('Entity repository against a real Postgres instance', () => {
       name: 'Donald Tusk',
       type: 'PERSON' as const,
       confidence: 0.9,
+      salience: 1,
     }
-    const poland = { key: 'country:entity-test-7', name: 'Poland', type: 'COUNTRY' as const, confidence: 0.9 }
+    const poland = {
+      key: 'country:entity-test-7',
+      name: 'Poland',
+      type: 'COUNTRY' as const,
+      confidence: 0.9,
+      salience: 1,
+    }
 
     await replaceStoryEntities(
       storyId,
@@ -119,13 +173,21 @@ describe('Entity repository against a real Postgres instance', () => {
       name: 'Donald Tusk',
       type: 'PERSON' as const,
       confidence: 0.9,
+      salience: 1,
     }
-    const poland = { key: 'country:entity-test-9', name: 'Poland', type: 'COUNTRY' as const, confidence: 0.9 }
+    const poland = {
+      key: 'country:entity-test-9',
+      name: 'Poland',
+      type: 'COUNTRY' as const,
+      confidence: 0.9,
+      salience: 1,
+    }
     const eu = {
       key: 'org:entity-test-10',
       name: 'European Union',
       type: 'ORGANIZATION' as const,
       confidence: 0.9,
+      salience: 1,
     }
 
     await replaceStoryEntities(
