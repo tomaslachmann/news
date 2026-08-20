@@ -13,5 +13,11 @@
 - [ ] `GET /api/admin/entity-aliases/candidates` (Admin only): ranks candidate same-entity pairs by `pg_trgm` similarity, excluding already-aliased and already-rejected pairs.
 - [ ] `POST /api/admin/entity-aliases/:pairId/confirm` and `POST /api/admin/entity-aliases/:pairId/reject` (Admin only).
 - [ ] Both actions logged via `AdminActionLog` (`entity.alias_merged`, `entity.alias_rejected`).
-- [ ] Admin UI: a candidates list (mirroring `DraftsSection`'s list-plus-action-buttons pattern) with confirm/reject buttons.
 - [ ] Integration tests (testcontainers): merge repoints existing rows correctly; a second extraction pass producing the merged-away key resolves to the surviving entity; a rejected pair doesn't reappear in candidates.
+
+## Notes
+
+Admin UI (candidates list, mirroring `DraftsSection`'s list-plus-action-buttons pattern) split out
+into ticket 46 — this ticket ships the backend (model, migration, `resolveEntityKey`, merge
+mechanics, candidate query, routes) end to end and is independently mergeable/testable via the API
+directly; the frontend is a separate, later pass rather than blocking this one.
