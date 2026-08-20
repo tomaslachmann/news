@@ -11,12 +11,37 @@ import {
 } from '@/services/ingestion/hooks'
 import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 import './IngestionReviewPage.css'
 
 // Below this many sources a Draft is flagged low-confidence — same threshold ReviewPage already
 // warns on ("Při méně než 5 zdrojích může být triangulace omezená"), computed from the real
 // coverageCount rather than a fabricated confidence score.
 const THIN_DRAFT_THRESHOLD = 5
+
+/** Shared by DraftItem and RelationItem — both queues resolve the same way (approve/reject). */
+function QitemActions({
+  onApprove,
+  onReject,
+  isApproving,
+  isRejecting,
+}: {
+  onApprove: () => void
+  onReject: () => void
+  isApproving: boolean
+  isRejecting: boolean
+}) {
+  return (
+    <div className="qitem__act">
+      <button className="btn btn--strong" onClick={onApprove} disabled={isApproving}>
+        Schválit
+      </button>
+      <button className="btn" type="button" onClick={onReject} disabled={isRejecting}>
+        Zamítnout
+      </button>
+    </div>
+  )
+}
 
 function DraftItem({
   draft,
@@ -45,14 +70,12 @@ function DraftItem({
         <span aria-hidden="true">·</span>
         <span className="u-mono">{draft.id}</span>
       </p>
-      <div className="qitem__act">
-        <button className="btn btn--strong" onClick={onApprove} disabled={isApproving}>
-          Schválit
-        </button>
-        <button className="btn" type="button" onClick={onReject} disabled={isRejecting}>
-          Zamítnout
-        </button>
-      </div>
+      <QitemActions
+        onApprove={onApprove}
+        onReject={onReject}
+        isApproving={isApproving}
+        isRejecting={isRejecting}
+      />
     </article>
   )
 }
@@ -108,9 +131,7 @@ function DraftsSection() {
 
       {hasNextPage && (
         <p style={{ marginTop: 'var(--sp-4)' }}>
-          <button className="btn" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
-            {isFetchingNextPage ? 'Načítání…' : 'Načíst další'}
-          </button>
+          <LoadMoreButton onClick={() => void fetchNextPage()} isFetching={isFetchingNextPage} />
         </p>
       )}
     </section>
@@ -221,14 +242,12 @@ function RelationItem({
         <span aria-hidden="true">·</span>
         <span className="u-mono">{relation.id}</span>
       </p>
-      <div className="qitem__act">
-        <button className="btn btn--strong" onClick={onApprove} disabled={isApproving}>
-          Schválit
-        </button>
-        <button className="btn" type="button" onClick={onReject} disabled={isRejecting}>
-          Zamítnout
-        </button>
-      </div>
+      <QitemActions
+        onApprove={onApprove}
+        onReject={onReject}
+        isApproving={isApproving}
+        isRejecting={isRejecting}
+      />
     </article>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,6 +16,7 @@ import { useAnalysisDetail } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
+import { EntitiesDemoSection, WordingDemoSection, ValueVariantsDemoSection } from './AnalysisPage.devDemos'
 import './AnalysisPage.css'
 
 type ExtractionState =
@@ -323,120 +324,6 @@ function RelatedEventsSection({ events }: { events: RelatedEventItem[] }) {
   )
 }
 
-// ============================================================================
-// Dev-only demo sections — no real data exists behind these yet. Each ships behind
-// import.meta.env.DEV so it's never reachable in a production build, per the ticket's own
-// "Mocked and dev-only" convention (already used for .trend/.qa elsewhere).
-// ============================================================================
-
-const SAMPLE_ENTITIES_DEMO = [
-  { name: 'Ministerstvo financí', mentions: 9 },
-  { name: 'Andrej Babiš', mentions: 6 },
-  { name: 'Poslanecká sněmovna', mentions: 4 },
-]
-
-// TODO(grill): needs a real entity-extraction feature — unscoped, AnalysisDetail has no entities
-// field at all today.
-function EntitiesDemoSection() {
-  return (
-    <section>
-      <div className="railhead">
-        <h2 className="railhead__t">Entity ve zprávě</h2>
-        <span className="railhead__x">ukázka</span>
-      </div>
-      <div className="ents">
-        {SAMPLE_ENTITIES_DEMO.map((e) => (
-          <div className="erow" key={e.name}>
-            <span className="erow__dot">{e.mentions}×</span>
-            <span className="erow__n">{e.name}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-const SAMPLE_QCMP_DEMO = [
-  { who: 'ČTK', time: '14:02', q: 'Rozpočet počítá se saldem 241 miliard korun.', kind: 'tisková zpráva' },
-  {
-    who: 'Deník N',
-    time: '14:31',
-    q: 'Schodek státního rozpočtu má dosáhnout 241 miliard.',
-    kind: 'vlastní formulace',
-  },
-  {
-    who: 'iROZHLAS',
-    time: '15:10',
-    q: 'Vláda počítá se schodkem 241 miliard korun.',
-    kind: 'parafráze tiskové zprávy',
-  },
-]
-
-// TODO(grill): needs a fixed-cardinality, per-claim wording comparison from synthesis — not in
-// AnalysisDimensions today (our contradiction items carry a variable-length attribution list, not
-// exactly-N source wordings).
-function WordingDemoSection() {
-  return (
-    <section>
-      <div className="sechead">
-        <h2 className="sechead__t">Tři formulace téhož faktu (ukázka)</h2>
-        <span className="sechead__rule" />
-      </div>
-      <div className="qcmp">
-        {SAMPLE_QCMP_DEMO.map((w, i) => (
-          <div className="qcmp__i" key={i}>
-            <p className="qcmp__h">
-              <span className="qcmp__w">{w.who}</span>
-              <span className="qcmp__t">{w.time}</span>
-            </p>
-            <p className="qcmp__q">{w.q}</p>
-            <span className="qcmp__k">{w.kind}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-const SAMPLE_VALS_DEMO = [
-  { v: '241 mld. Kč', who: 'ČTK, Deník N, iROZHLAS' },
-  { v: '235 mld. Kč', who: 'Seznam Zprávy, Novinky' },
-  { v: '223 mld. Kč', who: 'Hospodářské noviny' },
-]
-
-// TODO(grill): needs discrete per-source value extraction from synthesis — our contradiction
-// items are prose + attributions only, never structured values.
-function ValueVariantsDemoSection() {
-  return (
-    <section>
-      <div className="sechead">
-        <h2 className="sechead__t">Rozcházející se hodnoty (ukázka)</h2>
-        <span className="sechead__rule" />
-      </div>
-      <ol className="compare">
-        <li className="cmp">
-          <p className="cmp__t">Výsledné saldo rozpočtu</p>
-          <div className="cmp__m">
-            <span>
-              <b>7</b> z 9 zdrojů
-            </span>
-          </div>
-          <div className="cmp__v">
-            <ul className="vals">
-              {SAMPLE_VALS_DEMO.map((v, i) => (
-                <li key={i}>
-                  <span className="vals__v">{v.v}</span>
-                  <span className="vals__w">{v.who}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </li>
-      </ol>
-    </section>
-  )
-}
-
 function ErrorState({ message }: { message: string }) {
   return (
     <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
@@ -532,6 +419,27 @@ function StreamingAnalysis({ id, title }: { id: string; title: string }) {
     }
   }, [id])
 
+  // Single pass over `rows` (re-run only when it changes, not on every render) rather than four
+  // separate filter/reduce scans — rows updates on every SSE extraction event during streaming.
+  // Computed unconditionally, above the early returns below, per the Rules of Hooks.
+  const { doneCount, completedCount, claimTotal, attributedTotal, framingTotal } = useMemo(() => {
+    let doneCount = 0
+    let completedCount = 0
+    let claimTotal = 0
+    let attributedTotal = 0
+    let framingTotal = 0
+    for (const r of rows) {
+      if (r.extraction.phase !== 'pending') doneCount++
+      if (r.extraction.phase === 'complete') {
+        completedCount++
+        claimTotal += r.extraction.claimCount
+        attributedTotal += r.extraction.attributedClaimCount
+        framingTotal += r.extraction.framingSignalCount
+      }
+    }
+    return { doneCount, completedCount, claimTotal, attributedTotal, framingTotal }
+  }, [rows])
+
   if (dimensions) {
     return (
       <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
@@ -578,23 +486,9 @@ function StreamingAnalysis({ id, title }: { id: string; title: string }) {
     return <ErrorState message={synthesisError} />
   }
 
-  const doneCount = rows.filter((r) => r.extraction.phase !== 'pending').length
   const total = rows.length
   const isExtracting = phase === 'extracting'
   const isSynthesising = phase === 'synthesising'
-  const completedRows = rows.filter((r) => r.extraction.phase === 'complete')
-  const claimTotal = completedRows.reduce(
-    (sum, r) => sum + (r.extraction.phase === 'complete' ? r.extraction.claimCount : 0),
-    0
-  )
-  const attributedTotal = completedRows.reduce(
-    (sum, r) => sum + (r.extraction.phase === 'complete' ? r.extraction.attributedClaimCount : 0),
-    0
-  )
-  const framingTotal = completedRows.reduce(
-    (sum, r) => sum + (r.extraction.phase === 'complete' ? r.extraction.framingSignalCount : 0),
-    0
-  )
 
   return (
     <div className="page-shell">
@@ -653,7 +547,7 @@ function StreamingAnalysis({ id, title }: { id: string; title: string }) {
                       className="spin"
                       style={{ verticalAlign: '-2px', marginRight: '0.35rem' }}
                     />
-                    Syntéza napříč {completedRows.length} zdroji…
+                    Syntéza napříč {completedCount} zdroji…
                   </>
                 ) : (
                   `${doneCount} z ${total} zdrojů hotovo`

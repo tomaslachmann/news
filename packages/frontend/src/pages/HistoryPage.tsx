@@ -4,14 +4,9 @@ import type { AnalysisListItem } from '@/services/analyses'
 import { useAnalysesList } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/formatDate'
+import { ANALYSIS_STATUS_LABELS } from '@/lib/analysisStatusLabels'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 import './HistoryPage.css'
-
-const STATUS_LABELS: Record<AnalysisListItem['status'], string> = {
-  draft: 'Koncept',
-  complete: 'Dokončeno',
-  failed: 'Selhalo',
-  pending: 'Zpracovává se',
-}
 
 const STATE_MODIFIER: Record<AnalysisListItem['status'], string> = {
   draft: 'archive-state--draft',
@@ -26,7 +21,9 @@ type SortOrder = 'newest' | 'oldest' | 'most-sources'
 function ArchiveRow({ item }: { item: AnalysisListItem }) {
   return (
     <Link to={`/analysis/${item.id}`} className="archive-row">
-      <div className={`archive-state ${STATE_MODIFIER[item.status]}`}>{STATUS_LABELS[item.status]}</div>
+      <div className={`archive-state ${STATE_MODIFIER[item.status]}`}>
+        {ANALYSIS_STATUS_LABELS[item.status]}
+      </div>
       <div>
         <div className="archive-title">{item.title}</div>
         <div className="archive-meta">zdrojů: {item.coverageCount}</div>
@@ -52,7 +49,7 @@ export default function HistoryPage() {
   // available to filter/sort over.
   const filtered = useMemo(() => {
     let items = allLoaded
-    if (statusFilter !== 'all') items = (items ?? []).filter((i) => i.status === statusFilter)
+    if (statusFilter !== 'all') items = items.filter((i) => i.status === statusFilter)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       items = items.filter((i) => i.title.toLowerCase().includes(q))
@@ -60,7 +57,7 @@ export default function HistoryPage() {
     const sorted = [...items]
     if (sortOrder === 'oldest') sorted.reverse()
     else if (sortOrder === 'most-sources') sorted.sort((a, b) => b.coverageCount - a.coverageCount)
-    return sorted.filter(Boolean)
+    return sorted
   }, [allLoaded, statusFilter, sortOrder, search])
 
   return (
@@ -154,9 +151,7 @@ export default function HistoryPage() {
               : `${filtered.length} z ${allLoaded.length} načtených`}
           </span>
           {hasNextPage && (
-            <button className="btn" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
-              {isFetchingNextPage ? 'Načítání…' : 'Načíst další'}
-            </button>
+            <LoadMoreButton onClick={() => void fetchNextPage()} isFetching={isFetchingNextPage} />
           )}
         </div>
       )}

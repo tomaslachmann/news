@@ -2,13 +2,8 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { createAnalysis, discoverSources, attachSeedToMatch } from '@/services/analyses'
+import { ANALYSIS_STATUS_LABELS } from '@/lib/analysisStatusLabels'
 import './NewAnalysisPage.css'
-
-const MATCHED_STATUS_LABELS: Record<'draft' | 'pending' | 'complete', string> = {
-  draft: 'Koncept',
-  pending: 'Zpracovává se',
-  complete: 'Dokončeno',
-}
 
 type PageState =
   | { step: 'input' }
@@ -183,7 +178,7 @@ function MatchedStep({
     <section className="match">
       <div className="match__eyebrow">Tato událost už se sleduje</div>
       <h2 className="match__title">{title}</h2>
-      <p className="match__meta">Stav: {MATCHED_STATUS_LABELS[matchedStatus]}</p>
+      <p className="match__meta">Stav: {ANALYSIS_STATUS_LABELS[matchedStatus]}</p>
 
       {attachMutation.isError && (
         <div className="error" style={{ marginTop: 'var(--sp-3)' }}>
