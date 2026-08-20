@@ -1,18 +1,10 @@
-import type { AnalysisDimensions } from '@news-triangulator/shared'
+import type { AnalysisDimensions, SourceOverlapTier } from '@news-triangulator/shared'
 
 // DESIGN-SYSTEM.md §3.3 — the only place these boundaries are allowed to exist (ADR 0030). A
-// future frontend consumer switches on interpretSourceOverlap's returned tier instead of
-// re-typing 85/65 into a CSS class name or a JS conditional.
+// frontend consumer switches on interpretSourceOverlap's returned tier (ticket 39's byline)
+// instead of re-typing 85/65 into a CSS class name or a JS conditional.
 export const SOURCE_OVERLAP_OK_THRESHOLD = 85
 export const SOURCE_OVERLAP_MID_THRESHOLD = 65
-
-/** Below this many sources, a ten-segment gauge implies more precision than the data has (ADR
- *  0030) — one outlet moves a three-source bar by a third. The backend still returns the
- *  percentage regardless of source count; a display-layer consumer decides whether to render a
- *  gauge at all below this threshold. */
-export const MIN_SOURCES_FOR_GAUGE = 5
-
-export type SourceOverlapTier = 'ok' | 'mid' | 'bad'
 
 /** Source Overlap (ticket 38, ADR 0030) — counted, never asked of a model. For each item in the
  *  `agreement` dimension, the number of distinct outlets among its attributions; the metric is

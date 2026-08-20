@@ -1,12 +1,12 @@
 import type { FastifyBaseLogger } from 'fastify'
-import type { AnalysisDimensions, SseEvent } from '@news-triangulator/shared'
+import type { SseEvent } from '@news-triangulator/shared'
 import { NotFoundError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisRepo from '../repositories/synthesisResult.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { runExtractionPass, ExtractionResultSchema } from './extractionPass.js'
-import { runSynthesisPass, type SourceExtraction } from './synthesisPass.js'
+import { runSynthesisPass, mergeAgreementCategory, type SourceExtraction } from './synthesisPass.js'
 import { computeSourceOverlapPercentage } from './sourceOverlap.js'
 import { runHeadlinePass } from './headlinePass.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
@@ -125,10 +125,7 @@ async function runExtractionAndSynthesis(
   if (cached) {
     send({
       type: 'synthesis-complete',
-      dimensions: {
-        ...(cached.dimensions as unknown as AnalysisDimensions),
-        agreementCategory: cached.agreementCategory,
-      },
+      dimensions: mergeAgreementCategory(cached.dimensions, cached.agreementCategory),
     })
     return
   }
