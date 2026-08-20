@@ -5,6 +5,13 @@
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 
+/** Shared by both site chromes (Chrome.tsx, AdminChrome.tsx) for their theme-toggle button. */
+export const THEME_LABEL: Record<ThemePreference, string> = {
+  system: 'Systémový režim',
+  light: 'Světlý režim',
+  dark: 'Tmavý režim',
+}
+
 const STORAGE_KEY = 'nt-theme'
 
 export function getStoredTheme(): ThemePreference {

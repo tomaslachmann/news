@@ -477,15 +477,6 @@ a.threadband:hover {
   color: var(--ink-3);
 }
 
-.note {
-  font-family: var(--font-sans);
-  font-size: var(--text-micro);
-  color: var(--ink-3);
-  line-height: 1.5;
-}
-.note b {
-  color: var(--ink-2);
-}
 .box {
   border: var(--bw-hair) solid var(--line);
   padding: var(--sp-4);

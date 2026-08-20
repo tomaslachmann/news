@@ -322,29 +322,31 @@ export default function AdminUsersPage() {
 
         {users && (
           <section className="qsec">
-            <table className="dtable">
-              <thead>
-                <tr>
-                  <th scope="col">E-mail</th>
-                  <th scope="col">Role</th>
-                  <th scope="col">Vytvořeno</th>
-                  <th scope="col" className="dtable__act">
-                    Akce
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <UserRow
-                    key={u.id}
-                    user={u}
-                    isSelf={u.id === currentUser?.id}
-                    onEdit={() => setEditingUser(u)}
-                    onDelete={() => setDeletingUser(u)}
-                  />
-                ))}
-              </tbody>
-            </table>
+            <div className="u-scroll-x">
+              <table className="dtable">
+                <thead>
+                  <tr>
+                    <th scope="col">E-mail</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Vytvořeno</th>
+                    <th scope="col" className="dtable__act">
+                      Akce
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <UserRow
+                      key={u.id}
+                      user={u}
+                      isSelf={u.id === currentUser?.id}
+                      onEdit={() => setEditingUser(u)}
+                      onDelete={() => setDeletingUser(u)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="note picknote">
               Celkem <b>{users.length}</b>, z toho <b>{adminCount}</b>{' '}
               {adminCount === 1 ? 'správce' : 'správců'}. Mazání je okamžité a nevratné; historie schválení u

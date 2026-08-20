@@ -175,3 +175,15 @@ a:hover .hl {
   font-family: var(--font-sans);
   font-size: var(--text-micro);
 }
+
+/* Small muted explanatory text — moved here once a third page (AdminUsersPage, AnalysisPage,
+   IngestionReviewPage) needed it, same threshold as .byline/.chip/etc above. */
+.note {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.note b {
+  color: var(--ink-2);
+}

@@ -544,6 +544,13 @@ function StreamingAnalysis({ id, title }: { id: string; title: string }) {
         <SumBox dimensions={dimensions} />
         <section>
           <div className="sechead">
+            <h2 className="sechead__t">Shoda</h2>
+            <span className="sechead__rule" />
+          </div>
+          <CompareList items={dimensions.agreement} coverageCount={rows.length} />
+        </section>
+        <section>
+          <div className="sechead">
             <h2 className="sechead__t">Srovnání tvrzení</h2>
             <span className="sechead__rule" />
           </div>
@@ -756,6 +763,16 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
                 {topContradiction.attributions.map((a) => a.outlet).join(', ')}
               </p>
             </div>
+          )}
+
+          {dimensions.agreement.length > 0 && (
+            <section>
+              <div className="sechead">
+                <h2 className="sechead__t">Shoda</h2>
+                <span className="sechead__rule" />
+              </div>
+              <CompareList items={dimensions.agreement} coverageCount={coverageCount} />
+            </section>
           )}
 
           <section aria-labelledby="cmpT">

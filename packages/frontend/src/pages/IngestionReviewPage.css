@@ -45,13 +45,6 @@
   border-top: var(--bw-hair) solid var(--line-2);
 }
 
-.note {
-  font-family: var(--font-sans);
-  font-size: var(--text-micro);
-  color: var(--ink-3);
-  line-height: 1.5;
-}
-
 .qitem {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

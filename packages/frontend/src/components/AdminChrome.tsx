@@ -1,16 +1,10 @@
-import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { logout } from '@/services/auth'
+import { useLogout } from '@/services/auth/hooks'
 import { useTheme } from '@/ds/useTheme'
+import { THEME_LABEL } from '@/ds/theme'
 import '@/components/Chrome.css'
 import './AdminChrome.css'
-
-const THEME_LABEL: Record<'system' | 'light' | 'dark', string> = {
-  system: 'Systémový režim',
-  light: 'Světlý režim',
-  dark: 'Tmavý režim',
-}
 
 const ROLE_LABEL: Record<'ADMIN' | 'READONLY', string> = {
   ADMIN: 'Admin',
@@ -26,17 +20,9 @@ const ROLE_LABEL: Record<'ADMIN' | 'READONLY', string> = {
  *  `admin-sources.html` entry (which links to the mockup's one static demo page). */
 export function AdminChrome({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
   const [theme, cycleTheme] = useTheme()
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
-
-  const logoutMutation = useMutation({
-    mutationFn: logout,
-    onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ['me'] })
-      void navigate('/login', { replace: true })
-    },
-  })
+  const logoutMutation = useLogout()
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -47,8 +33,12 @@ export function AdminChrome({ children }: { children: React.ReactNode }) {
           </Link>
           <span className="abar__tag">Interní</span>
           <nav className="abar__nav" aria-label="Interní sekce">
-            <NavLink to="/admin/ingestion">Kontrola sběru</NavLink>
-            <NavLink to="/admin/users">Uživatelé</NavLink>
+            {isAdmin && (
+              <>
+                <NavLink to="/admin/ingestion">Kontrola sběru</NavLink>
+                <NavLink to="/admin/users">Uživatelé</NavLink>
+              </>
+            )}
             <Link to="/">Veřejný web</Link>
           </nav>
           <span className="abar__side">

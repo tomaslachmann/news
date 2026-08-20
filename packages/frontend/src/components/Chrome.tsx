@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { logout } from '@/services/auth'
+import { useLogout } from '@/services/auth/hooks'
 import { formatDate } from '@/lib/formatDate'
 import { useTheme } from '@/ds/useTheme'
+import { THEME_LABEL } from '@/ds/theme'
 import './Chrome.css'
-
-const THEME_LABEL: Record<'system' | 'light' | 'dark', string> = {
-  system: 'Systémový režim',
-  light: 'Světlý režim',
-  dark: 'Tmavý režim',
-}
 
 // TODO(grill): matches e.html's own RUBS list exactly. This product has no Story.primaryCategory
 // field (docs/spec-event-graph.md's Out of Scope) — not a real filter yet, styled identically to
@@ -55,18 +49,10 @@ function PrimaryNav({ compact = false }: { compact?: boolean }) {
 export function Chrome({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [theme, cycleTheme] = useTheme()
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const navAnchorRef = useRef<HTMLDivElement>(null)
   const [stickyOn, setStickyOn] = useState(false)
 
-  const logoutMutation = useMutation({
-    mutationFn: logout,
-    onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ['me'] })
-      void navigate('/login', { replace: true })
-    },
-  })
+  const logoutMutation = useLogout()
 
   useEffect(() => {
     const anchor = navAnchorRef.current
