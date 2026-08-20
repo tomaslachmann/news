@@ -1,6 +1,8 @@
 import type { FastifyBaseLogger } from 'fastify'
 import { runThreadTitlePass } from '../services/threadTitlePass.js'
 import { runStageOrThrow } from '../services/pipelineStage.js'
+import { resolveDisplayTitle } from '../mappers/analysis.js'
+import { COMBINING_DIACRITICS } from '../services/entityKey.js'
 import type {
   ThreadComponentMember,
   StoryAgreementForTitle,
@@ -12,6 +14,7 @@ import { JobName, type JobPayload } from './jobDefinitions.js'
 
 export interface ThreadRecomputeJobDeps {
   findFollowUpComponent: (seedStoryId: string) => Promise<ThreadComponentMember[]>
+  anyExistingThreadForStories: (storyIds: string[]) => Promise<boolean>
   findAgreementForTitle: (storyIds: string[]) => Promise<StoryAgreementForTitle[]>
   upsertThreadFromComponent: (
     members: UpsertThreadMemberInput[],
@@ -33,8 +36,6 @@ export function inferRole(position: number, total: number): ThreadRole {
   return 'DEVELOPMENT'
 }
 
-const DIACRITICS = /[̀-ͯ]/g
-
 /** URL-safe, not identity-preserving the way entityKey.ts's slugify is — Thread.slug has no
  *  reader route yet (ticket 17's Answer, Q3/Q5) to need a pretty one, so ASCII-folding diacritics
  *  away is fine here even though it would lose meaning for entityKey.ts's own purpose. Uniqueness
@@ -43,7 +44,7 @@ const DIACRITICS = /[̀-ͯ]/g
 function slugifyTitle(title: string, originStoryId: string): string {
   const base = title
     .normalize('NFD')
-    .replace(DIACRITICS, '')
+    .replace(COMBINING_DIACRITICS, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -51,30 +52,48 @@ function slugifyTitle(title: string, originStoryId: string): string {
   return `${base}-${originStoryId}`
 }
 
+/** The ORIGIN member's own resolved display title (`resolveDisplayTitle`, the same fallback rule
+ *  every other title in the app uses) — falls back to the chronologically-first member if ORIGIN
+ *  itself was skipped (its Analysis somehow missing, see `findAgreementForTitle`'s own note), and
+ *  to a generic label only if there's no title data at all. Never blank, never fabricated. */
+function fallbackTitle(membersByEventTime: StoryAgreementForTitle[], originStoryId: string): string {
+  const origin = membersByEventTime.find((m) => m.storyId === originStoryId)
+  const source = origin ?? membersByEventTime[0]
+  return source ? resolveDisplayTitle(source.headline, source.seedHeadline) : 'Vícedílná kauza'
+}
+
 /** Generates a Thread's title via the LLM (see threadTitlePass.ts), never letting a failure there
  *  fail the whole job — an LLM hiccup on the presentation-only title isn't worth spending
  *  `thread.recompute`'s own retry budget on (`THREAD_RECOMPUTE_RETRY_POLICY`, ticket 13, sized
- *  for a cheap DB-only job, not a billed-LLM-call-times-10-retries one). Falls back to the
- *  ORIGIN member's own resolved display title — same "always some title, never blank or
- *  fabricated" guarantee runHeadlinePass's own null-when-empty result gets via
- *  resolveDisplayTitle elsewhere, just resolved here instead of at read time since Thread.title
- *  is NOT NULL. */
+ *  for a cheap DB-only job, not a billed-LLM-call-times-10-retries one). Falls back to
+ *  `fallbackTitle` on any generation failure — same "always some title, never blank or
+ *  fabricated" guarantee `runHeadlinePass`'s own null-when-empty result gets at read time
+ *  elsewhere, just resolved here instead since `Thread.title` is NOT NULL.
+ *
+ *  `membersByEventTime` must already be in chronological (eventTime) order — this is what makes
+ *  the prose array sent to the LLM match `prompts/threadTitle.txt`'s own stated "each stage, in
+ *  chronological order" contract; `findAgreementForTitle`'s own DB fetch does *not* preserve
+ *  that order (Postgres doesn't for an `IN (...)` clause), so the caller re-sorts before this.
+ *
+ *  Only called for a component with no existing Thread — see `runThreadRecomputeJob`'s own
+ *  `anyExistingThreadForStories` pre-check. A recompute of an already-existing Thread uses
+ *  `fallbackTitle` directly instead, skipping the LLM call entirely: `Thread.title` is never
+ *  regenerated once set (see `upsertThreadFromComponent`), so deriving a fresh one for a Thread
+ *  that already has one would be pure waste — a real, billed call this ticket's own review round
+ *  caught happening on every single recompute, not just the first. */
 async function deriveThreadTitle(
-  members: StoryAgreementForTitle[],
+  membersByEventTime: StoryAgreementForTitle[],
   originStoryId: string,
   log?: FastifyBaseLogger
 ): Promise<string> {
-  const origin = members.find((m) => m.storyId === originStoryId)
-  const fallback = origin?.displayTitle ?? members[0]?.displayTitle ?? 'Vícedílná kauza'
-
   try {
     return await runThreadTitlePass(
-      members.map((m) => m.agreementProse),
+      membersByEventTime.map((m) => m.agreementProse),
       log
     )
   } catch (err) {
     log?.warn({ err, originStoryId }, 'thread.recompute job: title generation failed, using fallback title')
-    return fallback
+    return fallbackTitle(membersByEventTime, originStoryId)
   }
 }
 
@@ -107,12 +126,27 @@ export async function runThreadRecomputeJob(
   }
 
   const originStoryId = members[0].storyId
-  // Only ever needed if this component turns out to have no existing Thread yet — computed
-  // unconditionally regardless, since knowing that requires the same DB round-trip
-  // upsertThreadFromComponent's own transaction repeats anyway (see that function's doc comment
-  // on the narrow race this duplicated check exists to self-heal, not to optimize away).
-  const forTitle = await deps.findAgreementForTitle(members.map((m) => m.storyId))
-  const title = await deriveThreadTitle(forTitle, originStoryId, log)
+  const storyIds = members.map((m) => m.storyId)
+
+  // Independent reads, run concurrently. findAgreementForTitle doesn't preserve the CTE's own
+  // eventTime order (Postgres doesn't for an IN (...) clause) — re-sort against `members`, which
+  // is already chronological, before this feeds either the LLM prompt (told to expect
+  // chronological order) or the fallback's own "ORIGIN, else chronologically-first" logic.
+  const [agreementResult, hasExistingThread] = await Promise.all([
+    deps.findAgreementForTitle(storyIds),
+    deps.anyExistingThreadForStories(storyIds),
+  ])
+  const agreementByStoryId = new Map(agreementResult.map((f) => [f.storyId, f]))
+  const membersByEventTime = members
+    .map((m) => agreementByStoryId.get(m.storyId))
+    .filter((f): f is StoryAgreementForTitle => f !== undefined)
+
+  // A Thread whose title already exists is never regenerated (see upsertThreadFromComponent) —
+  // skip the billed LLM call entirely for a recompute of an already-known component, using the
+  // same cheap, non-LLM fallback title the create path only reaches for on an LLM failure.
+  const title = hasExistingThread
+    ? fallbackTitle(membersByEventTime, originStoryId)
+    : await deriveThreadTitle(membersByEventTime, originStoryId, log)
 
   const memberInputs: UpsertThreadMemberInput[] = members.map((m, i) => ({
     storyId: m.storyId,

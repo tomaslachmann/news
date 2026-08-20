@@ -4,6 +4,7 @@ import { createStoryRelation } from '../../src/repositories/storyRelation.js'
 import {
   findFollowUpComponent,
   findAgreementForTitle,
+  anyExistingThreadForStories,
   upsertThreadFromComponent,
   findThreadForStory,
   setThreadStatusForTesting,
@@ -125,10 +126,16 @@ describe('Thread repository against a real Postgres instance', () => {
       const found = (storyId: string) => result.find((r) => r.storyId === storyId)
       expect(found(a.storyId)).toEqual({
         storyId: a.storyId,
-        displayTitle: 'Generated A',
+        headline: 'Generated A',
+        seedHeadline: 'Seed A',
         agreementProse: ['Fakt 1'],
       })
-      expect(found(b.storyId)).toEqual({ storyId: b.storyId, displayTitle: 'Seed B', agreementProse: [] })
+      expect(found(b.storyId)).toEqual({
+        storyId: b.storyId,
+        headline: null,
+        seedHeadline: 'Seed B',
+        agreementProse: [],
+      })
     })
   })
 
@@ -242,6 +249,108 @@ describe('Thread repository against a real Postgres instance', () => {
       )
 
       expect(recomputed.status).toBe('CLOSED')
+    })
+
+    it('merges two pre-existing Threads a bridging edge unifies, keeping the earlier-starting one and folding the other in', async () => {
+      const a = await createAnalysis({ seedUrl: 'https://example.cz/thread-merge-a', seedHeadline: 'A' })
+      const b = await createAnalysis({ seedUrl: 'https://example.cz/thread-merge-b', seedHeadline: 'B' })
+      const c = await createAnalysis({ seedUrl: 'https://example.cz/thread-merge-c', seedHeadline: 'C' })
+      const d = await createAnalysis({ seedUrl: 'https://example.cz/thread-merge-d', seedHeadline: 'D' })
+
+      const older = await upsertThreadFromComponent(
+        [
+          { storyId: a.storyId, position: 0, role: 'ORIGIN' },
+          { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
+        ],
+        { firstEventAt: new Date('2026-01-01T00:00:00Z'), lastEventAt: new Date('2026-01-02T00:00:00Z') },
+        { title: 'Older arc', slug: `older-arc-${a.storyId}` }
+      )
+      const newer = await upsertThreadFromComponent(
+        [
+          { storyId: c.storyId, position: 0, role: 'ORIGIN' },
+          { storyId: d.storyId, position: 1, role: 'DEVELOPMENT' },
+        ],
+        { firstEventAt: new Date('2026-02-01T00:00:00Z'), lastEventAt: new Date('2026-02-02T00:00:00Z') },
+        { title: 'Newer arc', slug: `newer-arc-${c.storyId}` }
+      )
+      expect(newer.id).not.toBe(older.id)
+
+      // A new edge (e.g. B–C) bridges both arcs into one component — this must not crash on
+      // ThreadMember.storyId's unique constraint, and must not silently corrupt either Thread.
+      const merged = await upsertThreadFromComponent(
+        [
+          { storyId: a.storyId, position: 0, role: 'ORIGIN' },
+          { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
+          { storyId: c.storyId, position: 2, role: 'DEVELOPMENT' },
+          { storyId: d.storyId, position: 3, role: 'RESOLUTION' },
+        ],
+        { firstEventAt: new Date('2026-01-01T00:00:00Z'), lastEventAt: new Date('2026-02-02T00:00:00Z') },
+        { title: 'Would-be merged title', slug: `merged-${a.storyId}` }
+      )
+
+      // The earlier-starting (older) Thread survives with its own identity/title.
+      expect(merged.id).toBe(older.id)
+      expect(merged.title).toBe('Older arc')
+      expect(merged.memberCount).toBe(4)
+
+      const reader = await findThreadForStory(d.storyId)
+      expect(reader?.members.map((m) => m.analysisId).sort()).toEqual([a.id, b.id, c.id, d.id].sort())
+
+      // The merged-away Thread's own row must be gone, not left behind empty or dangling.
+      const stillFindableViaOldNewerThread = await findThreadForStory(c.storyId)
+      expect(stillFindableViaOldNewerThread?.title).toBe('Older arc')
+    })
+
+    it('is a cheap no-op when a duplicate recompute finds nothing actually changed', async () => {
+      const a = await createAnalysis({ seedUrl: 'https://example.cz/thread-noop-a', seedHeadline: 'A' })
+      const b = await createAnalysis({ seedUrl: 'https://example.cz/thread-noop-b', seedHeadline: 'B' })
+      const span = { firstEventAt: new Date(Date.now() - 60 * 60 * 1000), lastEventAt: new Date() }
+      const memberInputs = [
+        { storyId: a.storyId, position: 0, role: 'ORIGIN' as const },
+        { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' as const },
+      ]
+      const first = await upsertThreadFromComponent(memberInputs, span, {
+        title: 'Unchanged case',
+        slug: `unchanged-case-${a.storyId}`,
+      })
+
+      // Same members, same span, second call would recompute an identical title if it were
+      // consulted — passing an obviously-different one proves the early-exit branch, not the
+      // create branch, is what ran (create would have used this title).
+      const second = await upsertThreadFromComponent(memberInputs, span, {
+        title: 'Would-be different title',
+        slug: `different-${a.storyId}`,
+      })
+
+      expect(second.id).toBe(first.id)
+      expect(second.title).toBe('Unchanged case')
+    })
+  })
+
+  describe('anyExistingThreadForStories', () => {
+    it('returns false when none of the given Stories belong to any Thread', async () => {
+      const a = await createAnalysis({ seedUrl: 'https://example.cz/thread-exists-none', seedHeadline: 'A' })
+
+      expect(await anyExistingThreadForStories([a.storyId])).toBe(false)
+    })
+
+    it('returns true when at least one of the given Stories already belongs to a Thread', async () => {
+      const a = await createAnalysis({ seedUrl: 'https://example.cz/thread-exists-a', seedHeadline: 'A' })
+      const b = await createAnalysis({ seedUrl: 'https://example.cz/thread-exists-b', seedHeadline: 'B' })
+      const span = {
+        firstEventAt: new Date('2026-01-01T00:00:00Z'),
+        lastEventAt: new Date('2026-01-02T00:00:00Z'),
+      }
+      await upsertThreadFromComponent(
+        [
+          { storyId: a.storyId, position: 0, role: 'ORIGIN' },
+          { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
+        ],
+        span,
+        { title: 'Existing case', slug: `existing-case-${a.storyId}` }
+      )
+
+      expect(await anyExistingThreadForStories([a.storyId, 'nonexistent-story-id'])).toBe(true)
     })
   })
 

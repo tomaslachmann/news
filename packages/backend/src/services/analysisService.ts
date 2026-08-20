@@ -369,11 +369,13 @@ export async function getAnalysisDetail(analysisId: string): Promise<AnalysisDet
   let relatedEvents: AnalysisDetail['relatedEvents'] = []
   let thread: AnalysisDetail['thread']
   if (analysis.status === 'COMPLETE') {
-    relatedEvents = toRelatedEvents(
-      analysis.storyId,
-      await storyRelationRepo.findPublishedRelationsForStory(analysis.storyId)
-    )
-    const rawThread = await threadRepo.findThreadForStory(analysis.storyId)
+    // Independent reads, run concurrently rather than paying the sum of both latencies on this
+    // hot, unauthenticated read path.
+    const [publishedRelations, rawThread] = await Promise.all([
+      storyRelationRepo.findPublishedRelationsForStory(analysis.storyId),
+      threadRepo.findThreadForStory(analysis.storyId),
+    ])
+    relatedEvents = toRelatedEvents(analysis.storyId, publishedRelations)
     // A Thread with fewer than 2 currently-linkable (COMPLETE) members has nothing for a reader
     // to navigate to beyond this page itself — not worth showing (ticket 17's Answer, Q3).
     const summary = rawThread ? toThreadSummary(analysis.id, rawThread) : undefined

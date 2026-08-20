@@ -47,6 +47,7 @@ describe('runThreadRecomputeJob', () => {
 
   const baseDeps = {
     findAgreementForTitle: vi.fn(),
+    anyExistingThreadForStories: vi.fn().mockResolvedValue(false),
     upsertThreadFromComponent: vi.fn(),
   }
 
@@ -60,21 +61,23 @@ describe('runThreadRecomputeJob', () => {
     expect(log.info).toHaveBeenCalled()
   })
 
-  it('derives the title from flattened Agreement across every member and assigns roles/positions in eventTime order', async () => {
+  it('derives the title from flattened Agreement across every member (chronological order) and assigns roles/positions in eventTime order', async () => {
     const findFollowUpComponent = vi
       .fn()
       .mockResolvedValue([member('origin', 48), member('middle', 24), member('last', 1)])
+    // Deliberately returned out of eventTime order — the job must re-sort against `members`,
+    // not trust this array's own order (Postgres doesn't preserve IN (...) input order).
     const findAgreementForTitle = vi.fn().mockResolvedValue([
-      { storyId: 'origin', displayTitle: 'Origin title', agreementProse: ['Fact 1'] },
-      { storyId: 'middle', displayTitle: 'Middle title', agreementProse: ['Fact 2'] },
-      { storyId: 'last', displayTitle: 'Last title', agreementProse: [] },
+      { storyId: 'last', headline: null, seedHeadline: 'Last title', agreementProse: [] },
+      { storyId: 'origin', headline: null, seedHeadline: 'Origin title', agreementProse: ['Fact 1'] },
+      { storyId: 'middle', headline: null, seedHeadline: 'Middle title', agreementProse: ['Fact 2'] },
     ])
     mockRunThreadTitlePass.mockResolvedValue('Derived title')
     const upsertThreadFromComponent = vi.fn().mockResolvedValue({ id: 't1' })
 
     await runThreadRecomputeJob(
       { seedStoryId: 'origin' },
-      { findFollowUpComponent, findAgreementForTitle, upsertThreadFromComponent }
+      { ...baseDeps, findFollowUpComponent, findAgreementForTitle, upsertThreadFromComponent }
     )
 
     expect(mockRunThreadTitlePass).toHaveBeenCalledWith([['Fact 1'], ['Fact 2'], []], undefined)
@@ -98,8 +101,8 @@ describe('runThreadRecomputeJob', () => {
   it("falls back to the ORIGIN member's own display title when title generation fails, without failing the job", async () => {
     const findFollowUpComponent = vi.fn().mockResolvedValue([member('origin', 48), member('other', 1)])
     const findAgreementForTitle = vi.fn().mockResolvedValue([
-      { storyId: 'origin', displayTitle: 'Origin fallback title', agreementProse: [] },
-      { storyId: 'other', displayTitle: 'Other title', agreementProse: [] },
+      { storyId: 'origin', headline: null, seedHeadline: 'Origin fallback title', agreementProse: [] },
+      { storyId: 'other', headline: null, seedHeadline: 'Other title', agreementProse: [] },
     ])
     mockRunThreadTitlePass.mockRejectedValue(new Error('LLM down'))
     const upsertThreadFromComponent = vi.fn().mockResolvedValue({ id: 't1' })
@@ -107,7 +110,7 @@ describe('runThreadRecomputeJob', () => {
 
     await runThreadRecomputeJob(
       { seedStoryId: 'origin' },
-      { findFollowUpComponent, findAgreementForTitle, upsertThreadFromComponent },
+      { ...baseDeps, findFollowUpComponent, findAgreementForTitle, upsertThreadFromComponent },
       log as never
     )
 
@@ -116,6 +119,54 @@ describe('runThreadRecomputeJob', () => {
       expect.any(Array),
       expect.any(Object),
       expect.objectContaining({ title: 'Origin fallback title' })
+    )
+  })
+
+  it('prefers a generated headline over seedHeadline in the fallback title, same as resolveDisplayTitle everywhere else', async () => {
+    const findFollowUpComponent = vi.fn().mockResolvedValue([member('origin', 48), member('other', 1)])
+    const findAgreementForTitle = vi.fn().mockResolvedValue([
+      {
+        storyId: 'origin',
+        headline: 'Generated headline',
+        seedHeadline: 'Seed headline',
+        agreementProse: [],
+      },
+      { storyId: 'other', headline: null, seedHeadline: 'Other', agreementProse: [] },
+    ])
+    mockRunThreadTitlePass.mockRejectedValue(new Error('LLM down'))
+    const upsertThreadFromComponent = vi.fn().mockResolvedValue({ id: 't1' })
+
+    await runThreadRecomputeJob(
+      { seedStoryId: 'origin' },
+      { ...baseDeps, findFollowUpComponent, findAgreementForTitle, upsertThreadFromComponent }
+    )
+
+    expect(upsertThreadFromComponent).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      expect.objectContaining({ title: 'Generated headline' })
+    )
+  })
+
+  it('skips the LLM title call entirely when the component already has an existing Thread, using the fallback title directly', async () => {
+    const findFollowUpComponent = vi.fn().mockResolvedValue([member('origin', 48), member('other', 1)])
+    const findAgreementForTitle = vi.fn().mockResolvedValue([
+      { storyId: 'origin', headline: null, seedHeadline: 'Origin title', agreementProse: ['Fact 1'] },
+      { storyId: 'other', headline: null, seedHeadline: 'Other title', agreementProse: [] },
+    ])
+    const anyExistingThreadForStories = vi.fn().mockResolvedValue(true)
+    const upsertThreadFromComponent = vi.fn().mockResolvedValue({ id: 't1' })
+
+    await runThreadRecomputeJob(
+      { seedStoryId: 'origin' },
+      { findFollowUpComponent, findAgreementForTitle, anyExistingThreadForStories, upsertThreadFromComponent }
+    )
+
+    expect(mockRunThreadTitlePass).not.toHaveBeenCalled()
+    expect(upsertThreadFromComponent).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      expect.objectContaining({ title: 'Origin title' })
     )
   })
 
@@ -133,14 +184,14 @@ describe('runThreadRecomputeJob', () => {
     const findFollowUpComponent = vi.fn().mockResolvedValue([member('s1', 2), member('s2', 1)])
     const findAgreementForTitle = vi
       .fn()
-      .mockResolvedValue([{ storyId: 's1', displayTitle: 'x', agreementProse: [] }])
+      .mockResolvedValue([{ storyId: 's1', headline: null, seedHeadline: 'x', agreementProse: [] }])
     mockRunThreadTitlePass.mockResolvedValue('title')
     const upsertThreadFromComponent = vi.fn().mockRejectedValue(new Error('DB down'))
 
     await expect(
       runThreadRecomputeJob(
         { seedStoryId: 's1' },
-        { findFollowUpComponent, findAgreementForTitle, upsertThreadFromComponent }
+        { ...baseDeps, findFollowUpComponent, findAgreementForTitle, upsertThreadFromComponent }
       )
     ).rejects.toThrow()
   })

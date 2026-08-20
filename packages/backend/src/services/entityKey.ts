@@ -6,7 +6,12 @@ export function deriveEntityKey(type: string, canonicalName: string): string {
   return `${type.toLowerCase()}:${slugify(canonicalName)}`
 }
 
-const COMBINING_DIACRITICS = /[̀-ͯ]/g
+/** Unicode combining diacritical marks (U+0300–U+036F) — stripped after NFD normalization to
+ *  fold accented characters down to their base letter. Shared with threadRecomputeJob.ts's own
+ *  slug generation, not re-declared there; the range itself is generic and stable regardless of
+ *  each caller's different downstream normalization (this file keeps non-Latin scripts, that one
+ *  ASCII-folds them). */
+export const COMBINING_DIACRITICS = /[̀-ͯ]/g
 
 function slugify(value: string): string {
   return (

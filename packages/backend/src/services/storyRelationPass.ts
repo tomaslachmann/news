@@ -140,9 +140,19 @@ export async function linkStoryRelations(
         // to FOLLOW_UP/PUBLISHED — not atomic with the write above (see ticket 17's Answer on why
         // this is a deliberate, narrower risk than tickets 14/15/16's own atomic enqueues; a missed
         // enqueue here self-heals the moment any other edge in the same connected component is
-        // confirmed). Best-effort, degrading with the rest of this candidate's own try/catch.
+        // confirmed). Its own try/catch, separate from the one below: the StoryRelation is already
+        // persisted at this point, so a failure here must log as an enqueue failure specifically,
+        // not fold into the generic "confirmation or persistence failed" message below, which would
+        // wrongly suggest no relation was created at all.
         if (verdict.type === 'FOLLOW_UP' && status === 'PUBLISHED') {
-          await enqueueJob(JobName.ThreadRecompute, { seedStoryId: storyId })
+          try {
+            await enqueueJob(JobName.ThreadRecompute, { seedStoryId: storyId })
+          } catch (err) {
+            log?.error(
+              { storyId, candidateStoryId: candidateStory.storyId, err },
+              'Failed to enqueue thread.recompute after persisting a FOLLOW_UP/PUBLISHED StoryRelation'
+            )
+          }
         }
       } catch (err) {
         log?.warn(

@@ -51,6 +51,7 @@ const start = async () => {
           payload,
           {
             findFollowUpComponent: threadRepo.findFollowUpComponent,
+            anyExistingThreadForStories: threadRepo.anyExistingThreadForStories,
             findAgreementForTitle: threadRepo.findAgreementForTitle,
             upsertThreadFromComponent: threadRepo.upsertThreadFromComponent,
           },
