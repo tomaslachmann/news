@@ -9,6 +9,7 @@ import App from './App'
 import './ds/tokens.css'
 import './ds/fonts.css'
 import './ds/base.css'
+import './ds/controls.css'
 import './index.css'
 
 const queryClient = new QueryClient({

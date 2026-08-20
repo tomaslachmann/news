@@ -1,0 +1,80 @@
+/* Ported from ds/components.css (ticket 39) — class names unchanged. */
+
+.login {
+  display: grid;
+  place-items: center;
+  min-block-size: 64svh;
+  padding-block: var(--sp-7) var(--sp-6);
+}
+.login__in {
+  inline-size: 100%;
+  max-inline-size: 25rem;
+}
+.login__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.login__word {
+  font-family: var(--font-serif);
+  font-size: var(--text-h3);
+  font-weight: 500;
+  font-variation-settings: 'opsz' var(--opsz-h3);
+  letter-spacing: var(--ls-h2);
+}
+.login__word em {
+  font-style: normal;
+  color: var(--accent);
+}
+.login__box {
+  border: var(--bw-hair) solid var(--line);
+  border-top: var(--bw-rule) solid var(--line-strong);
+  background: var(--surface);
+  padding: var(--sp-5);
+}
+.login__t {
+  font-family: var(--font-serif);
+  font-size: var(--text-h4);
+  margin-bottom: var(--sp-1);
+}
+.login__n {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  margin-bottom: var(--sp-5);
+}
+.login__f {
+  display: grid;
+  gap: var(--sp-4);
+}
+.login__f .btn {
+  justify-content: center;
+  padding-block: 0.55rem;
+}
+.login__foot {
+  margin-top: var(--sp-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  line-height: 1.6;
+}
+.login__foot a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 0.15em;
+}
+.login__foot a:hover {
+  color: var(--accent);
+}
+
+.abar__tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: var(--bw-hair) solid var(--line);
+  padding: 0.1rem 0.3rem;
+}

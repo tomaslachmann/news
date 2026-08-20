@@ -1,0 +1,111 @@
+/* Ported from ds/components.css §7 "Ovládací prvky a stavy" (ticket 39) — class names
+   unchanged. Cross-cutting primitives reused by every page (buttons, fields, error boxes), so
+   this lives alongside tokens/base/fonts as a global import rather than duplicated into every
+   page-specific colocated CSS file that happens to use a button. Ported piecemeal, only as each
+   class is actually needed by a ported page — not the whole §7 section at once. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  padding: 0.45rem 0.85rem;
+  border: var(--bw-hair) solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.btn:hover {
+  border-color: var(--ink);
+}
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn--primary:hover {
+  background: color-mix(in oklab, var(--accent) 85%, black);
+  border-color: transparent;
+}
+.btn--ghost {
+  border-color: transparent;
+  color: var(--ink-2);
+  padding-inline: 0.25rem;
+}
+.btn--ghost:hover {
+  color: var(--accent);
+}
+.btn--micro {
+  font-size: var(--text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.55rem;
+}
+.btn[disabled] {
+  color: var(--ink-4);
+  border-color: var(--line-2);
+  cursor: not-allowed;
+}
+.btn--primary[disabled] {
+  background: var(--surface-2);
+  border-color: var(--line-2);
+  color: var(--ink-4);
+}
+.btn--strong {
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.btn--strong:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.field {
+  display: grid;
+  gap: var(--sp-1);
+  font-family: var(--font-sans);
+}
+.field__l {
+  font-size: var(--text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.input {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  padding: 0.45rem 0.6rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: var(--bw-hair) solid var(--line);
+}
+.input::placeholder {
+  color: var(--ink-4);
+}
+.input:focus {
+  border-color: var(--accent);
+}
+
+.error {
+  border-left: var(--bw-rule) solid var(--bad);
+  background: var(--accent-soft);
+  padding: var(--sp-3) var(--sp-4);
+}
+.error__t {
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--bad);
+}
+.error__p {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  margin-top: 0.15rem;
+}

@@ -28,7 +28,7 @@ Each of these is visually compared against its reference HTML before being check
 
 - [x] **Chrome** — `.utilbar`, `.mast`, `.rubnav`, `.sticky`, `.foot`. Ticket 26's masthead and footer *structure* is preserved and re-clothed, not redesigned; the footer keeps its role-aware `/history` label and shared container constant
 - [x] **`/styleguide`** — `styleguide.html` ported as a dev-only route, so a token change can be checked the way §1 requires
-- [ ] **`/login`** — `login.html`. Stays the internal-tool framing ticket 26 established
+- [x] **`/login`** — `login.html`. Stays the internal-tool framing ticket 26 established
 - [ ] **`/`** — `e.html`. `.lead`, `.story` / `.storylist`, `.card`, `.minute`, `.daystats`, `.entband`
 - [ ] **`/history`** — `history.html`. Filter bar, sort, search, pagination, states
 - [ ] **`/analysis/:id`** — `article.html`. The largest single item: `.arthead`, `.byline`, `.prose`, `.claim`, `.sumbox`, `.compare` / `.cmp` / `.vals`, `.qcmp`, `.srclist`, `.threadband`, `.artfoot`. Radix tabs are retained for the four dimensions
