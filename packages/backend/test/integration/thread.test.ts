@@ -116,7 +116,9 @@ describe('Thread repository against a real Postgres instance', () => {
           uniqueReporting: [],
           framing: [],
         },
-        'Generated A'
+        'Generated A',
+        null,
+        'PARTIAL'
       )
       const b = await createAnalysis({ seedUrl: 'https://example.cz/thread-title-b', seedHeadline: 'Seed B' })
       // No SynthesisResult at all for b — an Analysis that hasn't reached COMPLETE yet.
@@ -375,7 +377,9 @@ describe('Thread repository against a real Postgres instance', () => {
       await completeAnalysisWithSynthesis(
         b.id,
         { agreement: [], contradiction: [], uniqueReporting: [], framing: [] },
-        'Generated B'
+        'Generated B',
+        null,
+        'PARTIAL'
       )
       const span = {
         firstEventAt: new Date('2026-01-01T00:00:00Z'),

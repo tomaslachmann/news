@@ -7,6 +7,7 @@ import * as synthesisRepo from '../repositories/synthesisResult.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { runExtractionPass, ExtractionResultSchema } from './extractionPass.js'
 import { runSynthesisPass, type SourceExtraction } from './synthesisPass.js'
+import { computeSourceOverlapPercentage } from './sourceOverlap.js'
 import { runHeadlinePass } from './headlinePass.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
 import { enqueueJob } from '../jobs/enqueue.js'
@@ -160,13 +161,24 @@ async function runExtractionAndSynthesis(
     // reach COMPLETE without a headline, so this isn't allowed to degrade separately from
     // Synthesis's own failure handling (see ADR 0021).
     const headline = await runHeadlinePass(synthesis.agreement, log)
+    // Ticket 38 / ADR 0030 — counted from the just-validated `synthesis` result and the actual
+    // number of sources that went into it, not the raw coverage count (which may include
+    // excluded/failed ones `sources` already left out).
+    const sourceOverlapPercentage = computeSourceOverlapPercentage(synthesis, sources.length)
     // narrative.generate (ticket 15, ADR 0028) is enqueued inside the same transaction as the
     // COMPLETE write — never a completed Analysis without its narrative job. A queue failure
     // rolls the whole transition back, same as this same try/catch already does for a headline
     // failure.
-    await analysisRepo.completeAnalysisWithSynthesis(analysisId, synthesis, headline, async (tx) => {
-      await enqueueJob(JobName.Narrative, { analysisId }, { tx })
-    })
+    await analysisRepo.completeAnalysisWithSynthesis(
+      analysisId,
+      synthesis,
+      headline,
+      sourceOverlapPercentage,
+      synthesis.agreementCategory,
+      async (tx) => {
+        await enqueueJob(JobName.Narrative, { analysisId }, { tx })
+      }
+    )
     send({ type: 'synthesis-complete', dimensions: synthesis })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Syntéza se nezdařila'

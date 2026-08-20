@@ -87,6 +87,7 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'CONFIRMED' as const,
     }
     vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue(synthesis)
     vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue('Vláda schválila rozpočet')
@@ -109,6 +110,8 @@ describe('runAnalysisStream', () => {
       'a1',
       synthesis,
       'Vláda schválila rozpočet',
+      100,
+      'CONFIRMED',
       expect.any(Function)
     )
     expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
@@ -135,11 +138,12 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'CONFIRMED',
     })
     vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue('Headline')
     const tx = {} as never
     vi.mocked(analysisRepo.completeAnalysisWithSynthesis).mockImplementation(
-      async (_id, _dims, _headline, onComplete) => {
+      async (_id, _dims, _headline, _pct, _category, onComplete) => {
         await onComplete?.(tx)
       }
     )
@@ -170,6 +174,7 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'DISPUTED',
     })
     vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue(null)
 
@@ -180,6 +185,8 @@ describe('runAnalysisStream', () => {
       'a1',
       expect.anything(),
       null,
+      null,
+      'DISPUTED',
       expect.any(Function)
     )
   })
@@ -200,6 +207,7 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'CONFIRMED',
     })
     vi.mocked(headlinePassModule.runHeadlinePass).mockRejectedValue(new Error('headline LLM down'))
     vi.mocked(analysisRepo.updateAnalysisStatus).mockResolvedValue(undefined)

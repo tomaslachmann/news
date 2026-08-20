@@ -47,11 +47,13 @@ describe('runSynthesisPass', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'CONFIRMED',
     })
 
     const result = await runSynthesisPass(SOURCES)
 
     expect(result.agreement).toHaveLength(1)
+    expect(result.agreementCategory).toBe('CONFIRMED')
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(1)
     const [, , userContent] = vi.mocked(llmClientModule.callJsonModel).mock.calls[0]
     expect(userContent).not.toContain('extractedText')
@@ -62,7 +64,19 @@ describe('runSynthesisPass', () => {
     ])
   })
 
-  it('retries once and keeps the item when an attribution quote fails verification then passes', async () => {
+  it('rejects a response whose agreementCategory is outside the closed enum, never coercing it', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      agreement: [],
+      contradiction: [],
+      uniqueReporting: [],
+      framing: [],
+      agreementCategory: 'MOSTLY_TRUE',
+    })
+
+    await expect(runSynthesisPass(SOURCES)).rejects.toThrow()
+  })
+
+  it('preserves agreementCategory through the repair loop — it is a story-level judgement, not derived from which items survive verification', async () => {
     vi.mocked(llmClientModule.callJsonModel)
       .mockResolvedValueOnce({
         agreement: [
@@ -76,6 +90,7 @@ describe('runSynthesisPass', () => {
         contradiction: [],
         uniqueReporting: [],
         framing: [],
+        agreementCategory: 'DISPUTED',
       })
       .mockResolvedValueOnce({
         agreement: [
@@ -93,6 +108,48 @@ describe('runSynthesisPass', () => {
         contradiction: [],
         uniqueReporting: [],
         framing: [],
+        agreementCategory: 'DISPUTED',
+      })
+
+    const result = await runSynthesisPass(SOURCES)
+
+    expect(result.agreement).toHaveLength(1)
+    expect(result.agreementCategory).toBe('DISPUTED')
+  })
+
+  it('retries once and keeps the item when an attribution quote fails verification then passes', async () => {
+    vi.mocked(llmClientModule.callJsonModel)
+      .mockResolvedValueOnce({
+        agreement: [
+          {
+            prose: 'Oba zdroje potvrzují schválení rozpočtu.',
+            attributions: [
+              { outlet: 'iDnes', czechQuote: 'citát, který v článku není', articleUrl: 'https://idnes.cz/x' },
+            ],
+          },
+        ],
+        contradiction: [],
+        uniqueReporting: [],
+        framing: [],
+        agreementCategory: 'CONFIRMED',
+      })
+      .mockResolvedValueOnce({
+        agreement: [
+          {
+            prose: 'Oba zdroje potvrzují schválení rozpočtu.',
+            attributions: [
+              {
+                outlet: 'iDnes',
+                czechQuote: 'Vláda dnes schválila rozpočet',
+                articleUrl: 'https://idnes.cz/x',
+              },
+            ],
+          },
+        ],
+        contradiction: [],
+        uniqueReporting: [],
+        framing: [],
+        agreementCategory: 'CONFIRMED',
       })
 
     const result = await runSynthesisPass(SOURCES)
@@ -115,6 +172,7 @@ describe('runSynthesisPass', () => {
         contradiction: [],
         uniqueReporting: [],
         framing: [],
+        agreementCategory: 'CONFIRMED',
       })
       .mockResolvedValueOnce({
         agreement: [
@@ -128,11 +186,13 @@ describe('runSynthesisPass', () => {
         contradiction: [],
         uniqueReporting: [],
         framing: [],
+        agreementCategory: 'CONFIRMED',
       })
 
     const result = await runSynthesisPass(SOURCES)
 
     expect(result.agreement).toHaveLength(0)
+    expect(result.agreementCategory).toBe('CONFIRMED')
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(2)
   })
 
@@ -161,6 +221,7 @@ describe('runSynthesisPass', () => {
           },
         ],
         framing: [],
+        agreementCategory: 'CONFIRMED',
       })
       // Malformed repair: a contradiction item with only one attribution instead of the two the
       // schema requires — simulates the model misunderstanding the repair instructions.
@@ -174,6 +235,7 @@ describe('runSynthesisPass', () => {
         ],
         uniqueReporting: [],
         framing: [],
+        agreementCategory: 'CONFIRMED',
       })
 
     const result = await runSynthesisPass(SOURCES)
@@ -181,6 +243,7 @@ describe('runSynthesisPass', () => {
     expect(result.agreement).toHaveLength(0)
     expect(result.uniqueReporting).toHaveLength(1)
     expect(result.uniqueReporting[0]?.prose).toBe('Pouze Novinky uvádí toto tvrzení.')
+    expect(result.agreementCategory).toBe('CONFIRMED')
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(2)
   })
 
@@ -207,6 +270,7 @@ describe('runSynthesisPass', () => {
         ],
         uniqueReporting: [],
         framing: [],
+        agreementCategory: 'CONFIRMED',
       })
       .mockResolvedValueOnce({
         agreement: [],
@@ -225,6 +289,7 @@ describe('runSynthesisPass', () => {
         ],
         uniqueReporting: [],
         framing: [],
+        agreementCategory: 'CONFIRMED',
       })
 
     const result = await runSynthesisPass(SOURCES)

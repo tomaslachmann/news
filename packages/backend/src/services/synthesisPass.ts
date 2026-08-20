@@ -29,11 +29,18 @@ const ContradictionItemSchema = z.object({
   attributions: z.array(AttributionSchema).length(2),
 })
 
+// ADR 0030 (ticket 38): the model's own story-level read of how much the sources overlap in
+// what they report -- one judgement for the whole Analysis, never per dimension item or claim.
+// Closed enum, rejected (never coerced) if the model returns anything else.
+export const AgreementCategorySchema = z.enum(['CONFIRMED', 'PARTIAL', 'DISPUTED'])
+export type AgreementCategory = z.infer<typeof AgreementCategorySchema>
+
 export const SynthesisResultSchema = z.object({
   agreement: z.array(DimensionItemSchema),
   contradiction: z.array(ContradictionItemSchema),
   uniqueReporting: z.array(DimensionItemSchema),
   framing: z.array(DimensionItemSchema),
+  agreementCategory: AgreementCategorySchema,
 })
 
 export type SynthesisResult = z.infer<typeof SynthesisResultSchema>
@@ -64,6 +71,10 @@ function dropFailingItems(result: SynthesisResult, sourceTextByUrl: Map<string, 
     contradiction: filterValidAttributedItems(result.contradiction, sourceTextByUrl),
     uniqueReporting: filterValidAttributedItems(result.uniqueReporting, sourceTextByUrl),
     framing: filterValidAttributedItems(result.framing, sourceTextByUrl),
+    // Not a quote-bearing field -- nothing here can fail verification, so it always passes
+    // through unchanged. Dropping items from `agreement` above does not retroactively make this
+    // judgement wrong; it's a story-level read, not derived from which items survive repair.
+    agreementCategory: result.agreementCategory,
   }
 }
 

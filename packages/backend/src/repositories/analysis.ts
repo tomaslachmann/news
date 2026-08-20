@@ -1,5 +1,11 @@
 import { Prisma } from '@prisma/client'
-import type { Analysis, AnalysisStatus, Story, SynthesisResult } from '@prisma/client'
+import type {
+  Analysis,
+  AnalysisStatus,
+  Story,
+  SynthesisResult,
+  SynthesisAgreementCategory,
+} from '@prisma/client'
 import { prisma } from '../db.js'
 import type { CoverageWithSource } from './coverage.js'
 import type { Cursor } from '../pagination.js'
@@ -296,7 +302,10 @@ export async function disconnect(): Promise<void> {
 /** Persists the Synthesis result and the tool-authored headline (see ADR 0021) and flips the
  *  Analysis to COMPLETE, all in one transaction — there is never a window where an Analysis is
  *  COMPLETE without its headline already having been generated. `headline` is null when
- *  generation was skipped because the Agreement dimension was empty.
+ *  generation was skipped because the Agreement dimension was empty. `sourceOverlapPercentage`
+ *  (nullable) and `agreementCategory` are ticket 38 / ADR 0030's Source Overlap fields — the
+ *  former derived by `computeSourceOverlapPercentage`, the latter lifted straight off the
+ *  already-validated `SynthesisResult` the model returned.
  *
  *  `onComplete`, when given, runs inside the same transaction as the writes above (ADR 0028:
  *  "vytvoř Draft a naplánuj jeho zpracování" is one atomic step) — used by `analysisStream.ts`
@@ -308,14 +317,16 @@ export async function completeAnalysisWithSynthesis(
   analysisId: string,
   dimensions: Prisma.InputJsonValue,
   headline: string | null,
+  sourceOverlapPercentage: number | null,
+  agreementCategory: SynthesisAgreementCategory,
   onComplete?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<void> {
   await prisma.$transaction(
     async (tx) => {
       await tx.synthesisResult.upsert({
         where: { analysisId },
-        create: { analysisId, dimensions, headline },
-        update: { dimensions, headline },
+        create: { analysisId, dimensions, headline, sourceOverlapPercentage, agreementCategory },
+        update: { dimensions, headline, sourceOverlapPercentage, agreementCategory },
       })
       await tx.analysis.update({ where: { id: analysisId }, data: { status: 'COMPLETE' } })
       await onComplete?.(tx)

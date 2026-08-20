@@ -39,6 +39,16 @@ For each item provide:
 - "prose": Czech explanation of the framing contrast
 - "attributions": array of per-outlet evidence showing the contrasting choices (outlet, czechQuote, articleUrl)
 
+## Story-level judgement
+
+### agreementCategory
+One judgement for the whole Analysis — never per dimension item, never per claim. It describes how much the sources overlap in what they report, not how truthful, reliable, or credible any source is. Base it only on how much of the story's core the sources share and how consistently they say it, never on which source you think is right.
+
+Choose exactly one of:
+- "CONFIRMED": the sources substantially agree on the core of the story; little or no contradiction.
+- "PARTIAL": the sources share a core but diverge meaningfully — notable contradictions, or substantial unique/unconfirmed reporting alongside the shared core.
+- "DISPUTED": the sources conflict on the core of the story itself, not just on details around its edges.
+
 ## Rules
 - Be exhaustive. Identify every agreement, contradiction, unique claim, and framing difference across the provided sources that meets the criteria above — not just the handful that seem most notable. Coverage with many extracted claims should produce a correspondingly thorough synthesis.
 - Every item in every dimension must have at least one attribution with a verbatim czechQuote.
@@ -94,5 +104,6 @@ You will receive a JSON array of extraction results:
         { "outlet": "...", "czechQuote": "...", "articleUrl": "..." }
       ]
     }
-  ]
+  ],
+  "agreementCategory": "CONFIRMED" | "PARTIAL" | "DISPUTED"
 }

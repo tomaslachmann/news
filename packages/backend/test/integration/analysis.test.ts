@@ -136,7 +136,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const analysis = await createAnalysis({ seedUrl: 'https://example.cz/f', seedHeadline: 'Working title' })
     const dimensions = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
 
-    await completeAnalysisWithSynthesis(analysis.id, dimensions, 'Vláda schválila rozpočet')
+    await completeAnalysisWithSynthesis(analysis.id, dimensions, 'Vláda schválila rozpočet', null, 'PARTIAL')
 
     const found = await findAnalysisWithDetails(analysis.id)
 
@@ -149,7 +149,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const analysis = await createAnalysis({ seedUrl: 'https://example.cz/g', seedHeadline: 'Working title' })
     const dimensions = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
 
-    await completeAnalysisWithSynthesis(analysis.id, dimensions, null)
+    await completeAnalysisWithSynthesis(analysis.id, dimensions, null, null, 'PARTIAL')
 
     const found = await findAnalysisWithDetails(analysis.id)
 
