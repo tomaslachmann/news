@@ -670,6 +670,35 @@ describe('confirmCoverages', () => {
     )
   })
 
+  it('never scrapes more than 4 PENDING Coverage rows concurrently (ADR 0032)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(ANALYSIS)
+    vi.mocked(coverageRepo.findCoverageUrlsForAnalysis).mockResolvedValue([])
+    vi.mocked(coverageRepo.reconcileCoverages).mockResolvedValue({ ok: true })
+    const manyPending = Array.from({ length: 10 }, (_, i) => ({
+      ...PENDING_COVERAGE,
+      id: `c${i}`,
+      articleUrl: `https://idnes.cz/x${i}`,
+    }))
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockResolvedValueOnce(manyPending)
+      .mockResolvedValueOnce(manyPending)
+
+    let active = 0
+    let maxActive = 0
+    vi.mocked(articleScraperModule.scrapeArticle).mockImplementation(async () => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      active--
+      return SCRAPED
+    })
+
+    await confirmCoverages('a1', { confirmedIds: manyPending.map((c) => c.id) }, ACTOR_ID)
+
+    expect(maxActive).toBeLessThanOrEqual(4)
+    expect(articleScraperModule.scrapeArticle).toHaveBeenCalledTimes(10)
+  })
+
   it('marks a Coverage extraction-failed when the scraped text matches a blocked-content phrase, even though it is long', async () => {
     stubHappyPath()
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({

@@ -405,11 +405,17 @@ model Source {
 /// reads/writes it — this table exists now only so that ticket has somewhere to read feed URLs
 /// from instead of static config.
 model SourceFeed {
-  id        String   @id @default(cuid())
-  sourceId  String
-  source    Source   @relation(fields: [sourceId], references: [id])
-  url       String   @unique
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  sourceId   String
+  source     Source   @relation(fields: [sourceId], references: [id])
+  url        String   @unique
+  /// Which feed-parsing function rss.ts dispatches to — a plain String (closed set enforced by a
+  /// TS union, matching AdminActionLog/LlmCallLog's convention), not a Prisma enum, so a new kind
+  /// is a data change, not a migration. "rss2" is the only value today: every outlet's feed
+  /// verified as genuine RSS 2.0 (see ADR 0032/ticket 10), including several that declare an
+  /// xmlns:atom namespace only for a self-link tag — that's not evidence of an Atom feed.
+  parserKind String   @default("rss2")
+  createdAt  DateTime @default(now())
 
   @@index([sourceId])
 }
