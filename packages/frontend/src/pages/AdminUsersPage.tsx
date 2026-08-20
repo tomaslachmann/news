@@ -1,8 +1,5 @@
 import { useState } from 'react'
 import type { UserRole } from '@news-triangulator/shared'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -11,27 +8,32 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { PageContainer } from '@/components/PageContainer'
-import { PageTitle } from '@/components/PageTitle'
 import { useAuth } from '@/context/AuthContext'
 import type { AdminUserListItem } from '@/services/users'
 import { useUsersList, useCreateUser, useUpdateUser, useDeleteUser } from '@/services/users/hooks'
 import { formatDate } from '@/lib/formatDate'
+import './AdminUsersPage.css'
 
-function RoleSelect({ value, onChange }: { value: UserRole; onChange: (role: UserRole) => void }) {
+const ROLE_LABEL: Record<UserRole, string> = {
+  ADMIN: 'Admin',
+  READONLY: 'Pouze pro čtení',
+}
+
+function RoleSelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: UserRole
+  onChange: (role: UserRole) => void
+}) {
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as UserRole)}>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="ADMIN">Admin</SelectItem>
-        <SelectItem value="READONLY">Pouze pro čtení</SelectItem>
-      </SelectContent>
-    </Select>
+    <select id={id} className="select" value={value} onChange={(e) => onChange(e.target.value as UserRole)}>
+      <option value="READONLY">Pouze pro čtení</option>
+      <option value="ADMIN">Admin</option>
+    </select>
   )
 }
 
@@ -67,10 +69,13 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <DialogDescription>Přidejte nového uživatele se zadáním e-mailu, hesla a role.</DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="create-email">E-mail</Label>
-              <Input
+          <div className="panel__f">
+            <div className="field">
+              <label className="field__l" htmlFor="create-email">
+                E-mail
+              </label>
+              <input
+                className="input"
                 id="create-email"
                 type="email"
                 value={email}
@@ -78,9 +83,12 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
                 required
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="create-password">Heslo</Label>
-              <Input
+            <div className="field">
+              <label className="field__l" htmlFor="create-password">
+                Heslo
+              </label>
+              <input
+                className="input"
                 id="create-password"
                 type="password"
                 value={password}
@@ -88,20 +96,24 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
                 required
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="create-role">Role</Label>
-              <RoleSelect value={role} onChange={setRole} />
+            <div className="field">
+              <label className="field__l" htmlFor="create-role">
+                Role
+              </label>
+              <RoleSelect id="create-role" value={role} onChange={setRole} />
             </div>
           </div>
 
           {createMutation.isError && (
-            <p className="mt-4 text-sm text-destructive">{createMutation.error.message}</p>
+            <div className="error" style={{ marginTop: 'var(--sp-4)' }}>
+              <p className="error__p">{createMutation.error.message}</p>
+            </div>
           )}
 
-          <DialogFooter className="mt-6">
-            <Button type="submit" disabled={createMutation.isPending}>
+          <DialogFooter>
+            <button className="btn btn--primary" type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Vytváření…' : 'Vytvořit uživatele'}
-            </Button>
+            </button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -140,14 +152,19 @@ function EditUserDialog({
             <DialogDescription>Změňte roli tohoto uživatele nebo nastavte nové heslo.</DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-role">Role</Label>
-              <RoleSelect value={role} onChange={setRole} />
+          <div className="panel__f">
+            <div className="field">
+              <label className="field__l" htmlFor="edit-role">
+                Role
+              </label>
+              <RoleSelect id="edit-role" value={role} onChange={setRole} />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-password">Nové heslo</Label>
-              <Input
+            <div className="field">
+              <label className="field__l" htmlFor="edit-password">
+                Nové heslo
+              </label>
+              <input
+                className="input"
                 id="edit-password"
                 type="password"
                 value={password}
@@ -158,13 +175,15 @@ function EditUserDialog({
           </div>
 
           {updateMutation.isError && (
-            <p className="mt-4 text-sm text-destructive">{updateMutation.error.message}</p>
+            <div className="error" style={{ marginTop: 'var(--sp-4)' }}>
+              <p className="error__p">{updateMutation.error.message}</p>
+            </div>
           )}
 
-          <DialogFooter className="mt-6">
-            <Button type="submit" disabled={updateMutation.isPending}>
+          <DialogFooter>
+            <button className="btn btn--primary" type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? 'Ukládání…' : 'Uložit změny'}
-            </Button>
+            </button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -194,19 +213,23 @@ function DeleteUserDialog({
           <DialogDescription>Tuto akci nelze vrátit zpět.</DialogDescription>
         </DialogHeader>
 
-        {deleteMutation.isError && <p className="text-sm text-destructive">{deleteMutation.error.message}</p>}
+        {deleteMutation.isError && (
+          <div className="error" style={{ marginTop: 'var(--sp-3)' }}>
+            <p className="error__p">{deleteMutation.error.message}</p>
+          </div>
+        )}
 
-        <DialogFooter className="mt-2">
-          <Button variant="outline" type="button" onClick={() => handleOpenChange(false)}>
+        <DialogFooter>
+          <button className="btn" type="button" onClick={() => handleOpenChange(false)}>
             Zrušit
-          </Button>
-          <Button
-            variant="destructive"
+          </button>
+          <button
+            className="btn btn--primary"
             disabled={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate(user.id, { onSuccess: () => handleOpenChange(false) })}
           >
             {deleteMutation.isPending ? 'Mazání…' : 'Smazat'}
-          </Button>
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -217,10 +240,10 @@ function DisabledActionButton({ label, tooltip }: { label: string; tooltip: stri
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="inline-block" tabIndex={0}>
-          <Button variant="outline" size="sm" disabled className="pointer-events-none">
+        <span tabIndex={0} style={{ display: 'inline-block' }}>
+          <button className="btn btn--micro" disabled style={{ pointerEvents: 'none' }}>
             {label}
-          </Button>
+          </button>
         </span>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
@@ -240,31 +263,27 @@ function UserRow({
   onDelete: () => void
 }) {
   return (
-    <TableRow>
-      <TableCell>{user.email}</TableCell>
-      <TableCell>
-        <span className="utility-label">{user.role === 'ADMIN' ? 'Admin' : 'Pouze pro čtení'}</span>
-      </TableCell>
-      <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
-      <TableCell>
-        <div className="flex gap-2">
-          {isSelf ? (
-            <DisabledActionButton label="Upravit" tooltip="Svůj vlastní účet zde nemůžete upravit" />
-          ) : (
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              Upravit
-            </Button>
-          )}
-          {isSelf ? (
-            <DisabledActionButton label="Smazat" tooltip="Svůj vlastní účet nemůžete smazat" />
-          ) : (
-            <Button variant="destructive" size="sm" onClick={onDelete}>
-              Smazat
-            </Button>
-          )}
-        </div>
-      </TableCell>
-    </TableRow>
+    <tr className={isSelf ? 'is-self' : undefined}>
+      <td>{user.email}</td>
+      <td>{ROLE_LABEL[user.role]}</td>
+      <td className="dtable__d">{formatDate(user.createdAt)}</td>
+      <td className="dtable__act">
+        {isSelf ? (
+          <DisabledActionButton label="Upravit" tooltip="Svůj vlastní účet zde nemůžete upravit" />
+        ) : (
+          <button className="btn btn--micro" onClick={onEdit}>
+            Upravit
+          </button>
+        )}
+        {isSelf ? (
+          <DisabledActionButton label="Smazat" tooltip="Svůj vlastní účet nemůžete smazat" />
+        ) : (
+          <button className="btn btn--micro" onClick={onDelete}>
+            Smazat
+          </button>
+        )}
+      </td>
+    </tr>
   )
 }
 
@@ -275,39 +294,65 @@ export default function AdminUsersPage() {
   const [editingUser, setEditingUser] = useState<AdminUserListItem | null>(null)
   const [deletingUser, setDeletingUser] = useState<AdminUserListItem | null>(null)
 
+  const adminCount = users?.filter((u) => u.role === 'ADMIN').length ?? 0
+
   return (
     <TooltipProvider>
-      <PageContainer width="wide">
-        <div className="flex items-center justify-between">
-          <PageTitle>Uživatelé</PageTitle>
-          <Button onClick={() => setCreateOpen(true)}>Vytvořit uživatele</Button>
-        </div>
+      <div className="u-wrap">
+        <header className="ahead">
+          <h1 className="ahead__t">Uživatelé</h1>
+          <div className="ahead__act">
+            <button className="btn btn--primary" onClick={() => setCreateOpen(true)}>
+              Vytvořit uživatele
+            </button>
+          </div>
+          <p className="ahead__d">
+            Dvě role. <b>Admin</b> smí schvalovat koncepty, vztahy mezi událostmi a spravovat uživatele.{' '}
+            <b>Pouze pro čtení</b> vidí interní obrazovky, ale nic nepotvrzuje ani nemění. Svůj vlastní účet
+            zde upravit nelze — o změnu role nebo hesla požádejte druhého správce.
+          </p>
+        </header>
 
-        {isLoading && <p className="mt-8 text-muted-foreground">Načítání uživatelů…</p>}
-        {isError && <p className="mt-8 text-destructive">Nepodařilo se načíst uživatele.</p>}
+        {isLoading && <p style={{ marginTop: 'var(--sp-5)', color: 'var(--ink-3)' }}>Načítání uživatelů…</p>}
+        {isError && (
+          <div className="error" style={{ marginTop: 'var(--sp-5)' }}>
+            <p className="error__p">Nepodařilo se načíst uživatele.</p>
+          </div>
+        )}
 
         {users && (
-          <Table className="mt-8">
-            <TableHeader>
-              <TableRow>
-                <TableHead>E-mail</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Vytvořeno</TableHead>
-                <TableHead>Akce</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((u) => (
-                <UserRow
-                  key={u.id}
-                  user={u}
-                  isSelf={u.id === currentUser?.id}
-                  onEdit={() => setEditingUser(u)}
-                  onDelete={() => setDeletingUser(u)}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          <section className="qsec">
+            <div className="u-scroll-x">
+              <table className="dtable">
+                <thead>
+                  <tr>
+                    <th scope="col">E-mail</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Vytvořeno</th>
+                    <th scope="col" className="dtable__act">
+                      Akce
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <UserRow
+                      key={u.id}
+                      user={u}
+                      isSelf={u.id === currentUser?.id}
+                      onEdit={() => setEditingUser(u)}
+                      onDelete={() => setDeletingUser(u)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="note picknote">
+              Celkem <b>{users.length}</b>, z toho <b>{adminCount}</b>{' '}
+              {adminCount === 1 ? 'správce' : 'správců'}. Mazání je okamžité a nevratné; historie schválení u
+              článků zůstává zachovaná i po smazání účtu.
+            </p>
+          </section>
         )}
 
         <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
@@ -317,7 +362,7 @@ export default function AdminUsersPage() {
         {deletingUser && (
           <DeleteUserDialog user={deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)} />
         )}
-      </PageContainer>
+      </div>
     </TooltipProvider>
   )
 }

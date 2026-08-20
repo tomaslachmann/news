@@ -1,0 +1,451 @@
+/* ticket 39 — 1:1 port of e.html's home page: canonical ds/components.css class names where a
+   canonical equivalent exists (.lead, .card/.cards, .story/.storylist, .minute, .daystats,
+   .ents/.erow, .pull), plus a few page-only classes e.html itself uses with no canonical
+   equivalent at all (.qbox/.q, .legend — confirmed absent from ds/components.css, ported from
+   e.css directly). Content is e.html's own literal sample data (shared/data.js + data2.js), not
+   real API data — this is a visual/component port; wiring real data is separate, later work per
+   the user's explicit direction. .byline/.chip/.gauge/.kicker/.hl/.layout moved to the shared
+   ds/components.css once AnalysisPage needed them too — see that file's own header comment. */
+
+.daystats {
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.daystats__in {
+  display: flex;
+  align-items: center;
+  min-height: 2.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  font-family: var(--font-sans);
+}
+.daystats__in::-webkit-scrollbar {
+  display: none;
+}
+.stat {
+  padding: var(--sp-3) var(--sp-5) var(--sp-3) 0;
+  margin-right: var(--sp-5);
+  border-right: var(--bw-hair) solid var(--line-2);
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+}
+.stat:last-child {
+  border-right: 0;
+  margin-right: 0;
+}
+.stat b {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: clamp(1.0625rem, 1rem + 0.4vw, 1.3125rem);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 24;
+  color: var(--ink);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.stat--warn b {
+  color: var(--accent);
+}
+
+/* ADR 0031: no image field exists in the data model (ADR 0004 keeps article content unstored),
+   so .fig renders as an aspect-ratio placeholder box rather than an <img> — an empty area is
+   more honest than hotlinking a source's own image or showing a broken-image icon. e.html's own
+   sample img filenames are kept as the figcaption's TODO text so the placeholder still names
+   what would fill it. */
+.fig img,
+.fig__ph {
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  inline-size: 100%;
+  background: var(--surface-3);
+}
+.fig--thumb img,
+.fig--thumb .fig__ph {
+  aspect-ratio: 4 / 3;
+}
+.fig figcaption {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: var(--bw-hair) solid var(--line-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.fig figcaption > :last-child {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ═══ lead / cards / storylist (ds/components.css §5) ══════════════════════ */
+
+.lead {
+  padding-bottom: var(--sp-5);
+  border-bottom: var(--bw-hair) solid var(--line-strong);
+}
+.lead__h {
+  margin: var(--sp-2) 0 var(--sp-3);
+  max-width: var(--measure-head);
+}
+.lead__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: var(--sp-5);
+  align-items: start;
+}
+.lead__perex {
+  font-size: var(--text-lead);
+  line-height: var(--lh-relaxed);
+  color: var(--ink-2);
+}
+@media (max-width: 44rem) {
+  .lead__h {
+    max-width: none;
+  }
+  .lead__body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-4);
+  }
+}
+
+.card {
+  container-type: inline-size;
+  border-top: var(--bw-hair) solid var(--line);
+  padding-top: var(--sp-3);
+}
+.card__h {
+  margin-top: var(--sp-1);
+}
+.card__p {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+@container (max-width: 22rem) {
+  .card__h {
+    font-size: var(--text-h4);
+  }
+  .card .fig img {
+    aspect-ratio: 16 / 9;
+  }
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--sp-5);
+}
+
+.storylist {
+  border-top: var(--bw-hair) solid var(--line-strong);
+}
+.story {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(6.5rem, 12vw, 9rem);
+  gap: var(--sp-5);
+  padding: var(--sp-4) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.story:hover {
+  background: color-mix(in oklab, var(--surface-2) 70%, transparent);
+}
+.story h3 {
+  font-size: var(--text-h2);
+  line-height: 1.15;
+}
+.story:hover h3.hl {
+  color: var(--accent);
+}
+.story__p {
+  margin-top: var(--sp-2);
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  max-width: var(--measure);
+}
+.story__meta {
+  margin-top: var(--sp-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+}
+.story__meta a {
+  border-bottom: var(--bw-hair) solid var(--line);
+}
+.story__meta a:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* .li:has(.chip--bad)'s red left border, ported from e.css: permanent, driven by the data (a
+   conflict row is marked whether or not you're hovering it) — not a hover effect. The heading
+   color change is the separate hover affordance layered on top, per direct feedback. */
+.story:has(.chip--bad) {
+  border-left: var(--bw-rule) solid var(--bad);
+  padding-left: var(--sp-3);
+  margin-left: calc(var(--sp-3) * -1);
+}
+.story:has(.chip--bad):hover h3.hl {
+  color: var(--bad);
+}
+@media (max-width: 44rem) {
+  .story {
+    grid-template-columns: minmax(0, 1fr) 6rem;
+    gap: var(--sp-4);
+  }
+}
+
+/* ═══ right rail (ds/components.css §4/§5 + e.css-only .qbox/.legend) ══════ */
+
+.minute {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: var(--sp-2) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.minute__t {
+  padding-top: 0.15rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.minute__x {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 1.34;
+}
+.minute__s {
+  display: block;
+  margin-top: 0.1rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.minute__s .is-bad {
+  color: var(--bad);
+}
+
+.ents {
+  border-top: var(--bw-rule) solid var(--line-strong);
+  padding-top: var(--sp-3);
+}
+.ents__note {
+  margin-bottom: var(--sp-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.erow {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.erow__c {
+  display: grid;
+  place-items: center;
+}
+.erow__dot {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: var(--bw-hair) solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: var(--accent-soft);
+  font-family: var(--font-sans);
+  font-optical-sizing: none;
+  font-size: 0.625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.erow:hover .erow__dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.erow__n {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 1.25;
+}
+.erow__k {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.erow__t {
+  text-align: right;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.erow__t.is-up {
+  color: var(--ok);
+}
+.erow__t.is-down {
+  color: var(--bad);
+}
+
+.pull {
+  border-top: var(--bw-rule) solid var(--line-strong);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  padding: var(--sp-4) 0;
+}
+.pull q {
+  quotes: '„' '“' '‚' '‘';
+  display: block;
+  font-size: var(--text-h4);
+  line-height: 1.36;
+}
+.pull cite {
+  display: block;
+  margin-top: var(--sp-3);
+  font-style: normal;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* e.css-only — no canonical ds/components.css equivalent (confirmed absent). Ported directly,
+   tokens only. */
+.qbox {
+  border: var(--bw-hair) solid var(--line);
+  padding: var(--sp-4);
+  background: var(--surface);
+}
+.qbox h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  margin-bottom: var(--sp-3);
+}
+.q {
+  display: block;
+  padding: var(--sp-3) 0;
+  border-top: var(--bw-hair) solid var(--line-2);
+}
+.q:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.q__t {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 1.3;
+}
+.q__d {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  margin: 0.15rem 0 0.35rem;
+}
+
+.legend {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.legend b {
+  color: var(--ink-2);
+}
+
+/* Main-column section header ("Ve středu pozornosti", "Další zprávy dne") — e.css's .sec,
+   ported directly (confirmed present, tokens only). */
+.sec {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  margin: var(--sp-6) 0 var(--sp-4);
+}
+.sec h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+.sec .rule {
+  flex: 1;
+  height: var(--bw-hair);
+  background: var(--line);
+}
+.sec a {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Right-rail section header ("Entity dne", "Minuta", "Nejčtenější", "Jak čteme shodu") — e.css's
+   .bhead, a different, border-bottom treatment from .sec above (confirmed present, tokens only —
+   this was initially missed and replaced with an invented .sechead; corrected). */
+.bhead {
+  display: flex;
+  align-items: baseline;
+  border-bottom: var(--bw-hair) solid var(--ink);
+  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.bhead h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+.bhead span {
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.bhead a {
+  color: var(--accent);
+}
+
+.livedot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent);
+}
+.livedot i {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .livedot i {
+    animation: nt-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes nt-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}
+
+.mock-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--ink-4);
+  border: var(--bw-hair) dashed var(--line);
+  padding: 0.1rem 0.3rem;
+  margin-left: var(--sp-2);
+}

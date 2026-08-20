@@ -11,6 +11,9 @@ export default defineConfig(
       '.scratch/**',
       'packages/backend/prisma/migrations/**',
       'packages/frontend/src/components/ui/**',
+      // Vanilla-JS static assets ported verbatim from news_design (ticket 39's /styleguide
+      // route) — classic scripts served as-is, not part of the TS-checked app source.
+      'packages/frontend/public/styleguide-assets/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,

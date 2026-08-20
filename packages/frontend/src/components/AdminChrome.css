@@ -1,0 +1,138 @@
+/* ticket 39 — ds/components.css §15 "INTERNÍ OBRAZOVKY (PŘIHLÁŠENÍ A ADMIN)", the .abar slice:
+   the internal/admin screens' own chrome, not the public masthead/rubnav. Ported directly, tokens
+   only. .foot is reused from Chrome.css (imported alongside this file) — same footer component,
+   just simpler content for admin pages (no sitemap columns). */
+
+.abar {
+  border-bottom: var(--bw-rule) solid var(--line-strong);
+  background: var(--surface-2);
+}
+.abar__in {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  min-block-size: 3rem;
+}
+.abar__brand {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-serif);
+  font-size: var(--text-h4);
+  font-weight: 500;
+  letter-spacing: var(--ls-h4);
+  white-space: nowrap;
+}
+.abar__brand em {
+  font-style: normal;
+  color: var(--accent);
+}
+.abar__tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: var(--bw-hair) solid var(--line);
+  padding: 0.1rem 0.3rem;
+}
+.abar__nav {
+  display: flex;
+  gap: var(--sp-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+}
+.abar__nav a {
+  color: var(--ink-2);
+  padding-block: 0.9rem;
+  border-bottom: var(--bw-rule) solid transparent;
+  margin-bottom: -2px;
+}
+.abar__nav a:hover {
+  color: var(--ink);
+}
+.abar__nav a[aria-current='page'] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+.abar__side {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.abar__who {
+  white-space: nowrap;
+}
+.abar__side a,
+.abar__side button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+.abar__side a:hover,
+.abar__side button:hover {
+  color: var(--ink);
+}
+.abar__side button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* role uživatele — slovem, ne barvou */
+.pill {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: var(--bw-hair) solid var(--line);
+  padding: 0.1rem 0.35rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.pill--admin {
+  border-color: color-mix(in oklab, var(--ink) 45%, var(--line));
+  color: var(--ink);
+}
+
+/* hlava vnitřní stránky */
+.ahead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--sp-3) var(--sp-4);
+  padding-block: var(--sp-5) var(--sp-4);
+  border-bottom: var(--bw-rule) solid var(--line-strong);
+}
+.ahead__t {
+  grid-column: 1;
+  font-family: var(--font-serif);
+  font-size: var(--text-h2);
+  font-weight: 500;
+  font-variation-settings: 'opsz' var(--opsz-h2);
+  letter-spacing: var(--ls-h2);
+}
+.ahead__d {
+  grid-column: 1 / -1;
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  color: var(--ink-3);
+  max-inline-size: var(--measure);
+  line-height: 1.55;
+}
+.ahead__act {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  display: flex;
+  gap: var(--sp-2);
+}

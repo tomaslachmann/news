@@ -1,0 +1,199 @@
+/* ticket 39 — ds/components.css §15, ported for /review/:id (closest reference:
+   admin-sources.html). .crumbs duplicates AnalysisPage.css's copy — same source class, kept
+   page-scoped like every other page here. */
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  padding: var(--sp-3) 0;
+  font-family: var(--font-sans);
+  font-optical-sizing: none;
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.crumbs span[aria-current] {
+  color: var(--ink);
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  padding-block: var(--sp-4);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-4);
+}
+.steps__i {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.steps__n {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  border: var(--bw-hair) solid var(--line-2);
+  padding: 0.05rem 0.3rem;
+}
+.steps__i.is-done {
+  color: var(--ink-3);
+}
+.steps__i.is-done .steps__n {
+  border-color: var(--line);
+}
+.steps__i.is-now {
+  color: var(--ink);
+  font-weight: 500;
+}
+.steps__i.is-now .steps__n {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pick {
+  border-top: var(--bw-hair) solid var(--line-2);
+}
+.pick__i {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-4) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  align-items: start;
+}
+.pick__i:hover {
+  background: color-mix(in oklab, var(--surface-2) 60%, transparent);
+}
+.pick__c {
+  grid-row: 1 / span 4;
+  padding-top: 0.15rem;
+}
+.pick__c input {
+  accent-color: var(--accent);
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+}
+.pick__w {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.pick__t {
+  grid-column: 2;
+  font-family: var(--font-serif);
+  font-size: var(--text-h4);
+  line-height: 1.32;
+  font-variation-settings: 'opsz' var(--opsz-h4);
+}
+.pick__u {
+  grid-column: 2;
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--ink-4);
+  overflow-wrap: anywhere;
+}
+a.pick__u:hover {
+  color: var(--accent);
+}
+.pick__x {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pick__x.is-ok {
+  color: var(--ok);
+}
+.pick__x.is-bad {
+  color: var(--bad);
+}
+.pick__i.is-off {
+  color: var(--ink-3);
+}
+.pick__i.is-off .pick__t {
+  color: var(--ink-3);
+}
+.pick__i--fail {
+  border-left: var(--bw-rule) solid var(--bad);
+  padding-left: var(--sp-4);
+}
+.pick__paste {
+  grid-column: 2;
+  margin-top: var(--sp-1);
+  display: grid;
+  gap: var(--sp-2);
+}
+.pick__paste textarea {
+  min-block-size: 5.5rem;
+  resize: vertical;
+  font-family: var(--font-sans);
+  border: var(--bw-hair) solid var(--line);
+  background: var(--surface);
+  padding: 0.5rem;
+  font-size: var(--text-small);
+  color: var(--ink);
+}
+.pick__paste textarea:focus {
+  border-color: var(--accent);
+  outline: 0;
+}
+
+/* přidání vlastního zdroje */
+.addsrc {
+  margin-top: var(--sp-5);
+  max-inline-size: 34rem;
+}
+.addsrc__r {
+  display: flex;
+  gap: var(--sp-2);
+}
+.addsrc__r .input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+/* lepivá lišta s potvrzením — vždy vidět, kolik zdrojů je vybráno */
+.confirm {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding-block: var(--sp-4);
+  border-top: var(--bw-rule) solid var(--line-strong);
+  background: var(--paper);
+}
+.confirm__n {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+.confirm__n b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.confirm__act {
+  margin-left: auto;
+  display: flex;
+  gap: var(--sp-2);
+}

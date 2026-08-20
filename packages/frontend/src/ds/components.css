@@ -1,0 +1,189 @@
+/* ticket 39 — shared component vocabulary from news_design's ds/components.css, ported class by
+   class as pages start needing them (not the whole 57 KB file at once — see the ticket's own
+   mechanics checklist). Extracted here once a class was about to be duplicated a third time
+   (.byline/.chip/.gauge/.kicker/.hl/.layout, first built in HomePage.css, needed again by
+   AnalysisPage.css) rather than staying page-scoped like page-only classes (.qbox, .legend, …)
+   still do. Tokens only, imported globally from main.tsx alongside ds/base.css/ds/controls.css. */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rail);
+  gap: 0 var(--sp-6);
+  padding-block: var(--sp-5) var(--sp-8);
+}
+.layout__rail {
+  border-left: var(--bw-hair) solid var(--line-2);
+  padding-left: var(--sp-5);
+}
+.layout__rail > section {
+  margin-bottom: var(--sp-6);
+}
+@media (max-width: 62rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .layout__rail {
+    border-left: 0;
+    padding-left: 0;
+    border-top: var(--bw-hair) solid var(--line-strong);
+    padding-top: var(--sp-5);
+    margin-top: var(--sp-4);
+  }
+}
+
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+  margin: var(--sp-3) 0;
+  font-family: var(--font-sans);
+  font-optical-sizing: none;
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+}
+.byline b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.byline__who {
+  color: var(--ink-2);
+}
+.byline__time {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.byline__sep {
+  color: var(--line);
+}
+.byline__grp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.chip {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-optical-sizing: none;
+  font-size: var(--text-micro);
+  letter-spacing: 0.05em;
+  border: var(--bw-hair) solid var(--line);
+  padding: 0.12rem 0.4rem;
+  color: var(--ink-2);
+}
+.chip--ok {
+  border-color: color-mix(in oklab, var(--ok) 50%, var(--line));
+  color: var(--ok);
+}
+.chip--bad {
+  border-color: color-mix(in oklab, var(--bad) 45%, var(--line));
+  color: var(--bad);
+  background: var(--accent-soft);
+}
+.chip--mid {
+  border-color: color-mix(in oklab, var(--mid) 50%, var(--line));
+  color: var(--mid);
+}
+
+.gauge {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  vertical-align: middle;
+}
+.gauge i {
+  display: block;
+  inline-size: 5px;
+  block-size: 10px;
+  background: var(--line-2);
+}
+.gauge i.is-on {
+  background: color-mix(in oklab, var(--ink) 80%, transparent);
+}
+.gauge i.is-on.is-bad {
+  background: var(--bad);
+}
+.gauge--lg i {
+  inline-size: 6px;
+  block-size: 13px;
+}
+
+.hl {
+  transition: color var(--dur-fast) var(--ease);
+}
+a:hover .hl {
+  color: var(--accent);
+}
+
+.kicker {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-block;
+}
+.kicker--ink {
+  color: var(--ink-3);
+}
+
+/* design-complete.css's "missing screens" extension, not ds/components.css's own original
+   vocabulary (no page in news_design's core system used .page-shell/.screen-head — only the
+   utility screens history.html/new-analysis.html/analysis-live.html do). Moved here once a third
+   page needed it (History, NewAnalysis, now Analysis's live-streaming state). */
+.page-shell {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+.screen-head {
+  padding-block: var(--sp-7) var(--sp-5);
+  border-bottom: var(--bw-rule) solid var(--line-strong);
+}
+.screen-head__k {
+  font: 600 var(--text-micro) / 1 var(--font-sans);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.screen-head__t {
+  margin-top: var(--sp-2);
+  font: 500 var(--text-h1) / 1.08 var(--font-serif);
+  font-variation-settings: 'opsz' var(--opsz-h1);
+  max-width: var(--measure-head);
+}
+.screen-head__d {
+  margin-top: var(--sp-3);
+  max-width: var(--measure);
+  font: var(--text-body) / var(--lh-relaxed) var(--font-serif);
+  color: var(--ink-2);
+}
+
+/* Radix Tooltip content (ui/tooltip.tsx) — no reference equivalent exists (news_design is static
+   HTML, nothing there is interactive), so this is new, tokens-only, matching the system's own
+   zero-radius rule (--radius: 0) rather than shadcn's default rounded popover. */
+.tooltip {
+  z-index: 50;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.3rem 0.55rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+}
+
+/* Small muted explanatory text — moved here once a third page (AdminUsersPage, AnalysisPage,
+   IngestionReviewPage) needed it, same threshold as .byline/.chip/etc above. */
+.note {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.note b {
+  color: var(--ink-2);
+}

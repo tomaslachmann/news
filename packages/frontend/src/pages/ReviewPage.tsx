@@ -1,31 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { PageContainer } from '@/components/PageContainer'
-import { PageTitle } from '@/components/PageTitle'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
 import { formatDate } from '@/lib/formatDate'
+import './ReviewPage.css'
 
 type PageMode = 'select' | 'confirming' | 'results'
 
-function StatusBadge({ status }: { status: CoverageInfo['status'] }) {
-  if (status === 'ok') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-        <CheckCircle size={12} /> Extrahováno
-      </span>
-    )
-  }
-  if (status === 'extraction-failed') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
-        <XCircle size={12} /> Nelze extrahovat
-      </span>
-    )
-  }
+function StatusText({ status }: { status: CoverageInfo['status'] }) {
+  if (status === 'ok') return <span className="pick__x is-ok">Extrahováno</span>
+  if (status === 'extraction-failed') return <span className="pick__x is-bad">Nelze extrahovat</span>
   return null
 }
 
@@ -104,17 +88,19 @@ export default function ReviewPage() {
 
   if (isLoading) {
     return (
-      <PageContainer>
-        <p className="text-muted-foreground">Načítání zdrojů…</p>
-      </PageContainer>
+      <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
+        <p style={{ color: 'var(--ink-3)' }}>Načítání zdrojů…</p>
+      </div>
     )
   }
 
   if (isError || !analysis) {
     return (
-      <PageContainer>
-        <p className="text-destructive">Nepodařilo se načíst analýzu. Vraťte se zpět a zkuste to znovu.</p>
-      </PageContainer>
+      <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
+        <div className="error">
+          <p className="error__p">Nepodařilo se načíst analýzu. Vraťte se zpět a zkuste to znovu.</p>
+        </div>
+      </div>
     )
   }
 
@@ -123,187 +109,218 @@ export default function ReviewPage() {
     const failedIds = results.filter((c) => c.status === 'extraction-failed').map((c) => c.id)
 
     return (
-      <PageContainer>
-        <PageTitle size="sm">{analysis.seedHeadline}</PageTitle>
-        <p className="text-sm text-muted-foreground mt-1">Extrakce dokončena</p>
+      <div className="u-wrap">
+        <nav className="crumbs" aria-label="Cesta">
+          <span aria-current="page">Výběr zdrojů</span>
+        </nav>
 
-        <ul className="mt-6 flex flex-col gap-3">
+        <header className="ahead">
+          <h1 className="ahead__t">{analysis.seedHeadline}</h1>
+          <p className="ahead__d">Extrakce dokončena.</p>
+        </header>
+
+        <div className="pick">
           {results.map((coverage) => (
-            <li key={coverage.id} className="rounded-lg border bg-card p-4 flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="utility-label">{coverage.outlet}</span>
-                  <p className="text-sm font-medium leading-snug line-clamp-2">
-                    {coverage.title ?? coverage.articleUrl}
-                  </p>
-                  <StatusBadge status={coverage.status} />
-                </div>
-                <a
-                  href={coverage.articleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                  aria-label="Otevřít článek"
-                >
-                  <ExternalLink size={16} />
-                </a>
-              </div>
+            <div
+              className={`pick__i${coverage.status === 'extraction-failed' ? ' pick__i--fail' : ''}`}
+              key={coverage.id}
+            >
+              <span className="pick__w">{coverage.outlet}</span>
+              <p className="pick__t">{coverage.title ?? coverage.articleUrl}</p>
+              <a className="pick__u" href={coverage.articleUrl} target="_blank" rel="noopener noreferrer">
+                {coverage.articleUrl}
+              </a>
+              <StatusText status={coverage.status} />
 
               {coverage.status === 'extraction-failed' && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">
-                    Vložte text článku ručně (nepovinné):
+                <div className="pick__paste">
+                  <label className="field__l" htmlFor={`manual-${coverage.id}`}>
+                    Vložte text článku ručně (nepovinné)
                   </label>
                   <textarea
+                    id={`manual-${coverage.id}`}
                     rows={4}
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
                     placeholder="Sem vložte text článku…"
                     value={manualTexts.get(coverage.id) ?? ''}
                     onChange={(e) => setManualTexts((prev) => new Map(prev).set(coverage.id, e.target.value))}
                   />
                 </div>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
 
         {failedIds.length > 0 && (
-          <p className="mt-4 text-sm text-muted-foreground">
+          <p style={{ marginTop: 'var(--sp-4)', color: 'var(--ink-3)', fontSize: 'var(--text-small)' }}>
             Počet zdrojů, které se nepodařilo extrahovat: {failedIds.length}. Text můžete vložit ručně výše,
             nebo pokračovat bez nich.
           </p>
         )}
 
         {proceedMutation.isError && (
-          <p className="mt-3 text-sm text-destructive">{proceedMutation.error.message}</p>
+          <div className="error" style={{ marginTop: 'var(--sp-3)' }}>
+            <p className="error__p">{proceedMutation.error.message}</p>
+          </div>
         )}
 
-        <Button
-          className="mt-6"
-          onClick={() => proceedMutation.mutate()}
-          disabled={proceedMutation.isPending}
-        >
-          {proceedMutation.isPending ? 'Ukládání…' : 'Pokračovat k analýze'}
-        </Button>
-      </PageContainer>
+        <div className="confirm">
+          <p className="confirm__n">
+            <b>{results.length}</b> zdrojů zpracováno
+          </p>
+          <div className="confirm__act">
+            <button
+              className="btn btn--primary"
+              onClick={() => proceedMutation.mutate()}
+              disabled={proceedMutation.isPending}
+            >
+              {proceedMutation.isPending ? 'Ukládání…' : 'Pokračovat k analýze'}
+            </button>
+          </div>
+        </div>
+      </div>
     )
   }
 
   // ── Select / confirming mode ─────────────────────────────────────────────────
   return (
-    <PageContainer>
-      <PageTitle size="sm">{analysis.seedHeadline}</PageTitle>
-      <p className="text-sm text-muted-foreground mt-1">Vyberte zdroje, které chcete zahrnout do analýzy</p>
+    <div className="u-wrap">
+      <nav className="crumbs" aria-label="Cesta">
+        <span aria-current="page">Výběr zdrojů</span>
+      </nav>
+
+      <div className="steps">
+        <span className="steps__i is-done">
+          <span className="steps__n">1</span>Zdroj nalezen
+        </span>
+        <span className="steps__i is-done">
+          <span className="steps__n">2</span>Vyhledání pokrytí
+        </span>
+        <span className="steps__i is-now">
+          <span className="steps__n">3</span>Výběr zdrojů
+        </span>
+        <span className="steps__i">
+          <span className="steps__n">4</span>Triangulace
+        </span>
+        <span className="steps__i">
+          <span className="steps__n">5</span>Zveřejnění
+        </span>
+      </div>
+
+      <header className="ahead">
+        <h1 className="ahead__t">{analysis.seedHeadline}</h1>
+        <p className="ahead__d">
+          Vyberte zdroje, které chcete zahrnout do analýzy. Dokud nepotvrdíte, neproběhne nic — koncept
+          zůstane rozepsaný.
+        </p>
+      </header>
 
       {analysis.coverages.length === 0 && customUrls.length === 0 ? (
-        <div className="mt-8 rounded-lg border border-dashed p-8 text-center">
-          <p className="text-muted-foreground">
-            Nebylo nalezeno žádné pokrytí. Přidejte odkazy na články níže, nebo se vraťte a upravte klíčová
-            slova.
-          </p>
-        </div>
+        <p style={{ marginTop: 'var(--sp-5)', color: 'var(--ink-3)' }}>
+          Nebylo nalezeno žádné pokrytí. Přidejte odkazy na články níže, nebo se vraťte a upravte klíčová
+          slova.
+        </p>
       ) : (
-        <ul className="mt-6 flex flex-col gap-2">
+        <div className="pick">
           {analysis.coverages.map((coverage) => (
-            <li key={coverage.id} className="rounded-lg border bg-card p-4 flex items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                checked={checkedIds.has(coverage.id)}
-                onChange={(e) => {
-                  setCheckedIds((prev) => {
-                    const next = new Set(prev)
-                    if (e.target.checked) {
-                      next.add(coverage.id)
-                    } else {
-                      next.delete(coverage.id)
-                    }
-                    return next
-                  })
-                }}
-              />
-              <div className="flex flex-1 items-start justify-between gap-4 min-w-0">
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="utility-label">{coverage.outlet}</span>
-                  <p className="text-sm font-medium leading-snug line-clamp-2">
-                    {coverage.title ?? coverage.articleUrl}
-                  </p>
-                  {coverage.publishedAt && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(coverage.publishedAt, 'long')}
-                    </span>
-                  )}
-                </div>
-                <a
-                  href={coverage.articleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                  aria-label="Otevřít článek"
-                >
-                  <ExternalLink size={16} />
-                </a>
-              </div>
-            </li>
+            <div className="pick__i" key={coverage.id}>
+              <span className="pick__c">
+                <input
+                  type="checkbox"
+                  checked={checkedIds.has(coverage.id)}
+                  onChange={(e) => {
+                    setCheckedIds((prev) => {
+                      const next = new Set(prev)
+                      if (e.target.checked) {
+                        next.add(coverage.id)
+                      } else {
+                        next.delete(coverage.id)
+                      }
+                      return next
+                    })
+                  }}
+                />
+              </span>
+              <span className="pick__w">{coverage.outlet}</span>
+              <p className="pick__t">{coverage.title ?? coverage.articleUrl}</p>
+              {coverage.publishedAt && (
+                <span className="pick__u">{formatDate(coverage.publishedAt, 'long')}</span>
+              )}
+            </div>
           ))}
 
           {customUrls.map((url) => (
-            <li key={url} className="rounded-lg border bg-card p-4 flex items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                checked
-                onChange={() => setCustomUrls((prev) => prev.filter((u) => u !== url))}
-              />
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="utility-label">Vlastní URL</span>
-                <p className="text-sm text-muted-foreground truncate">{url}</p>
-              </div>
-            </li>
+            <div className="pick__i" key={url}>
+              <span className="pick__c">
+                <input
+                  type="checkbox"
+                  checked
+                  onChange={() => setCustomUrls((prev) => prev.filter((u) => u !== url))}
+                />
+              </span>
+              <span className="pick__w">Vlastní URL</span>
+              <p className="pick__t">{url}</p>
+            </div>
           ))}
-        </ul>
-      )}
-
-      {/* Add custom URL */}
-      <div className="mt-4 flex gap-2">
-        <Input
-          value={customUrlInput}
-          onChange={(e) => setCustomUrlInput(e.target.value)}
-          placeholder="Přidat odkaz na článek…"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              addCustomUrl()
-            }
-          }}
-          className="flex-1"
-          disabled={mode === 'confirming'}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          onClick={addCustomUrl}
-          disabled={!customUrlInput.trim() || mode === 'confirming'}
-        >
-          Přidat
-        </Button>
-      </div>
-
-      {/* Warning if fewer than 5 sources */}
-      {checkedCount > 0 && checkedCount < 5 && (
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <span>Při méně než 5 zdrojích může být triangulace omezená.</span>
         </div>
       )}
 
-      {confirmMutation.isError && (
-        <p className="mt-3 text-sm text-destructive">{confirmMutation.error.message}</p>
+      <div className="field addsrc">
+        <label className="field__l" htmlFor="add-src">
+          Přidat vlastní zdroj
+        </label>
+        <div className="addsrc__r">
+          <input
+            className="input"
+            id="add-src"
+            type="url"
+            value={customUrlInput}
+            onChange={(e) => setCustomUrlInput(e.target.value)}
+            placeholder="Přidat odkaz na článek…"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addCustomUrl()
+              }
+            }}
+            disabled={mode === 'confirming'}
+          />
+          <button
+            className="btn"
+            type="button"
+            onClick={addCustomUrl}
+            disabled={!customUrlInput.trim() || mode === 'confirming'}
+          >
+            Přidat
+          </button>
+        </div>
+      </div>
+
+      {checkedCount > 0 && checkedCount < 5 && (
+        <p style={{ marginTop: 'var(--sp-4)', color: 'var(--mid)', fontSize: 'var(--text-small)' }}>
+          Při méně než 5 zdrojích může být triangulace omezená.
+        </p>
       )}
 
-      <Button className="mt-6" onClick={handleConfirm} disabled={checkedCount === 0 || mode === 'confirming'}>
-        {mode === 'confirming' ? 'Extrahování textu článků…' : 'Potvrdit zdroje'}
-      </Button>
-    </PageContainer>
+      {confirmMutation.isError && (
+        <div className="error" style={{ marginTop: 'var(--sp-3)' }}>
+          <p className="error__p">{confirmMutation.error.message}</p>
+        </div>
+      )}
+
+      <div className="confirm">
+        <p className="confirm__n">
+          Vybráno <b>{checkedCount}</b> z <b>{analysis.coverages.length + customUrls.length}</b>.
+        </p>
+        <div className="confirm__act">
+          <button
+            className="btn btn--primary"
+            onClick={handleConfirm}
+            disabled={checkedCount === 0 || mode === 'confirming'}
+          >
+            {mode === 'confirming' ? 'Extrahování textu článků…' : 'Potvrdit zdroje'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

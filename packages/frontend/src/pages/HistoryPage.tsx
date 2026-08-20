@@ -1,43 +1,35 @@
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { AnalysisListItem } from '@/services/analyses'
 import { useAnalysesList } from '@/services/analyses/hooks'
-import { PageContainer } from '@/components/PageContainer'
-import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/formatDate'
-import { cn } from '@/lib/utils'
+import { ANALYSIS_STATUS_LABELS } from '@/lib/analysisStatusLabels'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
+import './HistoryPage.css'
 
-const STATUS_LABELS: Record<AnalysisListItem['status'], string> = {
-  draft: 'Koncept',
-  complete: 'Dokončeno',
-  failed: 'Selhalo',
-  pending: 'Zpracovává se',
+const STATE_MODIFIER: Record<AnalysisListItem['status'], string> = {
+  draft: 'archive-state--draft',
+  complete: 'archive-state--done',
+  failed: 'archive-state--fail',
+  pending: 'archive-state--live',
 }
 
-function StatusLabel({ status }: { status: AnalysisListItem['status'] }) {
-  return (
-    <span className={cn('utility-label shrink-0', status === 'failed' && 'text-destructive')}>
-      {STATUS_LABELS[status]}
-    </span>
-  )
-}
+type StatusFilter = 'all' | AnalysisListItem['status']
+type SortOrder = 'newest' | 'oldest' | 'most-sources'
 
-function HistoryEntry({ item }: { item: AnalysisListItem }) {
+function ArchiveRow({ item }: { item: AnalysisListItem }) {
   return (
-    <li>
-      <Link
-        to={`/analysis/${item.id}`}
-        className="flex items-center justify-between gap-4 py-4 hover:bg-muted/30"
-      >
-        <div className="min-w-0">
-          <p className="truncate font-serif text-lg font-semibold">{item.title}</p>
-          <p className="mt-1 font-sans text-xs text-muted-foreground">
-            {formatDate(item.createdAt)} · zdrojů: {item.coverageCount}
-          </p>
-        </div>
-        <StatusLabel status={item.status} />
-      </Link>
-    </li>
+    <Link to={`/analysis/${item.id}`} className="archive-row">
+      <div className={`archive-state ${STATE_MODIFIER[item.status]}`}>
+        {ANALYSIS_STATUS_LABELS[item.status]}
+      </div>
+      <div>
+        <div className="archive-title">{item.title}</div>
+        <div className="archive-meta">zdrojů: {item.coverageCount}</div>
+      </div>
+      <div className="archive-side">{formatDate(item.createdAt)}</div>
+    </Link>
   )
 }
 
@@ -45,51 +37,124 @@ export default function HistoryPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useAnalysesList()
-  const analyses = data?.pages.flatMap((page) => page.items)
+  const allLoaded = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data])
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest')
+  const [search, setSearch] = useState('')
+
+  // Client-side, over whatever pages have been loaded so far — the API only offers keyset
+  // pagination (newest-first), no status/search/sort query params, so this filters/sorts what's
+  // already fetched rather than the full archive. "Načíst další" below still extends what's
+  // available to filter/sort over.
+  const filtered = useMemo(() => {
+    let items = allLoaded
+    if (statusFilter !== 'all') items = items.filter((i) => i.status === statusFilter)
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      items = items.filter((i) => i.title.toLowerCase().includes(q))
+    }
+    const sorted = [...items]
+    if (sortOrder === 'oldest') sorted.reverse()
+    else if (sortOrder === 'most-sources') sorted.sort((a, b) => b.coverageCount - a.coverageCount)
+    return sorted
+  }, [allLoaded, statusFilter, sortOrder, search])
 
   return (
-    <PageContainer className="font-serif">
-      <h1 className="utility-label">{isAdmin ? 'Historie' : 'Články'}</h1>
-      <p className="mt-2 font-sans text-muted-foreground">
-        {isAdmin ? 'Procházejte své předchozí analýzy.' : 'Procházejte starší články.'}
-      </p>
+    <div className="page-shell">
+      <header className="screen-head">
+        <div className="screen-head__k">Archiv</div>
+        <h1 className="screen-head__t">{isAdmin ? 'Historie analýz' : 'Články'}</h1>
+        <p className="screen-head__d">
+          {isAdmin
+            ? 'Jedna událost, jeden záznam. Zde najdete koncepty, probíhající analýzy i dokončené triangulace.'
+            : 'Procházejte starší články.'}
+        </p>
+      </header>
 
-      {isLoading && <p className="mt-8 font-sans text-muted-foreground">Načítání…</p>}
+      {isLoading && <p style={{ padding: 'var(--sp-5) 0' }}>Načítání…</p>}
+      {isError && (
+        <div className="error" style={{ marginTop: 'var(--sp-5)' }}>
+          <p className="error__p">Nepodařilo se načíst data.</p>
+        </div>
+      )}
 
-      {isError && <p className="mt-8 font-sans text-destructive">Nepodařilo se načíst data.</p>}
+      {allLoaded.length > 0 && (
+        <div className="archive-toolbar">
+          <div className="filter">
+            <label htmlFor="status">Stav</label>
+            <select
+              id="status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            >
+              <option value="all">Všechny</option>
+              <option value="complete">Dokončeno</option>
+              <option value="pending">Zpracovává se</option>
+              <option value="draft">Koncept</option>
+              <option value="failed">Selhalo</option>
+            </select>
+          </div>
+          <div className="filter">
+            <label htmlFor="sort">Řazení</label>
+            <select id="sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)}>
+              <option value="newest">Nejnovější</option>
+              <option value="oldest">Nejstarší</option>
+              <option value="most-sources">Nejvíce zdrojů</option>
+            </select>
+          </div>
+          <div className="filter" style={{ flex: 1, minWidth: '14rem' }}>
+            <label htmlFor="historySearch">Hledat</label>
+            <input
+              id="historySearch"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Název události…"
+            />
+          </div>
+        </div>
+      )}
 
-      {analyses && analyses.length === 0 && (
-        <div className="mt-8 border p-8 text-center font-sans">
+      {!isLoading && allLoaded.length === 0 && (
+        <div className="empty">
+          <p className="empty__t">{isAdmin ? 'Zatím žádné analýzy' : 'Zatím žádné články'}</p>
           {isAdmin ? (
-            <>
-              <p className="text-muted-foreground">Zatím žádné analýzy.</p>
-              <Link to="/" className="mt-2 inline-block text-sm text-primary underline">
-                Spustit analýzu
-              </Link>
-            </>
+            <p className="empty__d">
+              <Link to="/new-analysis">Spusťte první analýzu</Link>
+            </p>
           ) : (
-            <p className="text-muted-foreground">Zatím žádné články — zkuste to brzy znovu.</p>
+            <p className="empty__d">Zkuste to prosím brzy znovu.</p>
           )}
         </div>
       )}
 
-      {analyses && analyses.length > 0 && (
-        <>
-          <ul className="mt-4 divide-y border-b border-t">
-            {analyses.map((item) => (
-              <HistoryEntry key={item.id} item={item} />
-            ))}
-          </ul>
-
-          {hasNextPage && (
-            <div className="mt-4 flex justify-center font-sans">
-              <Button variant="outline" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
-                {isFetchingNextPage ? 'Načítání…' : 'Načíst další'}
-              </Button>
-            </div>
-          )}
-        </>
+      {allLoaded.length > 0 && filtered.length === 0 && (
+        <div className="empty">
+          <p className="empty__t">Žádný záznam neodpovídá filtru</p>
+          <p className="empty__d">Zkuste změnit stav, hledaný výraz, nebo obojí vynulovat.</p>
+        </div>
       )}
-    </PageContainer>
+
+      {filtered.length > 0 && (
+        <section className="storylist">
+          {filtered.map((item) => (
+            <ArchiveRow key={item.id} item={item} />
+          ))}
+        </section>
+      )}
+
+      {allLoaded.length > 0 && (
+        <div className="pager">
+          <span>
+            {filtered.length === allLoaded.length
+              ? `${allLoaded.length} záznamů`
+              : `${filtered.length} z ${allLoaded.length} načtených`}
+          </span>
+          {hasNextPage && (
+            <LoadMoreButton onClick={() => void fetchNextPage()} isFetching={isFetchingNextPage} />
+          )}
+        </div>
+      )}
+    </div>
   )
 }
