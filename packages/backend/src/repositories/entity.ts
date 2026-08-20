@@ -8,6 +8,7 @@ export interface EntityInput {
   name: string
   type: EntityType
   confidence: number
+  salience: number
 }
 
 export interface EntityRelationInput {
@@ -88,8 +89,8 @@ export async function replaceStoryEntities(
         keyToEntityId.set(e.key, entity.id)
         await tx.storyEntity.upsert({
           where: { storyId_entityId: { storyId, entityId: entity.id } },
-          create: { storyId, entityId: entity.id, confidence: e.confidence },
-          update: { confidence: e.confidence },
+          create: { storyId, entityId: entity.id, confidence: e.confidence, salience: e.salience },
+          update: { confidence: e.confidence, salience: e.salience },
         })
       }
 
@@ -144,6 +145,19 @@ export async function findStoryEntitiesForScoring(
       type: r.type,
     })),
   }
+}
+
+/** One Story's attachment to one Entity, by the entity's own deterministic key — used where a
+ *  caller needs a specific attachment's stored fields (e.g. verifying persisted `salience`)
+ *  rather than the whole scoring-shaped set `findStoryEntitiesForScoring` returns. */
+export async function findStoryEntity(
+  storyId: string,
+  entityKey: string
+): Promise<{ confidence: number; salience: number } | null> {
+  return prisma.storyEntity.findFirst({
+    where: { storyId, entity: { key: entityKey } },
+    select: { confidence: true, salience: true },
+  })
 }
 
 /** Total Story count — the corpus size storyRelationScoring.ts's IDF weighting needs to know how

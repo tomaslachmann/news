@@ -15,11 +15,23 @@ describe('runEntityExtractionPass', () => {
     expect(llmClientModule.callJsonModel).not.toHaveBeenCalled()
   })
 
-  it('calls callJsonModel with the source texts tagged with the entityExtraction callSite, and derives deterministic keys', async () => {
+  it('calls callJsonModel with indexed source texts tagged with the entityExtraction callSite, and derives deterministic keys', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       entities: [
-        { mention: 'Tusk', canonical_name: 'Donald Tusk', type: 'PERSON', confidence: 0.98 },
-        { mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.99 },
+        {
+          mention: 'Tusk',
+          canonical_name: 'Donald Tusk',
+          type: 'PERSON',
+          confidence: 0.98,
+          source_indices: [0],
+        },
+        {
+          mention: 'Poland',
+          canonical_name: 'Poland',
+          type: 'COUNTRY',
+          confidence: 0.99,
+          source_indices: [0],
+        },
       ],
       entityRelations: [{ from: 'Donald Tusk', to: 'Poland', type: 'REPRESENTS', confidence: 0.91 }],
     })
@@ -31,15 +43,83 @@ describe('runEntityExtractionPass', () => {
     expect(typeof model).toBe('string')
     expect(typeof systemPrompt).toBe('string')
     expect(callSite).toBe('entityExtraction')
-    expect(JSON.parse(userContent)).toEqual(['Polish PM Donald Tusk said Poland would...'])
+    expect(JSON.parse(userContent)).toEqual([
+      { index: 0, text: 'Polish PM Donald Tusk said Poland would...' },
+    ])
 
     expect(result.entities).toEqual([
-      { key: 'person:donald-tusk', name: 'Donald Tusk', type: 'PERSON', confidence: 0.98 },
-      { key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99 },
+      { key: 'person:donald-tusk', name: 'Donald Tusk', type: 'PERSON', confidence: 0.98, salience: 1 },
+      { key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99, salience: 1 },
     ])
     expect(result.entityRelations).toEqual([
       { from: 'person:donald-tusk', to: 'country:poland', type: 'REPRESENTS', confidence: 0.91 },
     ])
+  })
+
+  it('computes salience as the fraction of source fragments mentioning the entity, unioning indices across duplicate mentions', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      entities: [
+        {
+          mention: 'Tusk',
+          canonical_name: 'Donald Tusk',
+          type: 'PERSON',
+          confidence: 0.9,
+          source_indices: [0],
+        },
+        {
+          mention: 'Donald Tusk',
+          canonical_name: 'Donald Tusk',
+          type: 'PERSON',
+          confidence: 0.95,
+          source_indices: [1],
+        },
+        {
+          mention: 'Poland',
+          canonical_name: 'Poland',
+          type: 'COUNTRY',
+          confidence: 0.99,
+          source_indices: [0, 1, 2],
+        },
+      ],
+      entityRelations: [],
+    })
+
+    const result = await runEntityExtractionPass(['fragment 0', 'fragment 1', 'fragment 2'])
+
+    expect(result.entities).toEqual([
+      { key: 'person:donald-tusk', name: 'Donald Tusk', type: 'PERSON', confidence: 0.9, salience: 2 / 3 },
+      { key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99, salience: 1 },
+    ])
+  })
+
+  it('ignores an out-of-range source_index rather than trusting a hallucinated one', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      entities: [
+        {
+          mention: 'Poland',
+          canonical_name: 'Poland',
+          type: 'COUNTRY',
+          confidence: 0.9,
+          source_indices: [0, 5, -1],
+        },
+      ],
+      entityRelations: [],
+    })
+
+    const result = await runEntityExtractionPass(['only fragment'])
+
+    expect(result.entities[0].salience).toBe(1)
+  })
+
+  it('treats a missing source_indices array as zero salience rather than throwing', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      entities: [{ mention: 'Poland', canonical_name: 'Poland', type: 'COUNTRY', confidence: 0.9 }],
+      entityRelations: [],
+    })
+
+    const result = await runEntityExtractionPass(['x'])
+
+    expect(result.entities[0].salience).toBe(0)
   })
 
   it('drops an entityRelation whose from/to does not match any extracted entity, rather than trusting a hallucinated reference', async () => {
@@ -70,6 +150,7 @@ describe('runEntityExtractionPass', () => {
       name: 'Donald Tusk',
       type: 'PERSON',
       confidence: 0.9,
+      salience: 0,
     })
   })
 
@@ -177,11 +258,11 @@ describe('extractAndPersistStoryEntities', () => {
 
     expect(replaceStoryEntities).toHaveBeenCalledWith(
       'story-1',
-      [{ key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
+      [{ key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99, salience: 0 }],
       []
     )
     expect(result).toEqual({
-      entities: [{ key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99 }],
+      entities: [{ key: 'country:poland', name: 'Poland', type: 'COUNTRY', confidence: 0.99, salience: 0 }],
       entityRelations: [],
     })
   })

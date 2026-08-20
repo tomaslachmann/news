@@ -21,6 +21,9 @@ const LlmResultSchema = z.object({
       canonical_name: z.string(),
       type: EntityTypeSchema,
       confidence: z.number().min(0).max(1),
+      // Optional, not required: an older/degraded response missing it must not fail validation
+      // wholesale — treated as "mentions nothing" (salience 0) rather than a schema error.
+      source_indices: z.array(z.number()).optional(),
     })
   ),
   entityRelations: z.array(
@@ -81,20 +84,42 @@ export async function runEntityExtractionPass(
   }
 
   const model = process.env.ENTITY_MODEL ?? 'gpt-4o'
-  const userContent = JSON.stringify(sourceTexts)
+  // Indexed, not a bare array: the model's own "source_indices" output (ticket 12, salience) has
+  // to reference these positions, and JSON.stringify(sourceTexts) alone gives it nothing stable
+  // to point at once the array is re-serialized on the model's side.
+  const userContent = JSON.stringify(sourceTexts.map((text, index) => ({ index, text })))
   const parsed = LlmResultSchema.parse(
     await callJsonModel(model, SYSTEM_PROMPT, userContent, 'entityExtraction')
   )
 
   // Deduped by derived key, not just pushed as-is — the model can (and does) re-mention the same
   // entity more than once across the input texts; keeping every mention as its own row would let
-  // Story.entities silently accumulate duplicate rows sharing one key.
+  // Story.entities silently accumulate duplicate rows sharing one key. Salience is the union of
+  // every mention's source_indices collapsing to this key, as a fraction of the total fragment
+  // count — a second, later mention widens salience even though it doesn't add a new entity row.
   const entityByKey = new Map<string, ExtractedEntity>()
+  const sourceIndicesByKey = new Map<string, Set<number>>()
   for (const e of parsed.entities) {
     const key = deriveEntityKey(e.type, e.canonical_name)
     if (!entityByKey.has(key)) {
-      entityByKey.set(key, { key, name: e.canonical_name, type: e.type, confidence: e.confidence })
+      entityByKey.set(key, {
+        key,
+        name: e.canonical_name,
+        type: e.type,
+        confidence: e.confidence,
+        salience: 0,
+      })
+      sourceIndicesByKey.set(key, new Set())
     }
+    const indices = sourceIndicesByKey.get(key)!
+    // A hallucinated out-of-range index is dropped, not trusted — mirrors this pass's existing
+    // rule (see entityRelations below) that unverifiable model output is excluded, not kept.
+    for (const i of e.source_indices ?? []) {
+      if (Number.isInteger(i) && i >= 0 && i < sourceTexts.length) indices.add(i)
+    }
+  }
+  for (const [key, indices] of sourceIndicesByKey) {
+    entityByKey.get(key)!.salience = indices.size / sourceTexts.length
   }
   const entities = [...entityByKey.values()]
 

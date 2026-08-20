@@ -308,7 +308,7 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
 
     expect(replaceStoryEntities).toHaveBeenCalledWith(
       'story-1',
-      [{ key: 'person:new-person', name: 'New Person', type: 'PERSON', confidence: 0.9 }],
+      [{ key: 'person:new-person', name: 'New Person', type: 'PERSON', confidence: 0.9, salience: 0 }],
       []
     )
     expect(findStoryEntitiesForScoring).toHaveBeenCalledWith('story-1')

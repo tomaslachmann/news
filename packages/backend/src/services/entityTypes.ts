@@ -27,6 +27,10 @@ export interface ExtractedEntity {
   name: string
   type: z.infer<typeof EntityTypeSchema>
   confidence: number
+  /** Fraction of this Story's source-text fragments that mention this entity, 0 to 1 (ticket 12).
+   *  A structural "how central is this entity to this Story's coverage" signal, distinct from
+   *  `confidence` (how sure the model is about the extraction itself). */
+  salience: number
 }
 
 export interface ExtractedEntityRelation {

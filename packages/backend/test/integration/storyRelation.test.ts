@@ -75,7 +75,7 @@ describe('StoryRelation repository against a real Postgres instance', () => {
     const newer = await createAnalysis({ seedUrl: 'https://example.cz/newer', seedHeadline: 'Newer' })
     await replaceStoryEntities(
       older.storyId,
-      [{ key: 'country:story-relation-test', name: 'Poland', type: 'COUNTRY', confidence: 0.9 }],
+      [{ key: 'country:story-relation-test', name: 'Poland', type: 'COUNTRY', confidence: 0.9, salience: 1 }],
       []
     )
 
