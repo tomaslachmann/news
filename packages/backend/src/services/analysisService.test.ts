@@ -821,6 +821,102 @@ describe('getAnalysisDetail', () => {
     expect(result.synthesisResult).toBeUndefined()
   })
 
+  const VALID_EXTRACTION_RESULT = {
+    factualClaims: [{ claim: 'x', czechQuote: 'x' }],
+    attributedClaims: [],
+    interpretiveStatements: [],
+    framingSignals: [],
+  }
+
+  it('interprets a non-null sourceOverlapPercentage into a tier, once, for the frontend (ticket 38 / ADR 0030)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [{ ...OK_COVERAGE, extractionResult: VALID_EXTRACTION_RESULT }],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        sourceOverlapPercentage: 70,
+        agreementCategory: 'PARTIAL',
+        narrative: null,
+        headline: 'Headline',
+        narrativeGenerationFailedAt: null,
+      },
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(result.sourceOverlap).toEqual({ percentage: 70, sourceCount: 1, tier: 'mid' })
+  })
+
+  it("counts sourceCount from successfully-extracted Coverage only, not every attached Coverage (ticket 39's byline gauge threshold reads this, not coverages.length)", async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [
+        { ...OK_COVERAGE, id: 'c1', extractionResult: VALID_EXTRACTION_RESULT },
+        { ...OK_COVERAGE, id: 'c2', extractionResult: null }, // scraped OK, extraction never ran
+        { ...OK_COVERAGE, id: 'c3', extractionResult: { malformed: true }, status: 'OK' as const }, // failed schema validation
+        {
+          ...OK_COVERAGE,
+          id: 'c4',
+          extractionResult: VALID_EXTRACTION_RESULT,
+          status: 'EXTRACTION_FAILED' as const,
+        },
+      ],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        sourceOverlapPercentage: 100,
+        agreementCategory: 'PARTIAL',
+        narrative: null,
+        headline: 'Headline',
+        narrativeGenerationFailedAt: null,
+      },
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(result.coverages).toHaveLength(4)
+    expect(result.sourceOverlap?.sourceCount).toBe(1)
+  })
+
+  it('omits sourceOverlap — not zero — when there is nothing to measure', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        sourceOverlapPercentage: null,
+        agreementCategory: 'PARTIAL',
+        narrative: null,
+        headline: 'Headline',
+        narrativeGenerationFailedAt: null,
+      },
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(result.sourceOverlap).toBeUndefined()
+  })
+
   it('fetches published relations for this Story and includes them as relatedEvents', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',

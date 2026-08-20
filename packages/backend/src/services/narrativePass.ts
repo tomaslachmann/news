@@ -52,13 +52,35 @@ function buildRepairPrompt(originalUserContent: string, previous: unknown, failu
   ].join('\n')
 }
 
+/** The four dimensions only — never `agreementCategory` (ticket 38). narrative.txt's own "Input
+ *  format" section documents exactly these four keys; the model has no instruction for a 5th, and
+ *  ADR 0012's "never adjudicates a disputed fact itself" is the reason not to hand it one — a
+ *  categorical agree/disagree judgement is exactly the kind of signal that could nudge narration
+ *  tone instead of just narrating the four already-classified dimensions. */
+export type NarrativeDimensions = Pick<
+  SynthesisResult,
+  'agreement' | 'contradiction' | 'uniqueReporting' | 'framing'
+>
+
 export async function runNarrativePass(
   sources: NarrativeSource[],
-  dimensions: SynthesisResult,
+  dimensions: NarrativeDimensions,
   log?: FastifyBaseLogger
 ): Promise<NarrativeResult> {
   const model = process.env.SYNTHESIS_MODEL ?? 'gpt-4o'
-  const userContent = JSON.stringify({ sources, dimensions })
+  // Rebuilt as a literal, not `{ sources, dimensions }` — `dimensions` is typed as
+  // NarrativeDimensions, but a caller passing the wider SynthesisResult it's `Pick`ed from
+  // (structurally assignable) would otherwise still carry `agreementCategory` through to
+  // JSON.stringify unnoticed, since TS's structural typing doesn't strip runtime properties.
+  const userContent = JSON.stringify({
+    sources,
+    dimensions: {
+      agreement: dimensions.agreement,
+      contradiction: dimensions.contradiction,
+      uniqueReporting: dimensions.uniqueReporting,
+      framing: dimensions.framing,
+    },
+  })
   const parsed = NarrativeResultSchema.parse(
     await callJsonModel(model, SYSTEM_PROMPT, userContent, 'narrative')
   )

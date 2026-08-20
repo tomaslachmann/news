@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { FastifyBaseLogger } from 'fastify'
-import type { AgreementCategory } from '@news-triangulator/shared'
+import type { AgreementCategory, AnalysisDimensions } from '@news-triangulator/shared'
 import { callJsonModel } from './llmClient.js'
 import type { ExtractionResult } from './extractionPass.js'
 import {
@@ -51,6 +51,22 @@ export const SynthesisResultSchema = z.object({
 })
 
 export type SynthesisResult = z.infer<typeof SynthesisResultSchema>
+
+/** `agreementCategory` is persisted twice: inside `SynthesisResult.dimensions`'s JSON blob (part
+ *  of the same object Synthesis returned) and its own typed column (ticket 38 / ADR 0030). The
+ *  column is authoritative — the 4 rows that migration backfilled have a `dimensions` blob that
+ *  predates the field entirely, so a bare JSON cast silently omits it for those rows. Every read
+ *  site merges the column back in through this one function rather than casting `dimensions`
+ *  directly, so a future read site can't forget to (mappers/analysis.ts, analysisStream.ts). */
+export function mergeAgreementCategory(
+  dimensionsJson: unknown,
+  agreementCategory: AgreementCategory
+): AnalysisDimensions {
+  return {
+    ...(dimensionsJson as Omit<AnalysisDimensions, 'agreementCategory'>),
+    agreementCategory,
+  }
+}
 
 export interface SourceExtraction {
   outlet: string

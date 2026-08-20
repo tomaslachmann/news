@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
+import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
 import {
   computeSourceOverlapPercentage,
   interpretSourceOverlap,
   SOURCE_OVERLAP_OK_THRESHOLD,
   SOURCE_OVERLAP_MID_THRESHOLD,
-  MIN_SOURCES_FOR_GAUGE,
 } from './sourceOverlap.js'
 
 const attribution = (outlet: string) => ({ outlet, czechQuote: 'x', articleUrl: `https://${outlet}.cz/x` })

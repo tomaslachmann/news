@@ -1,3 +1,4 @@
+import { Gauge } from '@/components/Gauge'
 import './HomePage.css'
 
 // ============================================================================
@@ -206,16 +207,9 @@ const SAMPLE_CONFLICTS = [
   { title: 'Termín dodávek munice', detail: 'původní zdroj nedohledán', pct: 55 },
 ]
 
-function Gauge({ pct, big }: { pct: number; big?: boolean }) {
-  const on = Math.round(pct / 10)
-  return (
-    <span className={`gauge${big ? ' gauge--lg' : ''}`} role="img" aria-label={`Shoda zdrojů ${pct} procent`}>
-      {Array.from({ length: 10 }, (_, i) => (
-        <i key={i} className={i < on ? `is-on${pct < 65 ? ' is-bad' : ''}` : ''} />
-      ))}
-    </span>
-  )
-}
+// The reference mockup's own hardcoded threshold for this fabricated sample data — there is no
+// real backend-computed tier behind these numbers to read instead (see components/Gauge.tsx).
+const SAMPLE_BAD_THRESHOLD = 65
 
 function SampleByline({ story, index, big }: { story: SampleStory; index: number; big?: boolean }) {
   return (
@@ -232,7 +226,12 @@ function SampleByline({ story, index, big }: { story: SampleStory; index: number
       <span className="byline__sep">|</span>
       <span className="byline__grp">
         shoda <b>{story.agreement} %</b>
-        <Gauge pct={story.agreement} big={big} />
+        <Gauge
+          pct={story.agreement}
+          bad={story.agreement < SAMPLE_BAD_THRESHOLD}
+          big={big}
+          ariaLabel={`Shoda zdrojů ${story.agreement} procent`}
+        />
       </span>
       {story.conflict ? (
         <span className="chip chip--bad">rozpor</span>
@@ -488,7 +487,11 @@ function ConflictsSection() {
             <span className="q__d">{c.detail}</span>
             <span className="byline" style={{ margin: 0 }}>
               shoda <b>{c.pct} %</b>
-              <Gauge pct={c.pct} />
+              <Gauge
+                pct={c.pct}
+                bad={c.pct < SAMPLE_BAD_THRESHOLD}
+                ariaLabel={`Shoda zdrojů ${c.pct} procent`}
+              />
             </span>
           </a>
         ))}

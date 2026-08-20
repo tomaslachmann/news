@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as llmClientModule from './llmClient.js'
-import { runExtractionPass } from './extractionPass.js'
+import { runExtractionPass, countValidExtractions } from './extractionPass.js'
 
 vi.mock('./llmClient.js')
 
@@ -75,5 +75,30 @@ describe('runExtractionPass', () => {
     expect(result.factualClaims).toHaveLength(0)
     expect(result.attributedClaims).toHaveLength(1)
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('countValidExtractions', () => {
+  const VALID = {
+    factualClaims: [{ claim: 'x', czechQuote: 'x' }],
+    attributedClaims: [],
+    interpretiveStatements: [],
+    framingSignals: [],
+  }
+
+  it('counts only Coverage that is status OK with a schema-valid extractionResult', () => {
+    const coverages = [
+      { status: 'OK' as const, extractionResult: VALID },
+      { status: 'OK' as const, extractionResult: null }, // scraped OK, never extracted
+      { status: 'OK' as const, extractionResult: { malformed: true } }, // failed schema validation
+      { status: 'EXTRACTION_FAILED' as const, extractionResult: VALID }, // scrape itself failed
+      { status: 'PENDING' as const, extractionResult: null },
+    ]
+
+    expect(countValidExtractions(coverages)).toBe(1)
+  })
+
+  it('returns 0 for an empty list', () => {
+    expect(countValidExtractions([])).toBe(0)
   })
 })

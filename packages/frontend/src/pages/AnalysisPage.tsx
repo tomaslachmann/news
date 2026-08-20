@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Gauge } from '@/components/Gauge'
 import {
   openAnalysisStream,
+  MIN_SOURCES_FOR_GAUGE,
   type AnalysisDetail,
   type Attribution,
   type AnalysisDimensions,
@@ -220,12 +222,13 @@ function CompareList({
   )
 }
 
-/** Ticket 39's own "Blocked by" note: ticket 38 supplies the byline's source-overlap gauge
- *  ("překryv zdrojů", not the dimension-count ratio this page could compute on its own — those
- *  are different metrics, and showing one labelled as the other would misrepresent it) — "until
- *  it lands, the byline renders without the gauge and this ticket does not wait for it." So this
- *  stays source-count + framing-signal-count only for now; the overlap metric joins once ticket
- *  38 ships. */
+/** Ticket 38 / ADR 0030 supplies `analysis.sourceOverlap`. Withheld below
+ *  MIN_SOURCES_FOR_GAUGE sources — a ten-segment bar over that few sources implies precision the
+ *  data doesn't have — in which case the byline stays source-count + framing-signal-count only,
+ *  same as before ticket 38 shipped. Gated on `sourceOverlap.sourceCount`, not
+ *  `analysis.coverages.length`: the percentage was computed from successfully-extracted sources
+ *  only, which can be fewer than every attached Coverage (one whose scrape succeeded but
+ *  extraction failed schema validation still counts toward `coverages.length`). */
 function AnalysisByline({
   analysis,
   dimensions,
@@ -233,11 +236,28 @@ function AnalysisByline({
   analysis: AnalysisDetail
   dimensions: AnalysisDimensions
 }) {
+  const gaugeInfo =
+    analysis.sourceOverlap && analysis.sourceOverlap.sourceCount >= MIN_SOURCES_FOR_GAUGE
+      ? analysis.sourceOverlap
+      : undefined
   return (
     <div className="byline">
       <span className="byline__grp">
         <b>{analysis.coverages.length}</b> zdrojů
       </span>
+      {gaugeInfo && (
+        <>
+          <span className="byline__sep">·</span>
+          <span className="byline__grp">
+            překryv zdrojů <b>{gaugeInfo.percentage} %</b>
+            <Gauge
+              pct={gaugeInfo.percentage}
+              bad={gaugeInfo.tier === 'bad'}
+              ariaLabel={`Překryv zdrojů ${gaugeInfo.percentage} procent`}
+            />
+          </span>
+        </>
+      )}
       {dimensions.framing.length > 0 && (
         <>
           <span className="byline__sep">·</span>

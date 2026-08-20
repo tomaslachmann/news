@@ -1,6 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify'
-import { runNarrativePass, type NarrativeSource, type NarrativeResult } from '../services/narrativePass.js'
-import type { SynthesisResult as SynthesisDimensions } from '../services/synthesisPass.js'
+import {
+  runNarrativePass,
+  type NarrativeSource,
+  type NarrativeResult,
+  type NarrativeDimensions,
+} from '../services/narrativePass.js'
 import { runStageOrThrow } from '../services/pipelineStage.js'
 import type { AnalysisWithDetails } from '../repositories/analysis.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
@@ -79,7 +83,11 @@ export async function runNarrativeJob(
     return
   }
 
-  const dimensions = analysis.synthesisResult.dimensions as unknown as SynthesisDimensions
+  // Cast to NarrativeDimensions, not the full SynthesisResult shape: only the four narrative
+  // dimensions are ever read here, so the 4-legacy-row "dimensions JSON predates agreementCategory"
+  // gap (ticket 38's migration) that mappers/analysis.ts and analysisStream.ts had to patch around
+  // simply doesn't apply to this call site — there's nothing to merge back in.
+  const dimensions = analysis.synthesisResult.dimensions as unknown as NarrativeDimensions
   const logContext = { analysisId: payload.analysisId }
 
   try {

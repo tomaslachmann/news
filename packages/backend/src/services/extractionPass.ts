@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { FastifyBaseLogger } from 'fastify'
+import type { CoverageStatus } from '../repositories/coverage.js'
 import { callJsonModel } from './llmClient.js'
 import { verifyAndRepair, isVerbatimQuote, type QuoteRef } from './quoteVerification.js'
 
@@ -36,6 +37,20 @@ export const ExtractionResultSchema = z.object({
 })
 
 export type ExtractionResult = z.infer<typeof ExtractionResultSchema>
+
+/** The same "does this Coverage actually feed downstream analysis" predicate
+ *  `analysisStream.ts`'s synthesis-source-building loop applies inline (status OK is necessary
+ *  but not sufficient — extraction can still fail schema validation after a successful scrape).
+ *  Exists so a second call site (ticket 38 / ADR 0030's `sourceOverlap.sourceCount`, computed at
+ *  read time in mappers/analysis.ts rather than persisted) can count the same set without
+ *  re-typing the predicate and risking drift from analysisStream.ts's own inline version. */
+export function countValidExtractions(
+  coverages: { status: CoverageStatus; extractionResult: unknown }[]
+): number {
+  return coverages.filter(
+    (c) => c.status === 'OK' && ExtractionResultSchema.safeParse(c.extractionResult).success
+  ).length
+}
 
 function extractQuotes(result: ExtractionResult, articleText: string): QuoteRef[] {
   return [

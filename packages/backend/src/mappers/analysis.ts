@@ -1,6 +1,5 @@
 import type {
   AnalysisDetail,
-  AnalysisDimensions,
   AnalysisListItem,
   DimensionItem,
   RelatedEventItem,
@@ -13,6 +12,9 @@ import type {
   DraftListRow,
 } from '../repositories/analysis.js'
 import { toCoverageInfo } from './coverage.js'
+import { interpretSourceOverlap } from '../services/sourceOverlap.js'
+import { countValidExtractions } from '../services/extractionPass.js'
+import { mergeAgreementCategory } from '../services/synthesisPass.js'
 
 export const STATUS_MAP: Record<AnalysisStatus, AnalysisDetail['status']> = {
   DRAFT: 'draft',
@@ -44,16 +46,27 @@ export function toAnalysisDetail(
     createdAt: analysis.createdAt.toISOString(),
     status: STATUS_MAP[analysis.status],
     coverages: analysis.coverages.map(toCoverageInfo),
-    // agreementCategory lives on its own SynthesisResult column (ticket 38 / ADR 0030), not only
-    // inside `dimensions` — the 4 Analyses backfilled by that migration have a `dimensions` blob
-    // that predates the field entirely, so it must be merged in from the column rather than read
-    // off the JSON cast alone.
     synthesisResult: analysis.synthesisResult
-      ? {
-          ...(analysis.synthesisResult.dimensions as unknown as AnalysisDimensions),
-          agreementCategory: analysis.synthesisResult.agreementCategory,
-        }
+      ? mergeAgreementCategory(
+          analysis.synthesisResult.dimensions,
+          analysis.synthesisResult.agreementCategory
+        )
       : undefined,
+    // Ticket 38 / ADR 0030 — interpreted here, once, so the frontend never re-derives the
+    // ok/mid/bad boundaries itself. Undefined (not 0) when there's nothing to measure.
+    // `sourceCount` is recomputed from `analysis.coverages` (via the same predicate
+    // analysisStream.ts used to build synthesis's own source list) rather than reusing
+    // `coverages.length` — a Coverage can be attached and even status:'OK' without its
+    // extraction having passed schema validation, so `coverages.length` can overstate the
+    // sources the percentage was actually computed from.
+    sourceOverlap:
+      analysis.synthesisResult?.sourceOverlapPercentage != null
+        ? {
+            percentage: analysis.synthesisResult.sourceOverlapPercentage,
+            sourceCount: countValidExtractions(analysis.coverages),
+            tier: interpretSourceOverlap(analysis.synthesisResult.sourceOverlapPercentage),
+          }
+        : undefined,
     narrative: analysis.synthesisResult?.narrative
       ? (analysis.synthesisResult.narrative as unknown as DimensionItem[])
       : undefined,

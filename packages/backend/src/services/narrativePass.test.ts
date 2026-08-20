@@ -1,16 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as llmClientModule from './llmClient.js'
-import { runNarrativePass, NarrativeResultSchema } from './narrativePass.js'
+import { runNarrativePass, NarrativeResultSchema, type NarrativeDimensions } from './narrativePass.js'
 import type { SynthesisResult } from './synthesisPass.js'
 
 vi.mock('./llmClient.js')
 
-const EMPTY_DIMENSIONS: SynthesisResult = {
+const EMPTY_DIMENSIONS: NarrativeDimensions = {
   agreement: [],
   contradiction: [],
   uniqueReporting: [],
   framing: [],
-  agreementCategory: 'DISPUTED',
 }
 
 const SOURCES = [
@@ -42,6 +41,26 @@ describe('runNarrativePass', () => {
       JSON.stringify({ sources: SOURCES, dimensions: EMPTY_DIMENSIONS }),
       'narrative'
     )
+  })
+
+  it('never sends agreementCategory to the LLM, even when the caller passes a fuller SynthesisResult-shaped object (ticket 38/39)', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      segments: [
+        {
+          prose: 'Oba deníky potvrdily, že k události došlo.',
+          attributions: [
+            { outlet: 'iDnes', czechQuote: 'Událost se stala', articleUrl: 'https://idnes.cz/x' },
+          ],
+        },
+      ],
+    })
+    const dimensionsWithCategory: SynthesisResult = { ...EMPTY_DIMENSIONS, agreementCategory: 'DISPUTED' }
+
+    await runNarrativePass(SOURCES, dimensionsWithCategory)
+
+    const [, , sentUserContent] = vi.mocked(llmClientModule.callJsonModel).mock.calls[0]
+    const sentPayload = JSON.parse(sentUserContent) as { dimensions: unknown }
+    expect(sentPayload.dimensions).not.toHaveProperty('agreementCategory')
   })
 
   it('throws when the LLM response does not match the expected schema', async () => {

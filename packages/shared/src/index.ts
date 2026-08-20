@@ -59,6 +59,29 @@ export interface AnalysisDimensions {
   agreementCategory: AgreementCategory
 }
 
+export type SourceOverlapTier = 'ok' | 'mid' | 'bad'
+
+/** Ticket 38 / ADR 0030 — the counted (never model-generated) share of the agreed-upon core of a
+ *  story carried by how many outlets. `tier` is already interpreted against DESIGN-SYSTEM.md
+ *  §3.3's boundaries by the backend (the only place those thresholds are allowed to live, per the
+ *  ADR) — a frontend consumer switches on `tier` and never re-derives it from `percentage`. */
+export interface SourceOverlapInfo {
+  percentage: number
+  /** The actual denominator `percentage` was computed against — successfully-extracted sources,
+   *  not `AnalysisDetail.coverages.length` (which includes attached Coverage whose scrape
+   *  succeeded but extraction failed schema validation, or hasn't been extracted at all). A
+   *  display layer gating a gauge on MIN_SOURCES_FOR_GAUGE must compare against this field, not
+   *  `coverages.length` — the two can differ. */
+  sourceCount: number
+  tier: SourceOverlapTier
+}
+
+/** Below this many sources, a ten-segment gauge implies more precision than the data has (ADR
+ *  0030). `sourceOverlap` on `AnalysisDetail` is still populated below this threshold — deciding
+ *  whether to render the gauge at all is this constant's one job, for whichever display layer
+ *  consumes it (currently AnalysisPage's byline). */
+export const MIN_SOURCES_FOR_GAUGE = 5
+
 export type SseEvent =
   | { type: 'sources-confirmed'; coverages: CoverageInfo[] }
   | {
@@ -275,6 +298,9 @@ export interface AnalysisDetail {
   status: AnalysisStatusLabel
   coverages: CoverageInfo[]
   synthesisResult?: AnalysisDimensions
+  /** Ticket 38 / ADR 0030 — undefined exactly when `synthesisResult.agreement` was empty (nothing
+   *  to measure), never a pending/not-computed-yet state for an Analysis reaching this mapper. */
+  sourceOverlap?: SourceOverlapInfo
   /** Cross-Source Narrative segments — generated lazily on first view, undefined until then. */
   narrative?: DimensionItem[]
   /** Other Events (Stories) this one has been linked to — see ticket 37. Empty, not undefined,

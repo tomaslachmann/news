@@ -13,7 +13,9 @@ import type {
   ThreadSummaryItem,
   ThreadMemberItem,
   Page,
+  SourceOverlapInfo,
 } from '@news-triangulator/shared'
+import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
 import { cursorQueryParam } from '../pagination'
 
 export type {
@@ -31,7 +33,9 @@ export type {
   ThreadSummaryItem,
   ThreadMemberItem,
   Page,
+  SourceOverlapInfo,
 }
+export { MIN_SOURCES_FOR_GAUGE }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as { error?: string }
