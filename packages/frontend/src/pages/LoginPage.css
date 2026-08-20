@@ -44,6 +44,12 @@
   color: var(--ink-3);
   margin-bottom: var(--sp-5);
 }
+/* The reference's own markup has no gap between .error and .login__f (its "for design purposes"
+   demo block never actually sits above a live form) — this page does, so a real failed-login
+   error needs breathing room before the form beneath it. */
+.login__box .error {
+  margin-bottom: var(--sp-4);
+}
 .login__f {
   display: grid;
   gap: var(--sp-4);

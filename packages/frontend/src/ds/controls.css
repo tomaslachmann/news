@@ -24,24 +24,29 @@
 .btn:hover {
   border-color: var(--ink);
 }
-.btn--primary {
+/* .btn.btn--primary, not bare .btn--primary: both classes always render together
+   (class="btn btn--primary"), and chaining them guarantees this rule's specificity beats plain
+   .btn regardless of file/module load order — the same defensive qualification as
+   Chrome.css's div.sticky fix, for the same class of bug (an equal-specificity, order-dependent
+   override silently winning). */
+.btn.btn--primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
-.btn--primary:hover {
+.btn.btn--primary:hover {
   background: color-mix(in oklab, var(--accent) 85%, black);
   border-color: transparent;
 }
-.btn--ghost {
+.btn.btn--ghost {
   border-color: transparent;
   color: var(--ink-2);
   padding-inline: 0.25rem;
 }
-.btn--ghost:hover {
+.btn.btn--ghost:hover {
   color: var(--accent);
 }
-.btn--micro {
+.btn.btn--micro {
   font-size: var(--text-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -52,16 +57,16 @@
   border-color: var(--line-2);
   cursor: not-allowed;
 }
-.btn--primary[disabled] {
+.btn.btn--primary[disabled] {
   background: var(--surface-2);
   border-color: var(--line-2);
   color: var(--ink-4);
 }
-.btn--strong {
+.btn.btn--strong {
   border-color: var(--ink);
   font-weight: 600;
 }
-.btn--strong:hover {
+.btn.btn--strong:hover {
   background: var(--ink);
   color: var(--paper);
 }
