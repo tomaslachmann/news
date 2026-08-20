@@ -227,15 +227,15 @@ function SampleByline({ story, index, big }: { story: SampleStory; index: number
   return (
     <div className="byline">
       <span className="byline__who">{AUTHORS[index % AUTHORS.length]}</span>
-      <span className="byline__sep">·</span>
+      <span className="byline__sep">|</span>
       <span className="byline__time">{story.clock}</span>
-      <span className="byline__sep">·</span>
+      <span className="byline__sep">|</span>
       <span>{readingMinutes(story.sources)} min čtení</span>
-      <span className="byline__sep">·</span>
+      <span className="byline__sep">|</span>
       <span>
         <b>{story.sources}</b> zdrojů
       </span>
-      <span className="byline__sep">·</span>
+      <span className="byline__sep">|</span>
       <span className="byline__grp">
         shoda <b>{story.agreement} %</b>
         <Gauge pct={story.agreement} big={big} />
@@ -253,14 +253,20 @@ function SampleByline({ story, index, big }: { story: SampleStory; index: number
 // so this renders an aspect-ratio placeholder instead of e.html's actual <img> — that's the one
 // deliberate deviation. The caption text itself is e.html's own literal two-line content
 // (IMG_CAPTIONS + "Ilustrační snímek"), unchanged.
-function FigPlaceholder({ img, thumb }: { img: string; thumb?: boolean }) {
+/** e.js only gives the LEAD image a figcaption (two spans: named caption + "Ilustrační snímek").
+ *  Card/list thumbnails have no figcaption at all in the reference — just an `alt` attribute,
+ *  which has no visual equivalent once the `<img>` itself is replaced by ADR 0031's placeholder,
+ *  so thumbnails render silently (an aria-label carries the same text for accessibility). */
+function FigPlaceholder({ img, thumb, caption }: { img: string; thumb?: boolean; caption?: boolean }) {
   return (
     <figure className={`fig${thumb ? ' fig--thumb' : ''}`}>
-      <div className="fig__ph" />
-      <figcaption>
-        <span>{IMG_CAPTIONS[img]}</span>
-        <span>Ilustrační snímek</span>
-      </figcaption>
+      <div className="fig__ph" aria-label={caption ? undefined : IMG_CAPTIONS[img]} />
+      {caption && (
+        <figcaption>
+          <span>{IMG_CAPTIONS[img]}</span>
+          <span>Ilustrační snímek</span>
+        </figcaption>
+      )}
     </figure>
   )
 }
@@ -279,10 +285,23 @@ function Sec({ title, linkText }: { title: string; linkText: string }) {
 }
 
 /** Right-rail section header ("Entity dne", "Minuta", "Nejčtenější", "Jak čteme shodu") — e.css's
- *  `.bhead`, a distinct treatment from `.sec` above (border-bottom, trailing span pushed right). */
-function BHead({ title, trailing }: { title: string; trailing?: React.ReactNode }) {
+ *  `.bhead`, a distinct treatment from `.sec` above (border-bottom, trailing span pushed right).
+ *  `noBorder` matches e.html's own inline override on the "Entity dne" instance specifically
+ *  (`style="border-bottom:0;padding-bottom:0;margin-bottom:2px"`) — every other .bhead keeps it. */
+function BHead({
+  title,
+  trailing,
+  noBorder,
+}: {
+  title: string
+  trailing?: React.ReactNode
+  noBorder?: boolean
+}) {
   return (
-    <div className="bhead">
+    <div
+      className="bhead"
+      style={noBorder ? { borderBottom: 0, paddingBottom: 0, marginBottom: '2px' } : undefined}
+    >
       <h2>{title}</h2>
       {trailing}
     </div>
@@ -303,7 +322,7 @@ function LeadArticle({ story }: { story: SampleStory }) {
       <SampleByline story={story} index={0} big />
       <div className="lead__body">
         <a href="#" onClick={(e) => e.preventDefault()}>
-          <FigPlaceholder img={story.img} />
+          <FigPlaceholder img={story.img} caption />
         </a>
         <div>
           <p className="lead__perex">{story.lead}</p>
@@ -320,6 +339,11 @@ function LeadArticle({ story }: { story: SampleStory }) {
           </p>
           <p className="story__meta" style={{ marginTop: '0.3rem' }}>
             Zdroje: {story.outlets.join(' · ')} a další
+          </p>
+          <p style={{ marginTop: '1rem' }}>
+            <a href="#" className="kicker" onClick={(e) => e.preventDefault()}>
+              Srovnání zdrojů →
+            </a>
           </p>
         </div>
       </div>
@@ -389,6 +413,7 @@ function EntsPanel() {
     <section className="ents">
       <BHead
         title="Entity dne"
+        noBorder
         trailing={
           <span>
             <a href="#" onClick={(e) => e.preventDefault()}>
