@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { ListQuerySchema } from '@news-triangulator/shared'
-import { requireAdmin } from '../plugins/auth.js'
+import { requireAdmin, verifyAuthCookie } from '../plugins/auth.js'
 import { requireIngestionSecret } from '../plugins/ingestionAuth.js'
 import { ValidationError } from '../errors.js'
 import * as ingestionService from '../services/ingestionService.js'
@@ -38,7 +38,7 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     '/api/admin/ingestion/drafts/:id/approve',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      await ingestionService.approveDraft(request.params.id, request.log)
+      await ingestionService.approveDraft(request.params.id, verifyAuthCookie(request)!.userId, request.log)
       return reply.code(200).send({ ok: true })
     }
   )
@@ -48,7 +48,7 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     '/api/admin/ingestion/drafts/:id/reject',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      await ingestionService.rejectDraft(request.params.id)
+      await ingestionService.rejectDraft(request.params.id, verifyAuthCookie(request)!.userId)
       return reply.code(200).send({ ok: true })
     }
   )
@@ -68,7 +68,11 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     '/api/admin/ingestion/story-relations/:id/approve',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      await ingestionService.approveStoryRelation(request.params.id, request.log)
+      await ingestionService.approveStoryRelation(
+        request.params.id,
+        verifyAuthCookie(request)!.userId,
+        request.log
+      )
       return reply.code(200).send({ ok: true })
     }
   )
@@ -78,7 +82,7 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     '/api/admin/ingestion/story-relations/:id/reject',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      await ingestionService.rejectStoryRelation(request.params.id)
+      await ingestionService.rejectStoryRelation(request.params.id, verifyAuthCookie(request)!.userId)
       return reply.code(200).send({ ok: true })
     }
   )

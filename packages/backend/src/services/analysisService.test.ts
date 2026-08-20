@@ -11,6 +11,7 @@ import * as ingestionServiceModule from './ingestionService.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as threadRepo from '../repositories/thread.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
+import * as adminActionLogRepo from '../repositories/adminActionLog.js'
 import * as jobsEnqueue from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import {
@@ -36,6 +37,9 @@ vi.mock('../repositories/storyRelation.js')
 vi.mock('../repositories/thread.js')
 vi.mock('../jobs/enqueue.js')
 vi.mock('../repositories/matchDecision.js')
+vi.mock('../repositories/adminActionLog.js')
+
+const ACTOR_ID = 'admin1'
 
 const SCRAPED = { title: 'Headline', excerpt: 'excerpt', fullText: 'full text' }
 const SEED_EMBEDDING = [1, 0, 0]
@@ -67,7 +71,7 @@ describe('createAnalysis', () => {
       createdAt: new Date(),
     })
 
-    const result = await createAnalysis('https://example.cz/x')
+    const result = await createAnalysis('https://example.cz/x', ACTOR_ID)
 
     expect(result).toEqual({
       outcome: 'created',
@@ -95,19 +99,25 @@ describe('createAnalysis', () => {
         decidedBy: 'THRESHOLD',
       })
     )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'analysis.created',
+      targetType: 'analysis',
+      targetId: 'a1',
+    })
   })
 
   it('throws ExternalServiceError when scraping fails', async () => {
     vi.mocked(articleScraperModule.scrapeArticle).mockRejectedValue(new Error('network down'))
 
-    await expect(createAnalysis('https://example.cz/x')).rejects.toThrow(ExternalServiceError)
+    await expect(createAnalysis('https://example.cz/x', ACTOR_ID)).rejects.toThrow(ExternalServiceError)
   })
 
   it('throws ExternalServiceError when keyword extraction fails', async () => {
     stubScrapeAndEmbedding()
     vi.mocked(keywordExtractorModule.extractKeywords).mockRejectedValue(new Error('LLM down'))
 
-    await expect(createAnalysis('https://example.cz/x')).rejects.toThrow(ExternalServiceError)
+    await expect(createAnalysis('https://example.cz/x', ACTOR_ID)).rejects.toThrow(ExternalServiceError)
   })
 
   it('degrades gracefully and skips the dedup check when embedding generation fails, instead of blocking submission', async () => {
@@ -123,7 +133,7 @@ describe('createAnalysis', () => {
       createdAt: new Date(),
     })
 
-    const result = await createAnalysis('https://example.cz/x')
+    const result = await createAnalysis('https://example.cz/x', ACTOR_ID)
 
     expect(result.outcome).toBe('created')
     expect(analysisRepo.findRecentStoriesForMatching).not.toHaveBeenCalled()
@@ -152,7 +162,7 @@ describe('createAnalysis', () => {
       reasoning: 'Same event',
     })
 
-    const result = await createAnalysis('https://example.cz/x')
+    const result = await createAnalysis('https://example.cz/x', ACTOR_ID)
 
     expect(result).toEqual({
       outcome: 'matched',
@@ -171,6 +181,9 @@ describe('createAnalysis', () => {
         decidedBy: 'LLM',
       })
     )
+    // A 'matched' outcome creates nothing for the admin to have decided on — see ticket 09's
+    // Answer for why this deliberately isn't logged, unlike the 'created' path above.
+    expect(adminActionLogRepo.recordAdminActionSafe).not.toHaveBeenCalled()
   })
 
   it('returns the generated headline as the title when the matched Analysis is already COMPLETE', async () => {
@@ -191,7 +204,7 @@ describe('createAnalysis', () => {
       reasoning: 'Same event',
     })
 
-    const result = await createAnalysis('https://example.cz/x')
+    const result = await createAnalysis('https://example.cz/x', ACTOR_ID)
 
     expect(result).toEqual({
       outcome: 'matched',
@@ -228,7 +241,7 @@ describe('createAnalysis', () => {
       createdAt: new Date(),
     })
 
-    const result = await createAnalysis('https://example.cz/x')
+    const result = await createAnalysis('https://example.cz/x', ACTOR_ID)
 
     expect(result.outcome).toBe('created')
   })
@@ -256,7 +269,7 @@ describe('createAnalysis', () => {
       createdAt: new Date(),
     })
 
-    const result = await createAnalysis('https://example.cz/x')
+    const result = await createAnalysis('https://example.cz/x', ACTOR_ID)
 
     expect(result.outcome).toBe('created')
     expect(storyVerificationModule.verifySameStoryLogged).not.toHaveBeenCalled()
@@ -274,7 +287,7 @@ describe('createAnalysis', () => {
       createdAt: new Date(),
     })
 
-    const result = await createAnalysis('https://example.cz/x', { force: true })
+    const result = await createAnalysis('https://example.cz/x', ACTOR_ID, { force: true })
 
     expect(result.outcome).toBe('created')
     expect(analysisRepo.findRecentStoriesForMatching).not.toHaveBeenCalled()
@@ -288,7 +301,9 @@ describe('attachSeedToMatch', () => {
   it('throws NotFoundError when the Analysis does not exist', async () => {
     vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(null)
 
-    await expect(attachSeedToMatch('missing', 'https://example.cz/x')).rejects.toThrow(NotFoundError)
+    await expect(attachSeedToMatch('missing', 'https://example.cz/x', ACTOR_ID)).rejects.toThrow(
+      NotFoundError
+    )
   })
 
   it('throws ValidationError for an Analysis that is not DRAFT or PENDING', async () => {
@@ -301,7 +316,7 @@ describe('attachSeedToMatch', () => {
       createdAt: new Date(),
     })
 
-    await expect(attachSeedToMatch('a1', 'https://example.cz/x')).rejects.toThrow(ValidationError)
+    await expect(attachSeedToMatch('a1', 'https://example.cz/x', ACTOR_ID)).rejects.toThrow(ValidationError)
   })
 
   it('attaches the seed as Coverage to a PENDING Analysis without approving anything', async () => {
@@ -318,7 +333,7 @@ describe('attachSeedToMatch', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
     vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: true })
 
-    await attachSeedToMatch('a1', 'https://example.cz/x')
+    await attachSeedToMatch('a1', 'https://example.cz/x', ACTOR_ID)
 
     expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalledWith(
       'a1',
@@ -334,6 +349,12 @@ describe('attachSeedToMatch', () => {
       25
     )
     expect(ingestionServiceModule.approveDraft).not.toHaveBeenCalled()
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'analysis.seed_attached',
+      targetType: 'analysis',
+      targetId: 'a1',
+    })
   })
 
   it('does not fail the attach when the Analysis is already at MAX_COVERAGES_PER_ANALYSIS, but still approves a DRAFT', async () => {
@@ -350,9 +371,9 @@ describe('attachSeedToMatch', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
     vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: false, activeCount: 25 })
 
-    await attachSeedToMatch('a1', 'https://example.cz/x')
+    await attachSeedToMatch('a1', 'https://example.cz/x', ACTOR_ID)
 
-    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', undefined)
+    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', ACTOR_ID, undefined)
   })
 
   it('attaches the seed as Coverage and runs the approve flow for a DRAFT Analysis', async () => {
@@ -369,10 +390,10 @@ describe('attachSeedToMatch', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([])
     vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: true })
 
-    await attachSeedToMatch('a1', 'https://example.cz/x')
+    await attachSeedToMatch('a1', 'https://example.cz/x', ACTOR_ID)
 
     expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalled()
-    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', undefined)
+    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', ACTOR_ID, undefined)
   })
 
   it('skips creating a duplicate Coverage when the outlet is already attached, but still approves a DRAFT', async () => {
@@ -403,10 +424,10 @@ describe('attachSeedToMatch', () => {
       },
     ])
 
-    await attachSeedToMatch('a1', 'https://example.cz/x')
+    await attachSeedToMatch('a1', 'https://example.cz/x', ACTOR_ID)
 
     expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
-    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', undefined)
+    expect(ingestionServiceModule.approveDraft).toHaveBeenCalledWith('a1', ACTOR_ID, undefined)
   })
 
   it('throws ValidationError if the Analysis status changed between the entry check and the post-scrape re-check', async () => {
@@ -429,7 +450,7 @@ describe('attachSeedToMatch', () => {
       })
     vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue(SCRAPED)
 
-    await expect(attachSeedToMatch('a1', 'https://example.cz/x')).rejects.toThrow(ValidationError)
+    await expect(attachSeedToMatch('a1', 'https://example.cz/x', ACTOR_ID)).rejects.toThrow(ValidationError)
     expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
     expect(ingestionServiceModule.approveDraft).not.toHaveBeenCalled()
   })
@@ -441,7 +462,7 @@ describe('discoverSources', () => {
   it('throws NotFoundError when the Analysis does not exist', async () => {
     vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(null)
 
-    await expect(discoverSources('missing', ['keyword'])).rejects.toThrow(NotFoundError)
+    await expect(discoverSources('missing', ['keyword'], ACTOR_ID)).rejects.toThrow(NotFoundError)
   })
 
   it('discovers candidates, verifies each against the Story, and persists the verified ones as Coverage', async () => {
@@ -491,7 +512,7 @@ describe('discoverSources', () => {
       droppedCount: 0,
     })
 
-    const result = await discoverSources('a1', ['keyword'])
+    const result = await discoverSources('a1', ['keyword'], ACTOR_ID)
 
     expect(storyVerificationModule.verifyCandidatesAgainstAnchor).toHaveBeenCalledWith(
       [
@@ -521,6 +542,12 @@ describe('discoverSources', () => {
       ],
       25
     )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'analysis.discovery_run',
+      targetType: 'analysis',
+      targetId: 'a1',
+    })
   })
 
   it('excludes a candidate that fails same-story verification', async () => {
@@ -556,7 +583,7 @@ describe('discoverSources', () => {
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchor).mockResolvedValue([])
     vi.mocked(coverageRepo.addCoveragesUpToLimit).mockResolvedValue({ inserted: [], droppedCount: 0 })
 
-    const result = await discoverSources('a1', ['keyword'])
+    const result = await discoverSources('a1', ['keyword'], ACTOR_ID)
 
     expect(result).toEqual([])
     expect(coverageRepo.addCoveragesUpToLimit).toHaveBeenCalledWith('a1', [], 25)
@@ -619,7 +646,9 @@ describe('confirmCoverages', () => {
     vi.mocked(coverageRepo.reconcileCoverages).mockResolvedValue({ ok: false, activeCount: 20 })
     const customUrls = Array.from({ length: 6 }, (_, i) => `https://example.cz/extra-${i}`)
 
-    await expect(confirmCoverages('a1', { confirmedIds: [], customUrls })).rejects.toThrow(ValidationError)
+    await expect(confirmCoverages('a1', { confirmedIds: [], customUrls }, ACTOR_ID)).rejects.toThrow(
+      ValidationError
+    )
     expect(coverageRepo.createCoverages).not.toHaveBeenCalled()
   })
 
@@ -631,7 +660,7 @@ describe('confirmCoverages', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValueOnce([]).mockResolvedValueOnce([])
     const customUrls = Array.from({ length: 5 }, (_, i) => `https://example.cz/extra-${i}`)
 
-    await confirmCoverages('a1', { confirmedIds: [], customUrls })
+    await confirmCoverages('a1', { confirmedIds: [], customUrls }, ACTOR_ID)
 
     expect(coverageRepo.reconcileCoverages).toHaveBeenCalledWith(
       'a1',
@@ -649,7 +678,7 @@ describe('confirmCoverages', () => {
       fullText: 'Neblokujete reklamy a vidíte tuto stránku? '.repeat(50),
     })
 
-    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+    await confirmCoverages('a1', { confirmedIds: ['c1'] }, ACTOR_ID)
 
     expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('c1', { status: 'EXTRACTION_FAILED' })
   })
@@ -663,7 +692,7 @@ describe('confirmCoverages', () => {
       fullText,
     })
 
-    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+    await confirmCoverages('a1', { confirmedIds: ['c1'] }, ACTOR_ID)
 
     expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('c1', { extractedText: fullText, status: 'OK' })
   })
@@ -681,12 +710,18 @@ describe('confirmCoverages', () => {
       .mockResolvedValueOnce([PENDING_COVERAGE])
       .mockResolvedValueOnce([{ ...PENDING_COVERAGE, status: 'OK', extractedText: fullText }])
 
-    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+    await confirmCoverages('a1', { confirmedIds: ['c1'] }, ACTOR_ID)
 
     expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
       analysisId: 'a1',
       origin: 'coverage-confirmation',
       coverageIds: ['c1'],
+    })
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'analysis.coverages_confirmed',
+      targetType: 'analysis',
+      targetId: 'a1',
     })
   })
 
@@ -698,7 +733,7 @@ describe('confirmCoverages', () => {
       .mockResolvedValueOnce([PENDING_COVERAGE])
       .mockResolvedValueOnce([{ ...PENDING_COVERAGE, status: 'EXTRACTION_FAILED', extractedText: null }])
 
-    await confirmCoverages('a1', { confirmedIds: ['c1'] })
+    await confirmCoverages('a1', { confirmedIds: ['c1'] }, ACTOR_ID)
 
     expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.EntityRelation, {
       analysisId: 'a1',

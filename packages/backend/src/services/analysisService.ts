@@ -32,6 +32,7 @@ import * as coverageRepo from '../repositories/coverage.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as threadRepo from '../repositories/thread.js'
+import { recordAdminActionSafe } from '../repositories/adminActionLog.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
@@ -46,6 +47,7 @@ import { toThreadSummary } from '../mappers/thread.js'
  *  the check entirely — the override for a confirmed-but-wrong match. */
 export async function createAnalysis(
   seedUrl: string,
+  actorId: string,
   opts: { force?: boolean } = {},
   log?: FastifyBaseLogger
 ): Promise<CreateAnalysisResponse> {
@@ -149,6 +151,12 @@ export async function createAnalysis(
     embeddingModel: embeddingResult?.model,
     embeddingInputHash: embeddingResult?.inputHash,
   })
+  await recordAdminActionSafe({
+    actorId,
+    action: 'analysis.created',
+    targetType: 'analysis',
+    targetId: analysis.id,
+  })
 
   return { outcome: 'created', id: analysis.id, seedHeadline: analysis.seedHeadline, keywords }
 }
@@ -162,6 +170,7 @@ export async function createAnalysis(
 export async function attachSeedToMatch(
   analysisId: string,
   seedUrl: string,
+  actorId: string,
   log?: FastifyBaseLogger
 ): Promise<void> {
   const analysis = await analysisRepo.findAnalysisById(analysisId)
@@ -210,14 +219,25 @@ export async function attachSeedToMatch(
     }
   }
 
+  await recordAdminActionSafe({
+    actorId,
+    action: 'analysis.seed_attached',
+    targetType: 'analysis',
+    targetId: analysisId,
+  })
+
+  // A DRAFT match also logs its own draft.approved below — deliberately two rows, not a
+  // double-count: the seed-attach and the draft approval are two distinct admin-visible facts
+  // (see ticket 09's Answer), even though this one click triggers both.
   if (fresh.status === 'DRAFT') {
-    await approveDraft(analysisId, log)
+    await approveDraft(analysisId, actorId, log)
   }
 }
 
 export async function discoverSources(
   analysisId: string,
   keywords: string[],
+  actorId: string,
   log?: FastifyBaseLogger
 ): Promise<CandidateArticle[]> {
   const analysis = await analysisRepo.findAnalysisWithStory(analysisId)
@@ -256,12 +276,19 @@ export async function discoverSources(
   }
 
   const insertedUrls = new Set(inserted.map((c) => c.articleUrl))
+  await recordAdminActionSafe({
+    actorId,
+    action: 'analysis.discovery_run',
+    targetType: 'analysis',
+    targetId: analysisId,
+  })
   return verified.filter((c) => insertedUrls.has(c.url))
 }
 
 export async function confirmCoverages(
   analysisId: string,
   body: PatchCoveragesBody,
+  actorId: string,
   log?: FastifyBaseLogger
 ): Promise<CoverageInfo[]> {
   const { confirmedIds, customUrls = [], manualTexts = [] } = body
@@ -351,6 +378,13 @@ export async function confirmCoverages(
   } catch (err) {
     log?.error({ analysisId, err }, 'Failed to enqueue entity.extract job after Coverage confirmation')
   }
+
+  await recordAdminActionSafe({
+    actorId,
+    action: 'analysis.coverages_confirmed',
+    targetType: 'analysis',
+    targetId: analysisId,
+  })
 
   return updated.map(toCoverageInfo)
 }

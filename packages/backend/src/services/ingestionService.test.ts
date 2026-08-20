@@ -9,6 +9,7 @@ import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
 import * as jobsEnqueue from '../jobs/enqueue.js'
+import * as adminActionLogRepo from '../repositories/adminActionLog.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import {
   runIngestionPass,
@@ -32,6 +33,9 @@ vi.mock('../repositories/storyRelation.js')
 vi.mock('../repositories/matchDecision.js')
 vi.mock('../repositories/ingestionRunLock.js')
 vi.mock('../jobs/enqueue.js')
+vi.mock('../repositories/adminActionLog.js')
+
+const ACTOR_ID = 'admin1'
 
 const RSS_ITEM = {
   sourceId: 'src-idnes',
@@ -502,7 +506,7 @@ describe('approveDraft', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue(coverages)
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue(coverages)
 
-    await approveDraft('a1')
+    await approveDraft('a1', ACTOR_ID)
 
     expect(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).toHaveBeenCalledWith(
       coverages,
@@ -516,6 +520,12 @@ describe('approveDraft', () => {
       'PENDING',
       expect.any(Function)
     )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'draft.approved',
+      targetType: 'analysis',
+      targetId: 'a1',
+    })
   })
 
   it('excludes only the specific Coverage that fails verification and proceeds to PENDING with the remainder', async () => {
@@ -525,7 +535,7 @@ describe('approveDraft', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([good, bad])
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([good])
 
-    await approveDraft('a1')
+    await approveDraft('a1', ACTOR_ID)
 
     expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c2'])
     expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
@@ -542,7 +552,7 @@ describe('approveDraft', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue(coverages)
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([])
 
-    await approveDraft('a1')
+    await approveDraft('a1', ACTOR_ID)
 
     expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c1', 'c2'])
     expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
@@ -560,7 +570,7 @@ describe('approveDraft', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([titled, titleless])
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([titled])
 
-    await approveDraft('a1')
+    await approveDraft('a1', ACTOR_ID)
 
     expect(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).toHaveBeenCalledWith(
       [titled],
@@ -577,7 +587,7 @@ describe('approveDraft', () => {
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue(coverages)
     vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(false)
 
-    await expect(approveDraft('a1')).resolves.toBeUndefined()
+    await expect(approveDraft('a1', ACTOR_ID)).resolves.toBeUndefined()
 
     expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
       'a1',
@@ -585,12 +595,13 @@ describe('approveDraft', () => {
       'PENDING',
       expect.any(Function)
     )
+    expect(adminActionLogRepo.recordAdminActionSafe).not.toHaveBeenCalled()
   })
 
   it('throws NotFoundError when the Analysis does not exist', async () => {
     vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(null)
 
-    await expect(approveDraft('missing')).rejects.toThrow(NotFoundError)
+    await expect(approveDraft('missing', ACTOR_ID)).rejects.toThrow(NotFoundError)
   })
 
   it('throws ValidationError when the Analysis is not a Draft', async () => {
@@ -599,7 +610,7 @@ describe('approveDraft', () => {
       status: 'COMPLETE',
     })
 
-    await expect(approveDraft('a1')).rejects.toThrow(ValidationError)
+    await expect(approveDraft('a1', ACTOR_ID)).rejects.toThrow(ValidationError)
   })
 
   it('enqueues the entity.extract job with this Analysis id and the draft-approval origin', async () => {
@@ -609,7 +620,7 @@ describe('approveDraft', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([good, bad])
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([good])
 
-    await approveDraft('a1')
+    await approveDraft('a1', ACTOR_ID)
 
     expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(
       JobName.EntityRelation,
@@ -632,9 +643,15 @@ describe('rejectDraft', () => {
       createdAt: new Date(),
     })
 
-    await rejectDraft('a1')
+    await rejectDraft('a1', ACTOR_ID)
 
     expect(analysisRepo.updateAnalysisStatus).toHaveBeenCalledWith('a1', 'FAILED')
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'draft.rejected',
+      targetType: 'analysis',
+      targetId: 'a1',
+    })
   })
 
   it('throws ValidationError when the Analysis is not a Draft', async () => {
@@ -647,7 +664,7 @@ describe('rejectDraft', () => {
       createdAt: new Date(),
     })
 
-    await expect(rejectDraft('a1')).rejects.toThrow(ValidationError)
+    await expect(rejectDraft('a1', ACTOR_ID)).rejects.toThrow(ValidationError)
   })
 })
 
@@ -806,7 +823,7 @@ describe('approveStoryRelation', () => {
     vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
     vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
 
-    await approveStoryRelation('r1')
+    await approveStoryRelation('r1', ACTOR_ID)
 
     expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).toHaveBeenCalledWith(
       'r1',
@@ -815,6 +832,12 @@ describe('approveStoryRelation', () => {
     )
     expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.ThreadRecompute, {
       seedStoryId: PENDING_RELATION.fromStoryId,
+    })
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'story_relation.approved',
+      targetType: 'story_relation',
+      targetId: 'r1',
     })
   })
 
@@ -825,7 +848,7 @@ describe('approveStoryRelation', () => {
     })
     vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
 
-    await approveStoryRelation('r1')
+    await approveStoryRelation('r1', ACTOR_ID)
 
     expect(jobsEnqueue.enqueueJob).not.toHaveBeenCalled()
   })
@@ -835,13 +858,13 @@ describe('approveStoryRelation', () => {
     vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
     vi.mocked(jobsEnqueue.enqueueJob).mockRejectedValue(new Error('queue down'))
 
-    await expect(approveStoryRelation('r1')).resolves.toBeUndefined()
+    await expect(approveStoryRelation('r1', ACTOR_ID)).resolves.toBeUndefined()
   })
 
   it('throws NotFoundError when the relation does not exist', async () => {
     vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(null)
 
-    await expect(approveStoryRelation('missing')).rejects.toThrow(NotFoundError)
+    await expect(approveStoryRelation('missing', ACTOR_ID)).rejects.toThrow(NotFoundError)
   })
 
   it('throws ValidationError when the relation is not PENDING_REVIEW', async () => {
@@ -850,7 +873,7 @@ describe('approveStoryRelation', () => {
       status: 'PUBLISHED',
     })
 
-    await expect(approveStoryRelation('r1')).rejects.toThrow(ValidationError)
+    await expect(approveStoryRelation('r1', ACTOR_ID)).rejects.toThrow(ValidationError)
     expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).not.toHaveBeenCalled()
   })
 
@@ -858,7 +881,7 @@ describe('approveStoryRelation', () => {
     vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
     vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(false)
 
-    await expect(approveStoryRelation('r1')).rejects.toThrow(ValidationError)
+    await expect(approveStoryRelation('r1', ACTOR_ID)).rejects.toThrow(ValidationError)
   })
 })
 
@@ -880,19 +903,25 @@ describe('rejectStoryRelation', () => {
     vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
     vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
 
-    await rejectStoryRelation('r1')
+    await rejectStoryRelation('r1', ACTOR_ID)
 
     expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).toHaveBeenCalledWith(
       'r1',
       'PENDING_REVIEW',
       'REJECTED'
     )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'story_relation.rejected',
+      targetType: 'story_relation',
+      targetId: 'r1',
+    })
   })
 
   it('throws NotFoundError when the relation does not exist', async () => {
     vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(null)
 
-    await expect(rejectStoryRelation('missing')).rejects.toThrow(NotFoundError)
+    await expect(rejectStoryRelation('missing', ACTOR_ID)).rejects.toThrow(NotFoundError)
   })
 
   it('throws ValidationError when the relation is not PENDING_REVIEW', async () => {
@@ -901,7 +930,7 @@ describe('rejectStoryRelation', () => {
       status: 'REJECTED',
     })
 
-    await expect(rejectStoryRelation('r1')).rejects.toThrow(ValidationError)
+    await expect(rejectStoryRelation('r1', ACTOR_ID)).rejects.toThrow(ValidationError)
     expect(storyRelationRepo.updateStoryRelationStatusIfCurrently).not.toHaveBeenCalled()
   })
 
@@ -909,6 +938,6 @@ describe('rejectStoryRelation', () => {
     vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
     vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(false)
 
-    await expect(rejectStoryRelation('r1')).rejects.toThrow(ValidationError)
+    await expect(rejectStoryRelation('r1', ACTOR_ID)).rejects.toThrow(ValidationError)
   })
 })

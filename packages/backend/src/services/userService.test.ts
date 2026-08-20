@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import bcrypt from 'bcryptjs'
 import * as userRepo from '../repositories/user.js'
+import * as adminActionLogRepo from '../repositories/adminActionLog.js'
 import { listUsers, createUser, updateUser, deleteUser } from './userService.js'
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/user.js')
 vi.mock('bcryptjs')
+vi.mock('../repositories/adminActionLog.js')
+
+const ACTOR_ID = 'admin1'
 
 const ADMIN = {
   id: 'admin-1',
@@ -52,7 +56,11 @@ describe('createUser', () => {
       createdAt: new Date('2026-01-03T00:00:00Z'),
     })
 
-    const result = await createUser({ email: 'new@example.com', password: 'secret', role: 'READONLY' })
+    const result = await createUser(ACTOR_ID, {
+      email: 'new@example.com',
+      password: 'secret',
+      role: 'READONLY',
+    })
 
     expect(bcrypt.hash).toHaveBeenCalledWith('secret', 12)
     expect(userRepo.createUser).toHaveBeenCalledWith({
@@ -66,14 +74,20 @@ describe('createUser', () => {
       role: 'READONLY',
       createdAt: '2026-01-03T00:00:00.000Z',
     })
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'user.created',
+      targetType: 'user',
+      targetId: 'new-1',
+    })
   })
 
   it('throws ConflictError when the email is already in use', async () => {
     vi.mocked(userRepo.findUserByEmail).mockResolvedValue(ADMIN)
 
-    await expect(createUser({ email: ADMIN.email, password: 'secret', role: 'READONLY' })).rejects.toThrow(
-      ConflictError
-    )
+    await expect(
+      createUser(ACTOR_ID, { email: ADMIN.email, password: 'secret', role: 'READONLY' })
+    ).rejects.toThrow(ConflictError)
     expect(userRepo.createUser).not.toHaveBeenCalled()
   })
 })
@@ -89,6 +103,12 @@ describe('updateUser', () => {
 
     expect(userRepo.updateUser).toHaveBeenCalledWith(OTHER.id, { role: 'ADMIN', passwordHash: undefined })
     expect(result.role).toBe('ADMIN')
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ADMIN.id,
+      action: 'user.updated',
+      targetType: 'user',
+      targetId: OTHER.id,
+    })
   })
 
   it('hashes and applies a new password when provided', async () => {
@@ -133,6 +153,12 @@ describe('deleteUser', () => {
     await deleteUser(ADMIN.id, OTHER.id)
 
     expect(userRepo.deleteUser).toHaveBeenCalledWith(OTHER.id)
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ADMIN.id,
+      action: 'user.deleted',
+      targetType: 'user',
+      targetId: OTHER.id,
+    })
   })
 
   it('throws ValidationError when an Admin tries to delete themselves', async () => {

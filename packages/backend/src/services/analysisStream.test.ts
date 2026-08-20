@@ -9,6 +9,7 @@ import { runAnalysisStream } from './analysisStream.js'
 import { NotFoundError } from '../errors.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
+import * as adminActionLogRepo from '../repositories/adminActionLog.js'
 import type { SseEvent } from '@news-triangulator/shared'
 
 vi.mock('../repositories/analysis.js')
@@ -21,6 +22,9 @@ vi.mock('./extractionPass.js', async (importOriginal) => {
 vi.mock('./synthesisPass.js')
 vi.mock('./headlinePass.js')
 vi.mock('../jobs/enqueue.js')
+vi.mock('../repositories/adminActionLog.js')
+
+const ACTOR_ID = 'admin1'
 
 const ANALYSIS = {
   id: 'a1',
@@ -60,9 +64,9 @@ describe('runAnalysisStream', () => {
     const onReady = vi.fn()
     const send = vi.fn()
 
-    await expect(runAnalysisStream('missing', { onReady, send, onClientClose: () => {} })).rejects.toThrow(
-      NotFoundError
-    )
+    await expect(
+      runAnalysisStream('missing', { onReady, send, onClientClose: () => {}, actorId: ACTOR_ID })
+    ).rejects.toThrow(NotFoundError)
     expect(onReady).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
   })
@@ -91,7 +95,7 @@ describe('runAnalysisStream', () => {
     const events: SseEvent['type'][] = []
     const send = vi.fn((event: SseEvent) => events.push(event.type))
 
-    await runAnalysisStream('a1', { onReady, send, onClientClose: () => {} })
+    await runAnalysisStream('a1', { onReady, send, onClientClose: () => {}, actorId: ACTOR_ID })
 
     expect(onReady).toHaveBeenCalledOnce()
     expect(events).toEqual([
@@ -107,6 +111,12 @@ describe('runAnalysisStream', () => {
       'Vláda schválila rozpočet',
       expect.any(Function)
     )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'analysis.synthesis_triggered',
+      targetType: 'analysis',
+      targetId: 'a1',
+    })
   })
 
   it('enqueues the narrative.generate job for this Analysis inside the COMPLETE transaction', async () => {
@@ -134,7 +144,12 @@ describe('runAnalysisStream', () => {
       }
     )
 
-    await runAnalysisStream('a1', { onReady: vi.fn(), send: vi.fn(), onClientClose: () => {} })
+    await runAnalysisStream('a1', {
+      onReady: vi.fn(),
+      send: vi.fn(),
+      onClientClose: () => {},
+      actorId: ACTOR_ID,
+    })
 
     expect(enqueueJob).toHaveBeenCalledWith(JobName.Narrative, { analysisId: 'a1' }, { tx })
   })
@@ -159,7 +174,7 @@ describe('runAnalysisStream', () => {
     vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue(null)
 
     const send = vi.fn()
-    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {} })
+    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {}, actorId: ACTOR_ID })
 
     expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith(
       'a1',
@@ -192,7 +207,7 @@ describe('runAnalysisStream', () => {
     const events: SseEvent['type'][] = []
     const send = vi.fn((event: SseEvent) => events.push(event.type))
 
-    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {} })
+    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {}, actorId: ACTOR_ID })
 
     expect(events).toEqual([
       'sources-confirmed',
@@ -212,7 +227,7 @@ describe('runAnalysisStream', () => {
     const events: SseEvent['type'][] = []
     const send = vi.fn((event: SseEvent) => events.push(event.type))
 
-    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {} })
+    await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {}, actorId: ACTOR_ID })
 
     expect(events).toEqual(['sources-confirmed', 'extraction-settled', 'synthesis-error'])
     expect(analysisRepo.updateAnalysisStatus).toHaveBeenCalledWith('a1', 'FAILED')
@@ -234,7 +249,7 @@ describe('runAnalysisStream', () => {
     }
     const send = vi.fn()
 
-    const promise = runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose })
+    const promise = runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose, actorId: ACTOR_ID })
     await vi.waitFor(() => {
       if (!closeHandler) throw new Error('onClientClose handler not registered yet')
     })
