@@ -1,0 +1,691 @@
+<div class="sgtop">
+  <div class="u-wrap sgtop__in">
+    <strong class="sgtop__b">News Triangulator — design systém</strong>
+    <span class="sgtop__v u-sans u-num">v1.2 · srpen 2026</span>
+    <nav class="sgtop__nav u-sans" aria-label="Obsah">
+      <a href="#zaklady">Základy</a><a href="#barvy">Barvy</a><a href="#typo">Typografie</a>
+      <a href="#prostor">Prostor</a><a href="#komponenty">Komponenty</a><a href="#stranky">Stránky</a><a href="#interni">Interní</a><a href="#stavy">Stavy</a>
+      <a href="#pravidla">Pravidla</a>
+    </nav>
+    <button class="btn btn--micro" id="sgTheme" type="button">Přepnout režim</button>
+  </div>
+</div>
+
+<header class="sghero u-wrap">
+  <span class="kicker">Design systém · varianta E — Kvalitní deník</span>
+  <h1 class="sghero__h">Pravidla, tokeny a komponenty zpravodajského portálu</h1>
+  <p class="sghero__p">
+    Tento dokument je zdroj pravdy pro vizuální podobu produktu. Vrstvy na sebe navazují
+    v pořadí <code>tokens.css → base.css → components.css → stránka</code>. V žádném
+    stránkovém ani komponentním souboru nesmí být zapsaná konkrétní barva, velikost písma
+    ani rozměr mezery — vždy jen token.
+  </p>
+  <div class="sghero__meta u-sans">
+    <span><b>2</b> variabilní písma</span>
+    <span><b>1</b> akcentní barva</span>
+    <span><b>0</b> zaoblení a stínů</span>
+    <span><b>2</b> barevné režimy</span>
+  </div>
+</header>
+
+<main class="u-wrap sgmain">
+
+<!-- ══════════════════ ZÁKLADY ══════════════════ -->
+<section id="zaklady" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">01</span> Základní myšlenka</h2>
+  <div class="sggrid2">
+    <div class="sgprose">
+      <h3>Jazyk zpravodajského portálu, ne dashboardu</h3>
+      <p>Produkt porovnává, jak o téže věci píší různé redakce. Uživatel k němu ale
+      přichází jako ke zprávám — ne jako k analytickému nástroji. Proto celý design
+      mluví idiomem tištěného deníku: hustá centrální kolona, výrazná hlavička,
+      linky místo karet, fotografie u každé zprávy.</p>
+      <p><b>Triangulační data patří do redakčního metadatového řádku</b> pod titulkem,
+      tedy tam, kde deník obvykle uvádí čas a rubriku. Nikdy nemají podobu
+      samostatného panelu s grafy.</p>
+    </div>
+    <div class="sgprose">
+      <h3>Čtyři pravidla, která drží celek</h3>
+      <ol>
+        <li><b>Hierarchii nese linka a mezera</b>, ne stín ani zaoblení. Radius je nula, výjimkou je kruh entity.</li>
+        <li><b>Jedna akcentní barva.</b> Červená znamená „pozor sem" — čas, rozpor, aktivní rubrika, primární akce. Nikde jinde.</li>
+        <li><b>Číslo je vždy doprovázeno slovem.</b> 62&nbsp;% nikdy nestojí samo, vždy „shoda 62 %".</li>
+        <li><b>Barva nikdy nenese informaci sama.</b> Každý stav má text i tvar, ne jen odstín.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ BARVY ══════════════════ -->
+<section id="barvy" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">02</span> Barevná paleta</h2>
+  <p class="sgnote">Paleta je zapsaná v OKLCH, aby odstíny držely stejnou vnímanou
+  jasnost ve světlém i tmavém režimu. Primitivy se v komponentách nepoužívají —
+  komponenta sahá vždy jen po semantický token.</p>
+
+  <h3 class="sgsub">Semantické tokeny — plochy a text</h3>
+  <div class="sgswatches" id="sgSurfaces"></div>
+
+  <h3 class="sgsub">Významové tokeny — shoda a stav</h3>
+  <div class="sgswatches" id="sgSemantic"></div>
+
+  <h3 class="sgsub">Použití u míry shody</h3>
+  <table class="sgtable">
+    <thead><tr><th>Rozsah</th><th>Token</th><th>Označení v UI</th><th>Ukázka</th></tr></thead>
+    <tbody>
+      <tr><td class="u-num">85–100 %</td><td><code>--ok</code></td><td>vysoká shoda, primární zdroj dohledán</td><td><span class="chip chip--ok">primární zdroj</span></td></tr>
+      <tr><td class="u-num">65–84 %</td><td><code>--mid</code></td><td>částečná shoda, uvádíme v čem se zdroje liší</td><td><span class="chip chip--mid">částečná shoda</span></td></tr>
+      <tr><td class="u-num">0–64 %</td><td><code>--bad</code></td><td>rozporná zpráva, řádek dostane červenou linku vlevo</td><td><span class="chip chip--bad">rozpor</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════════ TYPOGRAFIE ══════════════════ -->
+<section id="typo" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">03</span> Typografie</h2>
+
+  <div class="sggrid2">
+    <div class="sgspec">
+      <span class="kicker kicker--muted">Obsahové písmo</span>
+      <p class="sgspec__big">Newsreader</p>
+      <p class="sgnote">Variabilní novinový serif s osou optické velikosti 6–72.
+      Nese titulky, perex i běžný text. Osa <code>opsz</code> se páruje se skutečnou
+      velikostí sazby: značka 72, lead 60, mezititulky 28, drobná metadata 20.
+      Velké stupně mají užší kresbu a tvrdší přechody, malé otevřenější — přesně
+      jako tisková sazba.</p>
+    </div>
+    <div class="sgspec">
+      <span class="kicker kicker--muted">Systémové písmo</span>
+      <p class="sgspec__big u-sans">Inter Tight</p>
+      <p class="sgnote">Nese vše, co není obsah: metadata, rubriky, štítky, tlačítka,
+      popisky, čísla v pásu dne. Optické velikosti se u něj vypínají
+      (<code>font-optical-sizing: none</code>), aby drobný text zůstal stabilní.
+      Doplňkově <code>IBM Plex Mono</code> pro časové značky ve strojovém pohledu.</p>
+    </div>
+  </div>
+
+  <h3 class="sgsub">Fluidní stupnice</h3>
+  <p class="sgnote">Každý stupeň je <code>clamp()</code> — sazba se plynule mění mezi
+  390&nbsp;px a 1440&nbsp;px, žádné skoky na zlomech. Mimo tuto stupnici se
+  <code>font-size</code> nepíše.</p>
+  <div class="sgtype" id="sgType"></div>
+
+  <h3 class="sgsub">Pravidla sazby</h3>
+  <ul class="sgrules">
+    <li><b>Délka řádku</b> běžného textu maximálně <code>68ch</code>, velkého titulku <code>24ch</code>.</li>
+    <li><b>Vyvažování</b>: <code>text-wrap: balance</code> na nadpisech, <code>pretty</code> na odstavcích — žádné osamocené slovo na řádku.</li>
+    <li><b>Interpunkce</b> visí do okraje (<code>hanging-punctuation</code>), uvozovky jsou české <span class="u-nowrap">„ “</span>.</li>
+    <li><b>Čísla v UI</b> vždy <code>tabular-nums</code>, aby se hodnoty ve sloupci neposouvaly.</li>
+    <li><b>Nikdy nefalšovat řez</b> — <code>font-synthesis: none</code>. Tuk jen z variabilní osy.</li>
+    <li><b>Verzálkové nadpisy</b> sekcí mají prostrkání <code>0.14em</code>, jinak jsou nečitelné.</li>
+  </ul>
+</section>
+
+<!-- ══════════════════ PROSTOR ══════════════════ -->
+<section id="prostor" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">04</span> Prostor, mřížka a linky</h2>
+  <div class="sggrid2">
+    <div>
+      <h3 class="sgsub">Krokování mezer</h3>
+      <div class="sgspace" id="sgSpace"></div>
+    </div>
+    <div>
+      <h3 class="sgsub">Rozvržení a linky</h3>
+      <ul class="sgrules">
+        <li><b>Sazební zrcadlo</b> <code>1180px</code>, vnitřní okraj fluidní <code>16–28px</code>.</li>
+        <li><b>Dvousloupcová stránka</b>: obsah <code>1fr</code> + pravý sloupec <code>272–312px</code>, oddělené jemnou linkou.</li>
+        <li><b>Zlomy</b> jen dva: <code>62rem</code> (pravý sloupec pod obsah) a <code>44rem</code> (jeden sloupec).</li>
+        <li><b>Uvnitř komponent</b> se používají container queries — karta reaguje na svůj kontejner, ne na okno.</li>
+        <li><b>Subgrid</b> drží účaří titulků a metadat u sousedních karet i při různě dlouhých titulcích.</li>
+        <li><b>Tři síly linky</b>: <code>1px --line-2</code> vnitřní, <code>1px --line</code> běžná, <code>2px --line-strong</code> řez sekce.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ KOMPONENTY ══════════════════ -->
+<section id="komponenty" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">05</span> Komponenty</h2>
+
+  <!-- byline -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Byline — redakční metadatový řádek</h3>
+      <code class="sgc__c">.byline</code>
+    </div>
+    <p class="sgnote sgc__d">Nosný prvek celého produktu. Sem patří autor, čas, délka
+    čtení, počet zdrojů, míra shody s ukazatelem a štítek stavu. Skupina „shoda + ukazatel"
+    se nikdy nesmí zlomit na dva řádky — drží ji <code>.byline__grp</code>.</p>
+    <div class="sgc__demo">
+      <div class="byline">
+        <span class="byline__who">Jana Křížová</span><span class="byline__sep">|</span>
+        <span class="byline__time u-num">15:12</span><span class="byline__sep">|</span>
+        <span class="u-num">3 min čtení</span><span class="byline__sep">|</span>
+        <span><b>9</b> zdrojů</span><span class="byline__sep">|</span>
+        <span class="byline__grp">shoda <b>62 %</b><span class="gauge gauge--lg" id="g62"></span></span>
+        <span class="chip chip--bad">rozpor</span>
+      </div>
+      <div class="byline">
+        <span class="byline__who">Martin Bláha</span><span class="byline__sep">|</span>
+        <span class="byline__time u-num">14:41</span><span class="byline__sep">|</span>
+        <span><b>12</b> zdrojů</span><span class="byline__sep">|</span>
+        <span class="byline__grp">shoda <b>94 %</b><span class="gauge" id="g94"></span></span>
+        <span class="chip chip--ok">primární zdroj</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- ukazatele -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Ukazatel shody a skládaný pruh</h3>
+      <code class="sgc__c">.gauge · .stack</code>
+    </div>
+    <p class="sgnote sgc__d">Desetisegmentový pás je tichý a tiskový — nikdy nestojí bez
+    číselné hodnoty. Skládaný pruh rozděluje zdroje na ve shodě / v rozporu / bez potvrzení
+    a používá se ve strojovém, hustším pohledu.</p>
+    <div class="sgc__demo sgc__demo--rows" id="sgGauges"></div>
+  </article>
+
+  <!-- entity -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Entita — kruh podle počtu zmínek</h3>
+      <code class="sgc__c">.erow · .entband</code>
+    </div>
+    <p class="sgnote sgc__d">Kruh je jediný zaoblený tvar v systému. Průměr je proporční
+    počtu zmínek za 24 hodin, v rozsahu 26–88&nbsp;px; počet je vždy uvnitř kruhu, aby
+    velikost nebyla jediným nosičem informace. Trend vpravo, zeleně nahoru, červeně dolů.</p>
+    <div class="sgc__demo sggrid2">
+      <div id="sgEnts"></div>
+      <div class="entband u-scroll-x" id="sgBand"></div>
+    </div>
+  </article>
+
+  <!-- lead -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Lead</h3>
+      <code class="sgc__c">.lead</code>
+    </div>
+    <p class="sgnote sgc__d">Na stránce právě jeden. Nadrubrika, titulek do 24 znaků na
+    řádek, byline, pak fotografie 3:2 vlevo a perex s entitami vpravo.</p>
+    <div class="sgc__demo">
+      <article class="lead">
+        <span class="kicker">Ekonomika · analýza 9 zdrojů</span>
+        <h1 class="lead__h"><a href="#" class="hl">Vláda schválila úpravu rozpočtu, opozice mluví o skrytém deficitu</a></h1>
+        <div class="byline">
+          <span class="byline__who">Jana Křížová</span><span class="byline__sep">|</span>
+          <span class="byline__time u-num">15:12</span><span class="byline__sep">|</span>
+          <span><b>9</b> zdrojů</span><span class="byline__sep">|</span>
+          <span class="byline__grp">shoda <b>62 %</b><span class="gauge gauge--lg" id="g62b"></span></span>
+          <span class="chip chip--bad">rozpor</span>
+        </div>
+        <div class="lead__body">
+          <figure class="fig">
+            <img src="img/parlament.jpg" alt="Jednání Poslanecké sněmovny">
+            <figcaption><span>Jednání Poslanecké sněmovny o úpravě rozpočtu</span><span>Ilustrační snímek</span></figcaption>
+          </figure>
+          <div>
+            <p class="lead__perex">Sedm redakcí popisuje stejný krok, rozcházejí se ale v čísle
+            výsledného salda — rozdíl činí <b>18 mld. Kč</b>.</p>
+            <p class="story__meta">Entity: <a href="#">Ministerstvo financí</a> · <a href="#">Petr Fiala</a> · <a href="#">ODS</a></p>
+            <p style="margin-top:1rem"><a href="#" class="kicker">Srovnání zdrojů →</a></p>
+          </div>
+        </div>
+      </article>
+    </div>
+  </article>
+
+  <!-- karty -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Karta a mřížka se zarovnaným účařím</h3>
+      <code class="sgc__c">.card · .cards--aligned</code>
+    </div>
+    <p class="sgnote sgc__d">Karty v mřížce používají <code>subgrid</code>, takže fotka,
+    nadrubrika, titulek i byline leží na společné linii bez ohledu na délku titulku.
+    Pod 22&nbsp;rem šířky kontejneru karta sama zmenší titulek a překlopí fotku na 16:9.</p>
+    <div class="sgc__demo">
+      <div class="cards cards--aligned" id="sgCards"></div>
+    </div>
+  </article>
+
+  <!-- seznam -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Řádek seznamu zpráv</h3>
+      <code class="sgc__c">.story · .storylist</code>
+    </div>
+    <p class="sgnote sgc__d">Text vlevo, náhled 4:3 vpravo. Rozporná zpráva se označí
+    sama podle obsahu přes <code>:has(.chip--bad)</code> — červená linka vlevo, žádný
+    zásah do dat ani do šablony.</p>
+    <div class="sgc__demo"><div class="storylist" id="sgList"></div></div>
+  </article>
+
+  <!-- minuta -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Minutový servis</h3>
+      <code class="sgc__c">.minute · .live</code>
+    </div>
+    <div class="sgc__demo sggrid2">
+      <div>
+        <div class="railhead"><span class="railhead__t">Minuta</span><span class="railhead__x"><span class="live"><i></i>průběžně</span></span></div>
+        <div id="sgFeed"></div>
+      </div>
+      <div>
+        <div class="box">
+          <div class="box__t">Rozpory ve zdrojích</div>
+          <div id="sgConf"></div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- navigace -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Hlavička, rubriky a pás dne</h3>
+      <code class="sgc__c">.mast · .rubnav · .daystats</code>
+    </div>
+    <div class="sgc__demo sgc__demo--flush">
+      <div class="mast" style="padding-block:var(--sp-4) var(--sp-3)">
+        <a href="#" class="mast__brand">
+          <svg width="30" height="30" viewBox="0 0 34 34" aria-hidden="true">
+            <path d="M17 4.5 29.5 28.5H4.5L17 4.5Z" fill="none" stroke="currentColor" stroke-width="1.1"/>
+            <circle cx="17" cy="4.5" r="3.1" fill="var(--accent)"/><circle cx="4.5" cy="28.5" r="3.1" fill="currentColor"/><circle cx="29.5" cy="28.5" r="3.1" fill="currentColor"/>
+          </svg>
+          <span class="mast__word">News <em>Triangulator</em></span>
+        </a>
+        <div class="mast__sub">Zprávy porovnané napříč zdroji</div>
+      </div>
+      <nav class="rubnav"><div class="rubnav__in u-scroll-x">
+        <a href="#" aria-current="page">Titulní strana</a><a href="#">Domácí</a><a href="#">Ekonomika</a><a href="#">Zahraničí</a><a href="#">Rozpory</a><a href="#">Entity</a>
+      </div></nav>
+      <div class="daystats"><div class="daystats__in u-scroll-x" id="sgStats"></div></div>
+    </div>
+  </article>
+
+  <!-- ovládací prvky -->
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Tlačítka, pole a štítky</h3>
+      <code class="sgc__c">.btn · .input · .chip</code>
+    </div>
+    <div class="sgc__demo sgc__demo--rows">
+      <div class="sgrow">
+        <button class="btn btn--primary">Srovnat zdroje</button>
+        <button class="btn">Uložit téma</button>
+        <button class="btn btn--micro">Tmavý režim</button>
+        <button class="btn btn--ghost">Zrušit</button>
+        <button class="btn" disabled>Nedostupné</button>
+      </div>
+      <div class="sgrow">
+        <label class="field"><span class="field__l">Hledat v tématech</span><input class="input" placeholder="např. rozpočet" size="22"></label>
+        <label class="check"><input type="checkbox" checked> shoda nad 85 %</label>
+        <label class="check"><input type="checkbox"> jen rozporné</label>
+      </div>
+      <div class="sgrow">
+        <span class="chip">bez potvrzení</span>
+        <span class="chip chip--ok">primární zdroj</span>
+        <span class="chip chip--mid">částečná shoda</span>
+        <span class="chip chip--bad">rozpor</span>
+        <span class="chip chip--solid">nové</span>
+      </div>
+    </div>
+  </article>
+</section>
+
+<!-- ══════════════════ KOMPONENTY STRÁNEK ══════════════════ -->
+<section id="stranky" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">06</span> Komponenty stránek</h2>
+  <p class="sgnote">Aparát triangulace na detailu zprávy a ve vlákně tématu. Platí
+  stejné pravidlo jako všude jinde: <b>u každého čísla stojí slovo</b> a barva nikdy
+  nenese význam sama. Živé použití je na stránkách
+  <a href="/history">Detail zprávy</a> a
+  <a href="/history">Vlákno tématu</a>.</p>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Shrnutí napříč zdroji</h3>
+      <code class="sgc__c">.sumbox</code>
+    </div>
+    <p class="sgnote sgc__d">Tři sloupce se vypisují vždy všechny, i když je jeden prázdný —
+    čtenář má vidět, že se na něco nezapomnělo. Kategorii rozlišuje nadpis, typografická
+    značka (<code>+</code>, <code>×</code>, <code>?</code>) i barva linky.</p>
+    <div class="sgc__demo sgc__demo--flush"><div id="sgSum"></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Marginálie k tvrzení</h3>
+      <code class="sgc__c">.claim --ok --mid --bad</code>
+    </div>
+    <p class="sgnote sgc__d">Vysvětlivka na okraji textu. Vysvětluje, v čem se zdroje
+    rozcházejí — ne že se rozcházejí.</p>
+    <div class="sgc__demo sgc__demo--rows" id="sgClaims"></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Srovnání tvrzení a rozcházející se hodnoty</h3>
+      <code class="sgc__c">.compare · .cmp · .vals</code>
+    </div>
+    <p class="sgnote sgc__d">Jedno tvrzení na řádek: znění vlevo, opora vpravo. Rozporný
+    řádek se označí sám podle obsahu přes <code>:has(.chip--bad)</code>. Když se zdroje
+    liší v čísle, vypíše se každá hodnota i s tím, kdo ji uvádí.</p>
+    <div class="sgc__demo sgc__demo--flush"><div class="compare" id="sgCmp"></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Tři formulace téhož faktu</h3>
+      <code class="sgc__c">.qcmp</code>
+    </div>
+    <p class="sgnote sgc__d">Ukazuje rozdíl ve způsobu, jakým se o čísle mluví — ne jen
+    v čísle samotném. Nejsilnější prvek celého produktu, používej ho střídmě.</p>
+    <div class="sgc__demo sgc__demo--flush"><div id="sgQcmp"></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Výpis zdrojů</h3>
+      <code class="sgc__c">.srclist · .srcrow</code>
+    </div>
+    <p class="sgnote sgc__d">Kdo, kdy, jak blízko je většinovému výkladu a jakou roli
+    ve zprávě má. Nízká shoda není chyba zdroje — může jít o vlastní zjištění.
+    Komponenta je navržená na šířku pravého sloupce.</p>
+    <div class="sgc__demo"><div style="max-inline-size:var(--rail)"><div class="srclist" id="sgSrc"></div></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Chronologie vlákna</h3>
+      <code class="sgc__c">.tl · .tl__i--mark · .tl--bare</code>
+    </div>
+    <p class="sgnote sgc__d">Značka na ose je čtverec — kruh je v systému vyhrazen entitám.
+    Zlom ve vývoji tématu dostane barevnou značku a silnější linku. Varianta
+    <code>.tl--bare</code> je do úzkého sloupce bez svislé osy.</p>
+    <div class="sgc__demo sgc__demo--flush"><div class="tl" id="sgTl"></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Novinová grafika</h3>
+      <code class="sgc__c">.trend</code>
+    </div>
+    <p class="sgnote sgc__d">Na stránce právě jedna. Vždy s jednotkou, popiskem a poznámkou
+    o metodě. Kreslí se v pixelech skutečné šířky sloupce, aby popisky měly stejnou
+    velikost jako běžný text; na úzké obrazovce ubere krajní hodnoty. Bez zaoblení,
+    bez výplní ploch, bez kruhových značek. Živý příklad je ve
+    <a href="/history">vlákně tématu</a>.</p>
+    <div class="sgc__demo sgc__demo--rows">
+      <p class="sgnote">Svislá úsečka je rozsah hodnot udávaných v daný den, značka medián.
+      Rozptyl širší než 30 jednotek je červený a v poznámce se pojmenuje.</p>
+    </div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Plný výpis článků</h3>
+      <code class="sgc__c">.artable</code>
+    </div>
+    <p class="sgnote sgc__d">Tabulka se na mobilu posouvá vodorovně, nikdy nezmenšuje písmo
+    pod <code>--text-micro</code>.</p>
+    <div class="sgc__demo sgc__demo--flush"><div class="u-scroll-x"><table class="artable" id="sgTab"></table></div></div>
+  </article>
+</section>
+
+<!-- ══════════════════ STAVY ══════════════════ -->
+<!-- ══════════════════ INTERNÍ OBRAZOVKY ══════════════════ -->
+<section id="interni" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">07</span> Interní obrazovky</h2>
+  <p class="sgnote">Zázemí redakce, ne druhý produkt. Stejné tokeny a stejná
+  typografie jako veřejný web, jen hustší sazba, žádné fotografie a žádný
+  marketingový rámec. Dvě pravidla platí navíc: <b>rozhraní nikdy nepředstírá,
+  že rozhodl nástroj</b> — strojové zdůvodnění je vždy označené — a
+  <b>u každé fronty stojí, odkud položka přišla a co se stane po schválení</b>.
+  Živé použití: <a href="/login">Přihlášení</a>,
+  <a href="/admin/ingestion">Kontrola sběru</a>,
+  <a href="/history">Výběr zdrojů</a>,
+  <a href="/admin/users">Uživatelé</a>.</p>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Lišta interního rozhraní</h3>
+      <code class="sgc__c">.abar · .pill</code>
+    </div>
+    <p class="sgnote sgc__d">Jediná vodorovná lišta místo trojité hlavičky
+    veřejného webu. Štítek <code>Interní</code> a jméno přihlášeného jsou vidět
+    vždy, aby nešlo zaměnit prostředí. Role stojí slovem, ne barvou.</p>
+    <div class="sgc__demo sgc__demo--flush"><div class="abar" id="sgBar"></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Hlava vnitřní stránky a číselný pás</h3>
+      <code class="sgc__c">.ahead · .astats</code>
+    </div>
+    <p class="sgnote sgc__d">Titul, hlavní akce vpravo, vysvětlení pod tím na
+    šířku sazby. Nad hlavou stojí pás čísel, která admin potřebuje vidět první —
+    stejná komponenta <code>.stat</code> jako pás dne na titulní straně.</p>
+    <div class="sgc__demo sgc__demo--flush">
+      <div class="daystats astats" id="sgAStats"></div>
+      <div class="u-wrap">
+        <header class="ahead">
+          <h4 class="ahead__t">Kontrola sběru článků</h4>
+          <div class="ahead__act"><button class="btn" type="button">Spustit sběr ručně</button></div>
+          <p class="ahead__d">Tři fronty, tři různá rozhodnutí. Nic se nezveřejní
+          ani nespojí bez potvrzení člověkem.</p>
+        </header>
+      </div>
+    </div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Řádek fronty ke schválení</h3>
+      <code class="sgc__c">.qitem · .qitem__why · .qitem--flag</code>
+    </div>
+    <p class="sgnote sgc__d">Titulek serifem jako na veřejném webu, metadata
+    sansem, akce vpravo. Strojové zdůvodnění je v odsazeném bloku s vlastním
+    nadpisem — nikdy nesplyne s redakčním textem. Položka, která si žádá
+    pozornost, dostane svislý řez v barvě <code>--mid</code>, nikoli jen barvu textu.
+    Zdůrazněná akce je <code>.btn--strong</code>, ne plná akcentní plocha: ve
+    fronty o dvaceti řádcích by z červené vznikl sloupec.</p>
+    <div class="sgc__demo sgc__demo--flush"><div id="sgQ"></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Dvojice událostí ve vztahu</h3>
+      <code class="sgc__c">.pair · .pair__a</code>
+    </div>
+    <p class="sgnote sgc__d">Směr vztahu se čte ze zkratky <code>Z</code> /
+    <code>Na</code>, ne ze šipky ani z pořadí. Souvislost i pokračování mají
+    stejný tvar, liší se štítkem.</p>
+    <div class="sgc__demo sgc__demo--flush"><div id="sgQR"></div></div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Datová tabulka</h3>
+      <code class="sgc__c">.dtable · .dtable__act</code>
+    </div>
+    <p class="sgnote sgc__d">Bez zebry a bez zaoblení — hierarchii nese
+    verzálkové záhlaví se silnou linkou. Pod 44 rem se řádky rozpadnou na bloky
+    s popisky z <code>data-l</code>; vodorovný posuv tabulky by na mobilu byl
+    past. Zakázané akce zůstávají vidět s vysvětlením, nemizí.</p>
+    <div class="sgc__demo sgc__demo--flush">
+      <table class="dtable">
+        <thead><tr><th scope="col">E-mail</th><th scope="col">Role</th><th scope="col">Vytvořeno</th><th scope="col" class="dtable__act">Akce</th></tr></thead>
+        <tbody id="sgU"></tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Formulářový panel</h3>
+      <code class="sgc__c">.panel · .field · .input · .select</code>
+    </div>
+    <p class="sgnote sgc__d">Popisek vždy nad polem a verzálkami, nikdy jen
+    placeholder. Nevratná akce je pojmenovaná slovem, které se skutečně stane
+    („Smazat“), a důsledek je popsaný předem.</p>
+    <div class="sgc__demo">
+      <div class="panel">
+        <h4 class="panel__t">Upravit uživatele</h4>
+        <p class="panel__d">Změňte roli tohoto uživatele nebo nastavte nové heslo.</p>
+        <form class="panel__f" onsubmit="return false">
+          <div class="field">
+            <label class="field__l" for="sgRole">Role</label>
+            <select class="select" id="sgRole"><option>Pouze pro čtení</option><option>Admin</option></select>
+          </div>
+          <div class="field">
+            <label class="field__l" for="sgPass">Nové heslo</label>
+            <input class="input" id="sgPass" type="password" placeholder="Ponechte prázdné, pokud heslo neměníte">
+          </div>
+        </form>
+        <div class="panel__foot">
+          <button class="btn btn--primary" type="button">Uložit</button>
+          <button class="btn" type="button">Zrušit</button>
+          <p class="note">Zadejte roli nebo heslo ke změně.</p>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="sgc">
+    <div class="sgc__head">
+      <h3 class="sgc__t">Postup a výběr zdrojů</h3>
+      <code class="sgc__c">.steps · .pick · .confirm</code>
+    </div>
+    <p class="sgnote sgc__d">Postup ukazuje všech pět kroků včetně těch, které
+    ještě nepřišly — člověk má vědět, kolik toho zbývá. U každého odškrtnutého
+    zdroje stojí důvod. Lepivá lišta drží počet vybraných zdrojů a varování při
+    méně než pěti; potvrzení je jediné místo, kde se cokoli spustí.</p>
+    <div class="sgc__demo sgc__demo--flush">
+      <div class="u-wrap">
+        <div class="steps">
+          <span class="steps__i is-done"><span class="steps__n">1</span>Zdroj nalezen sběrem</span>
+          <span class="steps__i is-done"><span class="steps__n">2</span>Vyhledání dalšího pokrytí</span>
+          <span class="steps__i is-now"><span class="steps__n">3</span>Výběr zdrojů</span>
+          <span class="steps__i"><span class="steps__n">4</span>Triangulace</span>
+          <span class="steps__i"><span class="steps__n">5</span>Zveřejnění</span>
+        </div>
+        <div class="pick" id="sgP"></div>
+        <div class="confirm confirm--static">
+          <p class="confirm__n">Vybráno <b>4</b> z <b>9 zdrojů</b>. Při méně než 5 zdrojích může být triangulace omezená.</p>
+          <div class="confirm__act"><button class="btn btn--primary" type="button">Potvrdit a spustit triangulaci</button></div>
+        </div>
+      </div>
+    </div>
+  </article>
+</section>
+
+<section id="stavy" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">08</span> Stavy rozhraní</h2>
+  <p class="sgnote">Každá plocha, která načítá data, musí mít navržený stav načítání,
+  prázdný stav i chybu. Načítání má vždy podobu obrysu skutečného obsahu, nikdy
+  rotujícího kolečka.</p>
+  <div class="sggrid3">
+    <div>
+      <h3 class="sgsub">Načítání</h3>
+      <div class="sgc__demo">
+        <div class="skel skel--img"></div>
+        <div class="skel skel--head"></div>
+        <div class="skel skel--line"></div><div class="skel skel--line"></div><div class="skel skel--line"></div>
+      </div>
+    </div>
+    <div>
+      <h3 class="sgsub">Prázdný stav</h3>
+      <div class="sgc__demo">
+        <div class="empty">
+          <p class="empty__t">Žádné rozpory za dnešní den</p>
+          <p class="empty__p">Ve sledovaných 41 zdrojích jsme dnes nenašli zprávu, kde by se
+          údaje věcně rozcházely. Zkuste rozšířit období.</p>
+          <button class="btn">Zobrazit posledních 7 dní</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 class="sgsub">Chyba</h3>
+      <div class="sgc__demo">
+        <div class="error">
+          <p class="error__t">Zdroj se nepodařilo načíst</p>
+          <p class="error__p">Poslední úspěšné načtení iRozhlas.cz bylo v 14:02. Ukazatel shody
+          u zpráv z posledních 40 minut proto nemusí být úplný.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ PRAVIDLA ══════════════════ -->
+<section id="pravidla" class="sgsec">
+  <h2 class="sgsec__h"><span class="sgsec__n">09</span> Pravidla a hranice</h2>
+  <div class="sggrid2">
+    <div>
+      <h3 class="sgsub">Ano</h3>
+      <ul class="sgrules sgrules--yes">
+        <li>Hierarchii tvoř linkou a mezerou.</li>
+        <li>Triangulační data piš do bylinu jako běžná metadata.</li>
+        <li>Každé číslo doplň slovem a jednotkou.</li>
+        <li>Stav vyjádři textem i tvarem, ne jen barvou.</li>
+        <li>Pohyb použij jen tam, kde nese informaci o poloze či změně.</li>
+        <li>Fotografii vždy popiš — popisek i alternativní text.</li>
+        <li>Ukázková data označ v UI, aby se nepletla s provozem.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="sgsub">Ne</h3>
+      <ul class="sgrules sgrules--no">
+        <li>Žádné zaoblené karty se stínem — vypadají jako generický šablonový web.</li>
+        <li>Žádný gradient, žádné sklo, žádné neonové zvýraznění.</li>
+        <li>Druhá akcentní barva vedle červené.</li>
+        <li>Emoji a ikonové sady místo typografie.</li>
+        <li>Samostatný dashboardový panel s grafy nad zprávami.</li>
+        <li>Animace při načtení stránky a paralax.</li>
+        <li>Velikost písma nebo barva zapsaná mimo tokeny.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 class="sgsub">Přístupnost — nepřekročitelné minimum</h3>
+  <ul class="sgrules">
+    <li><b>Kontrast</b> textu vůči pozadí nejméně 4,5:1, u velkých titulků 3:1. Ověřeno v obou režimech.</li>
+    <li><b>Zaměření</b> je vždy viditelné: dvoupixelový obrys v akcentní barvě s odsazením 3&nbsp;px. Nikdy se neruší.</li>
+    <li><b>Klávesnice</b> obslouží celé rozhraní, včetně vodorovně posuvných pásů rubrik a entit.</li>
+    <li><b>Kruh entity</b> má <code>title</code> i textový popis; velikost je jen doplněk k číslu.</li>
+    <li><b>Ukazatel shody</b> má <code>role="img"</code> a <code>aria-label</code> se slovní hodnotou.</li>
+    <li><b>Pohyb</b> respektuje <code>prefers-reduced-motion</code> — vypne se odhalování, výsuv i tep živého indikátoru.</li>
+    <li><b>Cílová plocha</b> odkazu nejméně 24&nbsp;px na výšku, na dotykových zařízeních 44&nbsp;px.</li>
+  </ul>
+
+  <h3 class="sgsub">Struktura souborů</h3>
+  <pre class="sgcode">ds/
+  tokens.css        barvy, typografie, prostor, pohyb — jediný zdroj pravdy
+  base.css          reset, výchozí sazba, pomocné třídy
+  components.css    komponenty v konvenci blok__část--varianta
+  styleguide.css    styly pouze tohoto dokumentu
+
+styleguide.html     živý přehled — otevři při každé změně tokenů
+e.html / e.css      referenční home page postavená na systému</pre>
+  <p class="sgnote">Při přenosu do Reactu zůstávají <code>tokens.css</code> a
+  <code>base.css</code> beze změny jako globální styl; <code>components.css</code>
+  se rozdělí po komponentách, názvy tříd se zachovají, aby styleguide zůstal platný.</p>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="u-wrap">
+    <div class="foot__bottom">
+      <span>News Triangulator — design systém v1.1</span>
+      <span>Ukázková data i fotografie slouží pouze k návrhu</span>
+      <a href="/">Domů →</a>
+    </div>
+  </div>
+</footer>
+

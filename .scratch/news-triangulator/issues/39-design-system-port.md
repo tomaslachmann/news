@@ -27,7 +27,7 @@ Source of truth is `DESIGN-SYSTEM.md` plus `ds/tokens.css`; `styleguide.html` is
 Each of these is visually compared against its reference HTML before being checked off.
 
 - [x] **Chrome** — `.utilbar`, `.mast`, `.rubnav`, `.sticky`, `.foot`. Ticket 26's masthead and footer *structure* is preserved and re-clothed, not redesigned; the footer keeps its role-aware `/history` label and shared container constant
-- [ ] **`/styleguide`** — `styleguide.html` ported as a dev-only route, so a token change can be checked the way §1 requires
+- [x] **`/styleguide`** — `styleguide.html` ported as a dev-only route, so a token change can be checked the way §1 requires
 - [ ] **`/login`** — `login.html`. Stays the internal-tool framing ticket 26 established
 - [ ] **`/`** — `e.html`. `.lead`, `.story` / `.storylist`, `.card`, `.minute`, `.daystats`, `.entband`
 - [ ] **`/history`** — `history.html`. Filter bar, sort, search, pagination, states
