@@ -39,6 +39,7 @@ function PrimaryNav({ compact = false }: { compact?: boolean }) {
       <NavLink to="/history">{isAdmin ? 'Historie' : 'Články'}</NavLink>
       {isAdmin && (
         <>
+          <NavLink to="/new-analysis">Nová analýza</NavLink>
           <NavLink to="/admin/users">Uživatelé</NavLink>
           <NavLink to="/admin/ingestion">Sběr článků</NavLink>
         </>

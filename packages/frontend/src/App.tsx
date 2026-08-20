@@ -3,6 +3,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { Chrome } from '@/components/Chrome'
 import HomePage from './pages/HomePage'
+import NewAnalysisPage from './pages/NewAnalysisPage'
 import ReviewPage from './pages/ReviewPage'
 import AnalysisPage from './pages/AnalysisPage'
 import HistoryPage from './pages/HistoryPage'
@@ -28,6 +29,14 @@ function AppRoutes() {
       {import.meta.env.DEV && <Route path="/styleguide" element={<StyleguidePage />} />}
       <Route element={<AppLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route
+          path="/new-analysis"
+          element={
+            <ProtectedRoute>
+              <NewAnalysisPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/review/:id" element={<ReviewPage />} />
         <Route path="/analysis/:id" element={<AnalysisPage />} />
         <Route path="/history" element={<HistoryPage />} />
