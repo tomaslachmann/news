@@ -530,3 +530,24 @@ model IngestionRunLock {
   /// and then incorrectly cleared by the old run's own (late-finishing) `finally` block.
   runId        String?
 }
+
+/// Who did what to what, when — an admin action that spends LLM money or changes state
+/// irreversibly (P2-24, docs/audit.md; ticket 09). Maintainer-only, same convention as
+/// `LlmCallLog`/`MatchDecision`: inspected via Prisma Studio, never surfaced in the app itself,
+/// no FK relation into the live domain tables it references (an FK to `User` would force a
+/// choice between blocking user deletion or losing audit history when a user is removed — a
+/// log's whole point is outliving its subject). `action`/`targetType` are plain `String`,
+/// enforced by closed TS union types at every call site (`repositories/adminActionLog.ts`), same
+/// idiom as `LlmCallLog.callSite`/`LlmCallSite` — not a DB enum, so a new action never needs a
+/// migration to add.
+model AdminActionLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  actorId    String
+  action     String
+  targetType String
+  targetId   String
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+}

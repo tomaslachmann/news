@@ -21,6 +21,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
 
     const response = await analysisService.createAnalysis(
       parsed.data.seedUrl,
+      verifyAuthCookie(request)!.userId,
       { force: parsed.data.force },
       fastify.log
     )
@@ -39,7 +40,12 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
         throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
       }
 
-      await analysisService.attachSeedToMatch(request.params.id, parsed.data.seedUrl, fastify.log)
+      await analysisService.attachSeedToMatch(
+        request.params.id,
+        parsed.data.seedUrl,
+        verifyAuthCookie(request)!.userId,
+        fastify.log
+      )
       return reply.code(204).send()
     }
   )
@@ -57,6 +63,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
       const candidates = await analysisService.discoverSources(
         request.params.id,
         parsed.data.keywords,
+        verifyAuthCookie(request)!.userId,
         fastify.log
       )
       return reply.code(200).send(candidates)
@@ -73,7 +80,12 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
         throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
       }
 
-      const response = await analysisService.confirmCoverages(request.params.id, parsed.data, fastify.log)
+      const response = await analysisService.confirmCoverages(
+        request.params.id,
+        parsed.data,
+        verifyAuthCookie(request)!.userId,
+        fastify.log
+      )
       return reply.code(200).send(response)
     }
   )
@@ -97,6 +109,7 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
           }
         },
         onClientClose: (handler) => request.raw.on('close', handler),
+        actorId: verifyAuthCookie(request)!.userId,
         log: request.log,
       })
 

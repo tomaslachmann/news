@@ -18,7 +18,7 @@ export function registerAdminUsersRoutes(fastify: FastifyInstance): void {
       throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné tělo požadavku')
     }
 
-    const user = await userService.createUser(parsed.data)
+    const user = await userService.createUser(verifyAuthCookie(request)!.userId, parsed.data)
     return reply.code(201).send(user)
   })
 

@@ -11,6 +11,7 @@ import { runHeadlinePass } from './headlinePass.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
+import { recordAdminActionSafe } from '../repositories/adminActionLog.js'
 
 export interface RunAnalysisStreamOptions {
   /** Called once the Analysis is confirmed to exist, right before the first `send`. */
@@ -18,17 +19,30 @@ export interface RunAnalysisStreamOptions {
   send: (event: SseEvent) => void
   /** Registers a handler to invoke if the client disconnects before the pipeline finishes. */
   onClientClose: (handler: () => void) => void
+  /** The admin whose request triggered this stream — see repositories/adminActionLog.ts. */
+  actorId: string
   log?: FastifyBaseLogger
 }
 
 export async function runAnalysisStream(
   analysisId: string,
-  { onReady, send, onClientClose, log }: RunAnalysisStreamOptions
+  { onReady, send, onClientClose, actorId, log }: RunAnalysisStreamOptions
 ): Promise<void> {
   const analysis = await analysisRepo.findAnalysisById(analysisId)
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
 
   onReady()
+
+  // Logged at the admin's request to trigger extraction+synthesis, not at the pipeline's eventual
+  // success/failure — same "log the decision, not the downstream outcome" convention every other
+  // admin action here follows (see ticket 09's Answer). Awaited after onReady(), not before — this
+  // write must never delay flushing the SSE response headers.
+  await recordAdminActionSafe({
+    actorId,
+    action: 'analysis.synthesis_triggered',
+    targetType: 'analysis',
+    targetId: analysisId,
+  })
 
   const coverages = await coverageRepo.findCoveragesForAnalysis(analysisId)
   send({ type: 'sources-confirmed', coverages: coverages.map(toCoverageInfo) })

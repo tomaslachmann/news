@@ -27,6 +27,7 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
+import { recordAdminActionSafe } from '../repositories/adminActionLog.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
 import { toPendingStoryRelationItem } from '../mappers/storyRelation.js'
@@ -232,7 +233,11 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
   return summary
 }
 
-export async function approveDraft(analysisId: string, log?: FastifyBaseLogger): Promise<void> {
+export async function approveDraft(
+  analysisId: string,
+  actorId: string,
+  log?: FastifyBaseLogger
+): Promise<void> {
   const analysis = await analysisRepo.findAnalysisWithStory(analysisId)
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
   if (analysis.status !== 'DRAFT') throw new ValidationError('Schválit lze pouze koncepty')
@@ -298,15 +303,28 @@ export async function approveDraft(analysisId: string, log?: FastifyBaseLogger):
       { analysisId },
       'Draft was no longer DRAFT when the quality gate finished (likely rejected concurrently); not overwriting its status'
     )
+    return
   }
+  await recordAdminActionSafe({
+    actorId,
+    action: 'draft.approved',
+    targetType: 'analysis',
+    targetId: analysisId,
+  })
 }
 
-export async function rejectDraft(analysisId: string): Promise<void> {
+export async function rejectDraft(analysisId: string, actorId: string): Promise<void> {
   const analysis = await analysisRepo.findAnalysisById(analysisId)
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
   if (analysis.status !== 'DRAFT') throw new ValidationError('Zamítnout lze pouze koncepty')
 
   await analysisRepo.updateAnalysisStatus(analysisId, 'FAILED')
+  await recordAdminActionSafe({
+    actorId,
+    action: 'draft.rejected',
+    targetType: 'analysis',
+    targetId: analysisId,
+  })
 }
 
 export async function listPendingAdditions(): Promise<PendingAdditionItem[]> {
@@ -337,7 +355,11 @@ export async function listPendingStoryRelations(): Promise<PendingStoryRelationI
   return rows.map(toPendingStoryRelationItem)
 }
 
-export async function approveStoryRelation(id: string, log?: FastifyBaseLogger): Promise<void> {
+export async function approveStoryRelation(
+  id: string,
+  actorId: string,
+  log?: FastifyBaseLogger
+): Promise<void> {
   const relation = await storyRelationRepo.findStoryRelationById(id)
   if (!relation) throw new NotFoundError('Vztah nenalezen')
   if (relation.status !== 'PENDING_REVIEW') throw new ValidationError('Schválit lze pouze čekající vztahy')
@@ -350,6 +372,12 @@ export async function approveStoryRelation(id: string, log?: FastifyBaseLogger):
     'PUBLISHED'
   )
   if (!transitioned) throw new ValidationError('Vztah mezitím změnil stav; zkuste to prosím znovu')
+  await recordAdminActionSafe({
+    actorId,
+    action: 'story_relation.approved',
+    targetType: 'story_relation',
+    targetId: id,
+  })
 
   // thread.recompute (ticket 17, ADR 0028): the second of the two real trigger points a
   // StoryRelation can reach FOLLOW_UP/PUBLISHED from — see storyRelationPass.ts's own enqueue for
@@ -367,7 +395,7 @@ export async function approveStoryRelation(id: string, log?: FastifyBaseLogger):
  *  relation-candidate-generation pass (ticket 35 only ever runs once per Story, searching
  *  backward; it never revisits a pair it already produced a row for, per the @@unique
  *  constraint). */
-export async function rejectStoryRelation(id: string): Promise<void> {
+export async function rejectStoryRelation(id: string, actorId: string): Promise<void> {
   const relation = await storyRelationRepo.findStoryRelationById(id)
   if (!relation) throw new NotFoundError('Vztah nenalezen')
   if (relation.status !== 'PENDING_REVIEW') throw new ValidationError('Zamítnout lze pouze čekající vztahy')
@@ -378,4 +406,10 @@ export async function rejectStoryRelation(id: string): Promise<void> {
     'REJECTED'
   )
   if (!transitioned) throw new ValidationError('Vztah mezitím změnil stav; zkuste to prosím znovu')
+  await recordAdminActionSafe({
+    actorId,
+    action: 'story_relation.rejected',
+    targetType: 'story_relation',
+    targetId: id,
+  })
 }
