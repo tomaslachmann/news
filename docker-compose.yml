@@ -42,6 +42,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-news}:${POSTGRES_PASSWORD:-news}@db:5432/${POSTGRES_DB:-news}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gpt-4o}
+      ENTITY_MODEL: ${ENTITY_MODEL:-gpt-4o}
       SYNTHESIS_MODEL: ${SYNTHESIS_MODEL:-gpt-4o}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       JWT_SECRET: ${JWT_SECRET}
@@ -68,6 +69,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-news}:${POSTGRES_PASSWORD:-news}@db:5432/${POSTGRES_DB:-news}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gpt-4o}
+      ENTITY_MODEL: ${ENTITY_MODEL:-gpt-4o}
       SYNTHESIS_MODEL: ${SYNTHESIS_MODEL:-gpt-4o}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
     depends_on:

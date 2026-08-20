@@ -106,6 +106,53 @@ describe('runEntityExtractionPass', () => {
     await expect(runEntityExtractionPass(['x'])).rejects.toThrow('API down')
   })
 
+  it('throws before calling the model when the total input exceeds the character budget', async () => {
+    const hugeInput = ['x'.repeat(200_001)]
+
+    await expect(runEntityExtractionPass(hugeInput)).rejects.toThrow(/too large/i)
+    expect(llmClientModule.callJsonModel).not.toHaveBeenCalled()
+  })
+
+  it('allows input right at the character budget', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ entities: [], entityRelations: [] })
+
+    await expect(runEntityExtractionPass(['x'.repeat(200_000)])).resolves.toEqual({
+      entities: [],
+      entityRelations: [],
+    })
+  })
+
+  it('uses ENTITY_MODEL when set, independent of EXTRACTION_MODEL', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ entities: [], entityRelations: [] })
+    const originalEntityModel = process.env.ENTITY_MODEL
+    const originalExtractionModel = process.env.EXTRACTION_MODEL
+    process.env.ENTITY_MODEL = 'gpt-4o-mini'
+    process.env.EXTRACTION_MODEL = 'gpt-4o'
+
+    try {
+      await runEntityExtractionPass(['x'])
+      const [model] = vi.mocked(llmClientModule.callJsonModel).mock.calls[0]
+      expect(model).toBe('gpt-4o-mini')
+    } finally {
+      process.env.ENTITY_MODEL = originalEntityModel
+      process.env.EXTRACTION_MODEL = originalExtractionModel
+    }
+  })
+
+  it('defaults to gpt-4o when ENTITY_MODEL is unset', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ entities: [], entityRelations: [] })
+    const original = process.env.ENTITY_MODEL
+    delete process.env.ENTITY_MODEL
+
+    try {
+      await runEntityExtractionPass(['x'])
+      const [model] = vi.mocked(llmClientModule.callJsonModel).mock.calls[0]
+      expect(model).toBe('gpt-4o')
+    } finally {
+      process.env.ENTITY_MODEL = original
+    }
+  })
+
   it('throws when the response does not match the expected schema', async () => {
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
       entities: [{ mention: 'x', canonical_name: 'x', type: 'NOT_A_REAL_TYPE', confidence: 0.5 }],
@@ -147,6 +194,20 @@ describe('extractAndPersistStoryEntities', () => {
 
     expect(replaceStoryEntities).not.toHaveBeenCalled()
     expect(result).toBeNull()
+  })
+
+  it('logs at info level (not warn) when nothing was extracted, so the case is visible without reading as an error', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ entities: [], entityRelations: [] })
+    const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+
+    await extractAndPersistStoryEntities('story-1', ['x', 'y'], replaceStoryEntities, log as never)
+
+    expect(log.info).toHaveBeenCalledWith(
+      expect.objectContaining({ storyId: 'story-1', sourceTextCount: 2 }),
+      expect.stringContaining('No entities extracted')
+    )
+    expect(log.warn).not.toHaveBeenCalled()
   })
 
   it('rethrows as ExternalServiceError, without calling replaceStoryEntities, when the LLM call fails', async () => {

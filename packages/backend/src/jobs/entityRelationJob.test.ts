@@ -139,6 +139,23 @@ describe('runEntityRelationJob', () => {
     )
   })
 
+  it('logs and returns without calling extractEntitiesAndLinkStoryRelations when derived source text exceeds the extraction budget', async () => {
+    const findAnalysisWithStory = vi.fn().mockResolvedValue({ storyId: 'story-1', story: STORY })
+    const findCoveragesForAnalysis = vi
+      .fn()
+      .mockResolvedValue([coverage({ id: 'c1', extractedText: 'x'.repeat(200_001), status: 'OK' })])
+    const log = { warn: vi.fn(), error: vi.fn() }
+
+    await runEntityRelationJob(
+      { analysisId: 'a1', origin: 'coverage-confirmation', coverageIds: ['c1'] },
+      { ...baseDeps, findAnalysisWithStory, findCoveragesForAnalysis },
+      log as never
+    )
+
+    expect(mockExtractEntitiesAndLinkStoryRelations).not.toHaveBeenCalled()
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ analysisId: 'a1' }), expect.any(String))
+  })
+
   it('propagates a retryable failure from the pipeline rather than swallowing it', async () => {
     const findAnalysisWithStory = vi.fn().mockResolvedValue({ storyId: 'story-1', story: STORY })
     const findCoveragesForAnalysis = vi.fn().mockResolvedValue([])

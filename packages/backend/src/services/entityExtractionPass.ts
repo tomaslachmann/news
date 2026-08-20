@@ -38,6 +38,20 @@ export interface EntityExtractionResult {
   entityRelations: ExtractedEntityRelation[]
 }
 
+// Ticket 11 / P1-14: a defensive ceiling, not a real chunking scheme — at today's actual volume
+// (<=25 Coverage rows, MAX_COVERAGES_PER_ANALYSIS) this comfortably fits in gpt-4o's context
+// window with room to spare, so there's no evidence an overflow ever actually happens. Throwing
+// loudly here beats either a silent truncation (losing entities from whichever text got cut) or
+// a real multi-call chunking scheme, which would need to solve replaceStoryEntities's whole-
+// Story-replace-per-call semantics (see repositories/entity.ts) for a risk that's speculative at
+// current volume. Exported so entityRelationJob.ts can pre-check the same budget before entering
+// the pipeline at all — this is a permanent, non-retryable condition (the same pinned Coverage
+// set produces the same total length on every retry), so the job handler treats it like its own
+// "Analysis no longer exists" case (log + skip) rather than let it burn the job's retry budget on
+// a guaranteed-to-fail-identically retry. This function's own throw stays as a correctness
+// backstop for any other caller.
+export const MAX_TOTAL_INPUT_CHARS = 200_000
+
 /**
  * Extracts a lightweight, Story-scoped entity + entity-relation signal from whatever source text
  * is available for a Story (RSS titles for an Ingestion-originated Draft, confirmed Coverage's
@@ -58,7 +72,15 @@ export async function runEntityExtractionPass(
 ): Promise<EntityExtractionResult> {
   if (sourceTexts.length === 0) return { entities: [], entityRelations: [] }
 
-  const model = process.env.EXTRACTION_MODEL ?? 'gpt-4o'
+  const totalChars = sourceTexts.reduce((sum, t) => sum + t.length, 0)
+  if (totalChars > MAX_TOTAL_INPUT_CHARS) {
+    throw new Error(
+      `Entity extraction input too large: ${totalChars} chars across ${sourceTexts.length} texts ` +
+        `(budget ${MAX_TOTAL_INPUT_CHARS})`
+    )
+  }
+
+  const model = process.env.ENTITY_MODEL ?? 'gpt-4o'
   const userContent = JSON.stringify(sourceTexts)
   const parsed = LlmResultSchema.parse(
     await callJsonModel(model, SYSTEM_PROMPT, userContent, 'entityExtraction')
@@ -145,8 +167,13 @@ export async function extractAndPersistStoryEntities(
 
   // Nothing extracted is not the same as "clear whatever was there before" — e.g. a Review Step
   // confirmation call that ends up with no OK Coverage this round must not wipe out a Story's
-  // previously-extracted entities from an earlier, more successful pass.
-  if (extraction.entities.length === 0) return null
+  // previously-extracted entities from an earlier, more successful pass. Logged at info, not
+  // warn/error — a thin or off-topic source producing zero entities isn't a failure, just worth
+  // being visible in logs rather than silently invisible.
+  if (extraction.entities.length === 0) {
+    log?.info({ storyId, sourceTextCount: sourceTexts.length }, 'No entities extracted for this Story')
+    return null
+  }
 
   await runStageOrThrow({ storyId }, 'Persisting extracted entities', log, () =>
     replaceStoryEntities(storyId, extraction.entities, extraction.entityRelations)

@@ -4,6 +4,7 @@ import {
   type EntityAndRelationPipelineDeps,
   type StoryForRelationPipeline,
 } from '../services/storyRelationPass.js'
+import { MAX_TOTAL_INPUT_CHARS } from '../services/entityExtractionPass.js'
 import type { AnalysisWithStory } from '../repositories/analysis.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
 import { JobName, type JobPayload } from './jobDefinitions.js'
@@ -38,10 +39,12 @@ export function deriveSourceTexts(
 
 /** Handler for the `entity.extract` job (ticket 14): looks up the Analysis this job's `analysisId`
  *  points to, derives source text from current Coverage state, then runs the same
- *  extraction+relation-linking pipeline `approveDraft`/`confirmCoverages` used to run inline. The
- *  Analysis no longer existing is a permanent condition — retrying a lookup that will never
- *  resolve wastes the job's retry budget for nothing, so it's logged and swallowed rather than
- *  thrown. Every other failure this pipeline can hit is retryable and left to propagate (see
+ *  extraction+relation-linking pipeline `approveDraft`/`confirmCoverages` used to run inline. Two
+ *  permanent conditions are logged and skipped rather than thrown, since retrying either wastes
+ *  the job's retry budget on something guaranteed to fail identically every time: the Analysis no
+ *  longer existing, and derived source text exceeding entityExtractionPass's MAX_TOTAL_INPUT_CHARS
+ *  budget (ticket 11) — the same pinned coverageIds produce the same total length on every retry.
+ *  Every other failure this pipeline can hit is retryable and left to propagate (see
  *  extractEntitiesAndLinkStoryRelations). */
 export async function runEntityRelationJob(
   payload: JobPayload[typeof JobName.EntityRelation],
@@ -72,6 +75,15 @@ export async function runEntityRelationJob(
     analysis.story,
     payload.origin
   )
+
+  const totalChars = sourceTexts.reduce((sum, t) => sum + t.length, 0)
+  if (totalChars > MAX_TOTAL_INPUT_CHARS) {
+    log?.warn(
+      { analysisId: payload.analysisId, totalChars },
+      'entity.extract job: derived source text exceeds the extraction budget, skipping'
+    )
+    return
+  }
 
   await extractEntitiesAndLinkStoryRelations(analysis.storyId, sourceTexts, analysis.story, deps, log)
 }
