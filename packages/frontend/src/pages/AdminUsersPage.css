@@ -1,0 +1,197 @@
+/* ticket 39 — ds/components.css §15, ported for /admin/users (admin-users.html). */
+
+.qsec {
+  padding-block: var(--sp-6);
+  border-bottom: var(--bw-hair) solid var(--line);
+}
+.qsec:last-of-type {
+  border-bottom: 0;
+}
+.qsec__h {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.qsec__t {
+  font-family: var(--font-serif);
+  font-size: var(--text-h3);
+  font-weight: 500;
+  font-variation-settings: 'opsz' var(--opsz-h3);
+  letter-spacing: var(--ls-h2);
+}
+.qsec__d {
+  margin-top: var(--sp-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  color: var(--ink-3);
+  max-inline-size: var(--measure);
+  line-height: 1.55;
+}
+
+.note {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.note b {
+  color: var(--ink-2);
+}
+.picknote {
+  margin-top: var(--sp-3);
+}
+
+.dtable {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+}
+.dtable th {
+  text-align: left;
+  padding: 0 var(--sp-4) var(--sp-2) 0;
+  border-bottom: var(--bw-rule) solid var(--line-strong);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.dtable td {
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  vertical-align: baseline;
+  font-size: var(--text-small);
+}
+.dtable tr:hover td {
+  background: color-mix(in oklab, var(--surface-2) 60%, transparent);
+}
+.dtable__d {
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dtable__act {
+  text-align: right;
+  white-space: nowrap;
+}
+.dtable__act > * + * {
+  margin-left: var(--sp-2);
+}
+.dtable th:last-child,
+.dtable td:last-child {
+  padding-right: 0;
+}
+.dtable .is-self td {
+  background: color-mix(in oklab, var(--surface-2) 75%, transparent);
+}
+
+/* formulářový panel — also the visual surface for the create/edit/delete dialogs, see ui/dialog.tsx */
+.panel {
+  border: var(--bw-hair) solid var(--line);
+  border-top: var(--bw-rule) solid var(--line-strong);
+  background: var(--surface);
+  padding: var(--sp-5);
+}
+.panel__t {
+  font-family: var(--font-serif);
+  font-size: var(--text-h4);
+}
+.panel__d {
+  margin-top: var(--sp-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.panel__f {
+  margin-top: var(--sp-5);
+  display: grid;
+  gap: var(--sp-4);
+}
+.panel__foot {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: var(--bw-hair) solid var(--line-2);
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.panel__foot .note {
+  margin-left: auto;
+  text-align: right;
+}
+.panel--wide {
+  max-inline-size: 32rem;
+}
+.form2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+@media (max-width: 44rem) {
+  .form2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.select {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  padding: 0.45rem 0.6rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: var(--bw-hair) solid var(--line);
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.85rem) 55%,
+    calc(100% - 0.55rem) 55%;
+  background-size:
+    0.3rem 0.3rem,
+    0.3rem 0.3rem;
+  background-repeat: no-repeat;
+  padding-right: var(--sp-6);
+}
+.select:focus {
+  border-color: var(--accent);
+  outline: 0;
+}
+
+/* Dialog mechanics only — Radix supplies focus trap/portalling/escape handling unchanged; the
+   visual surface itself is .panel above (ui/dialog.tsx applies both classes to DialogContent). */
+.dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: color-mix(in oklab, var(--ink) 45%, transparent);
+}
+.dialog__content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 50;
+  transform: translate(-50%, -50%);
+  inline-size: calc(100% - var(--sp-6));
+  max-inline-size: 30rem;
+  max-block-size: 85vh;
+  overflow-y: auto;
+}
+.dialog__close {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0.2rem;
+}
+.dialog__close:hover {
+  color: var(--ink);
+}
