@@ -1,0 +1,158 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/context/AuthContext'
+import { logout } from '@/services/auth'
+import { formatDate } from '@/lib/formatDate'
+import { useTheme } from '@/ds/useTheme'
+import './Chrome.css'
+
+const THEME_LABEL: Record<'system' | 'light' | 'dark', string> = {
+  system: 'Systémový režim',
+  light: 'Světlý režim',
+  dark: 'Tmavý režim',
+}
+
+/** Route links shared by `.rubnav` (full header) and `.sticky__nav` (condensed header) — the
+ *  design system's own rubnav slot is editorial rubrics, which this product's data model doesn't
+ *  have (no Story.primaryCategory yet); re-purposed for this app's actual primary nav instead,
+ *  per ADR 0031 ("ticket 26's structural decisions survive; its styling does not"). `NavLink` sets
+ *  `aria-current="page"` on the active route automatically — `.rubnav a[aria-current='page']`
+ *  (ds/components.css) styles it, no className function needed. */
+function PrimaryNav() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
+
+  return (
+    <>
+      <NavLink to="/history">{isAdmin ? 'Historie' : 'Články'}</NavLink>
+      {isAdmin && (
+        <>
+          <NavLink to="/admin/users">Uživatelé</NavLink>
+          <NavLink to="/admin/ingestion">Sběr článků</NavLink>
+        </>
+      )}
+    </>
+  )
+}
+
+/** Site-wide chrome (ticket 39): `.utilbar` / `.mast` / `.rubnav` / `.sticky` / `.foot`, ported
+ *  from `ds/chrome.js`. Ticket 26's masthead/footer structure survives (the utility bar above a
+ *  centered nameplate, a nav row below, a sitemap-shaped footer); only the styling — and, for
+ *  rubnav specifically, what fills the nav slot — comes from the new system. */
+export function Chrome({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  const [theme, cycleTheme] = useTheme()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const navAnchorRef = useRef<HTMLDivElement>(null)
+  const [stickyOn, setStickyOn] = useState(false)
+
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ['me'] })
+      void navigate('/login', { replace: true })
+    },
+  })
+
+  useEffect(() => {
+    const anchor = navAnchorRef.current
+    if (!anchor) return
+    const io = new IntersectionObserver(([entry]) => setStickyOn(!entry.isIntersecting), {
+      rootMargin: '0px',
+    })
+    io.observe(anchor)
+    return () => io.disconnect()
+  }, [])
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <div className={`sticky${stickyOn ? ' is-on' : ''}`}>
+        <div className="u-wrap sticky__in">
+          <Link className="sticky__w" to="/">
+            News <em>Triangulator</em>
+          </Link>
+          <nav className="sticky__nav" aria-label="Zkratky">
+            <PrimaryNav />
+          </nav>
+          <span className="sticky__bar" aria-hidden="true" />
+        </div>
+      </div>
+
+      <div className="utilbar">
+        <div className="u-wrap utilbar__in">
+          <span>{formatDate(new Date(), 'long')}</span>
+          <span className="utilbar__r">
+            {user && (
+              <>
+                <span>{user.email}</span>
+                <button onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
+                  {logoutMutation.isPending ? 'Odhlašování…' : 'Odhlásit se'}
+                </button>
+              </>
+            )}
+            <button type="button" onClick={cycleTheme}>
+              {THEME_LABEL[theme]}
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <div className="mast">
+        <div className="u-wrap mast__in">
+          <Link className="mast__brand" to="/">
+            <span className="mast__word">
+              News <em>Triangulator</em>
+            </span>
+          </Link>
+          <p className="mast__sub">Zprávy ověřené napříč zdroji</p>
+        </div>
+      </div>
+
+      <div className="rubnav" ref={navAnchorRef}>
+        <nav className="u-wrap rubnav__in" aria-label="Hlavní navigace">
+          <PrimaryNav />
+        </nav>
+      </div>
+
+      <div className="flex-1">{children}</div>
+
+      <footer className="foot">
+        <div className="u-wrap">
+          <div className="foot__cols">
+            <div>
+              <h4>Triangulátor</h4>
+              <p>
+                News Triangulator srovnává zpravodajství napříč zdroji a odděluje shodu, rozpory, jedinečné
+                zprávy a framing.
+              </p>
+            </div>
+            <div>
+              <h4>Procházet</h4>
+              <ul>
+                <li>
+                  <Link to="/">Domů</Link>
+                </li>
+                <li>
+                  <Link to="/history">{user?.role === 'ADMIN' ? 'Historie' : 'Články'}</Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4>Personál</h4>
+              <ul>
+                <li>
+                  <Link to="/login">Přihlášení pro personál</Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="foot__bottom">
+            <span>© News Triangulator</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}

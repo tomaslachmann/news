@@ -10,23 +10,23 @@ Source of truth is `DESIGN-SYSTEM.md` plus `ds/tokens.css`; `styleguide.html` is
 
 ## Mechanics
 
-- [ ] `ds/tokens.css` and `ds/base.css` land **unchanged** and are imported globally from `main.tsx` — not translated into a JS theme object, not merged into Tailwind's `theme.extend`, per `DESIGN-SYSTEM.md` §10
+- [x] `ds/tokens.css` and `ds/base.css` land **unchanged** and are imported globally from `main.tsx` — not translated into a JS theme object, not merged into Tailwind's `theme.extend`, per `DESIGN-SYSTEM.md` §10
 - [ ] `ds/components.css` (57 KB) is split into per-component files colocated with their components and imported globally. **Plain CSS, never CSS Modules** — Modules hash class names, which breaks both `styleguide.html`'s validity as a reference and §10's "názvy tříd se zachovají"
 - [ ] `tailwind.config.js`'s HSL semantic colour set (`--background`, `--foreground`, `--muted`, …) and the matching `:root` / `.dark` blocks in `index.css` are **deleted**. Tailwind is retained for layout utilities only; colour, typography and spacing come exclusively from tokens. The ~179 semantic-colour class usages across 17 files go away with the pages that use them, not via a compatibility shim
 - [ ] The 10 alpha-modifier usages (`bg-muted/30`, `hover:bg-primary/90`, …) are removed rather than reproduced. They currently compile to `hsl(var(--muted) / .3)`, which only works because the old tokens were bare HSL channel triplets; the new tokens are complete `oklch()` values and the same construction would silently emit invalid CSS
 - [ ] `class-variance-authority` is dropped from the components it styles; variants map to modifier class names (`cn('btn', variant && \`btn--${variant}\`)`). `cn()` stays. Remove the dependency if nothing else uses it
 - [ ] Radix stays as headless behaviour under the new styling — `dialog`, `select`, `tabs`, `tooltip`, `label` keep their Radix implementations and get new class names. Focus trap, escape handling, portalling and keyboard navigation are not reimplemented by hand
-- [ ] Dark mode is driven by `data-theme` on `<html>` with **three** states: absent (follow `prefers-color-scheme`), `light`, `dark`. Tailwind's `darkMode` switches to the `[data-theme="dark"]` selector. The toggle lives in `.utilbar` and cycles system → light → dark
-- [ ] Theme choice persists in `localStorage`, read by a small inline script in `index.html` before the bundle loads so a dark-preferring visitor never sees a light flash. This is a deliberate deviation from `DESIGN-SYSTEM.md` §3.2 (which specifies server or cookie storage) — see ADR 0031
+- [x] Dark mode is driven by `data-theme` on `<html>` with **three** states: absent (follow `prefers-color-scheme`), `light`, `dark`. Tailwind's `darkMode` switches to the `[data-theme="dark"]` selector. The toggle lives in `.utilbar` and cycles system → light → dark
+- [x] Theme choice persists in `localStorage`, read by a small inline script in `index.html` before the bundle loads so a dark-preferring visitor never sees a light flash. This is a deliberate deviation from `DESIGN-SYSTEM.md` §3.2 (which specifies server or cookie storage) — see ADR 0031
 - [ ] The three hardcoded colours that survive nowhere else (`text-green-700` ×2, `bg-yellow-50` / `text-yellow-800`) move onto `--ok` / `--mid`; they are unreadable in dark mode as they stand
-- [ ] Newsreader, Inter Tight and IBM Plex Mono are **self-hosted**, not loaded from `fonts.googleapis.com`. Variable `woff2` with the `opsz` axis intact (§4.1 depends on it), `latin` **and `latin-ext`** subsets — without `latin-ext` Czech diacritics disappear. `font-synthesis: none` is part of the system, so any italic in use needs a real italic file
+- [x] Newsreader, Inter Tight and IBM Plex Mono are **self-hosted**, not loaded from `fonts.googleapis.com`. Variable `woff2` with the `opsz` axis intact (§4.1 depends on it), `latin` **and `latin-ext`** subsets — without `latin-ext` Czech diacritics disappear. `font-synthesis: none` is part of the system, so any italic in use needs a real italic file
 - [ ] `e.css`'s short aliases (`--t-h1` → `--text-h1`) are not carried over; ported pages use the long token names directly, per §2
 
 ## Screens
 
 Each of these is visually compared against its reference HTML before being checked off.
 
-- [ ] **Chrome** — `.utilbar`, `.mast`, `.rubnav`, `.sticky`, `.foot`. Ticket 26's masthead and footer *structure* is preserved and re-clothed, not redesigned; the footer keeps its role-aware `/history` label and shared container constant
+- [x] **Chrome** — `.utilbar`, `.mast`, `.rubnav`, `.sticky`, `.foot`. Ticket 26's masthead and footer *structure* is preserved and re-clothed, not redesigned; the footer keeps its role-aware `/history` label and shared container constant
 - [ ] **`/styleguide`** — `styleguide.html` ported as a dev-only route, so a token change can be checked the way §1 requires
 - [ ] **`/login`** — `login.html`. Stays the internal-tool framing ticket 26 established
 - [ ] **`/`** — `e.html`. `.lead`, `.story` / `.storylist`, `.card`, `.minute`, `.daystats`, `.entband`

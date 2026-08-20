@@ -1,0 +1,224 @@
+/* Ported verbatim from ds/components.css (ticket 39) — class names unchanged so styleguide.html
+   stays a valid reference. .utilbar / .mast / .rubnav / .sticky / .foot only; .daystats belongs
+   to the homepage (ticket 39's `/` screen), not shared chrome. */
+
+.utilbar {
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  background: var(--paper);
+}
+.utilbar__in {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  min-height: 2.25rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+}
+.utilbar__r {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+.utilbar a:hover,
+.utilbar button:hover {
+  color: var(--ink);
+}
+.utilbar button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.utilbar button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.mast {
+  text-align: center;
+  padding: var(--sp-6) 0 var(--sp-4);
+  border-bottom: var(--bw-hair) solid var(--line-strong);
+}
+.mast__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.mast__word {
+  font-size: var(--text-mast);
+  font-weight: 500;
+  font-variation-settings: 'opsz' var(--opsz-mast);
+  letter-spacing: var(--ls-mast);
+  line-height: 0.95;
+}
+.mast__word em {
+  font-style: normal;
+  color: var(--accent);
+}
+.mast__sub {
+  margin-top: var(--sp-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.rubnav {
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.rubnav__in {
+  display: flex;
+  justify-content: center;
+  gap: 0 var(--sp-5);
+  padding: var(--sp-3) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  font-weight: 500;
+  flex-wrap: nowrap;
+}
+.rubnav a {
+  white-space: nowrap;
+  padding-bottom: 2px;
+  border-bottom: var(--bw-rule) solid transparent;
+  color: var(--ink-2);
+}
+.rubnav a:hover {
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+.rubnav a[aria-current='page'] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.sticky {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+  backdrop-filter: blur(10px) saturate(1.1);
+  border-bottom: var(--bw-hair) solid var(--line);
+  transform: translateY(-102%);
+  transition: transform var(--dur-slow) var(--ease);
+}
+.sticky.is-on {
+  transform: none;
+}
+.sticky__in {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: 2.9rem;
+}
+.sticky__w {
+  font-size: 1.0625rem;
+  font-variation-settings: 'opsz' 30;
+  letter-spacing: -0.02em;
+}
+.sticky__w em {
+  font-style: normal;
+  color: var(--accent);
+}
+.sticky__nav {
+  margin-left: auto;
+  display: flex;
+  gap: var(--sp-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+}
+.sticky__nav a:hover {
+  color: var(--accent);
+}
+.sticky__bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+}
+@supports (animation-timeline: scroll()) {
+  .sticky__bar {
+    animation: nt-grow linear both;
+    animation-timeline: scroll(root block);
+  }
+  @keyframes nt-grow {
+    to {
+      transform: scaleX(1);
+    }
+  }
+}
+
+.foot {
+  border-top: var(--bw-hair) solid var(--line-strong);
+  background: var(--surface-2);
+  padding: var(--sp-6) 0 var(--sp-7);
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+.foot__cols {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: var(--sp-5);
+}
+.foot h4 {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  margin-bottom: var(--sp-3);
+}
+.foot ul {
+  list-style: none;
+  padding: 0;
+}
+.foot li {
+  padding: 0.15rem 0;
+}
+.foot a:hover {
+  color: var(--accent);
+}
+.foot__bottom {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-3);
+  border-top: var(--bw-hair) solid var(--line-2);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+
+/* Breakpoints per ds/components.css §12 — 62rem (tablet) and 44rem (phone). */
+@media (max-width: 62rem) {
+  .foot__cols {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 44rem) {
+  .mast {
+    padding: var(--sp-4) 0 var(--sp-3);
+  }
+  .rubnav__in {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .rubnav__in::-webkit-scrollbar {
+    display: none;
+  }
+  .sticky__nav {
+    display: none;
+  }
+}
