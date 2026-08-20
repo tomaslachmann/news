@@ -193,6 +193,7 @@ docker compose down -v
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string (Prisma format) |
 | `OPENAI_API_KEY` | Yes | — | OpenAI API key for extraction and synthesis passes |
 | `EXTRACTION_MODEL` | No | `gpt-4o` | Model used for the per-article extraction pass |
+| `ENTITY_MODEL` | No | `gpt-4o` | Model used for the Story-scoped entity/entity-relation extraction pass (ticket 11) |
 | `SYNTHESIS_MODEL` | No | `gpt-4o` | Model used for the cross-source synthesis pass |
 | `EMBEDDING_MODEL` | No | `text-embedding-3-small` | Model used to embed incoming RSS items for Ingestion's cheap candidate matching (ADR 0018) |
 | `JWT_SECRET` | Yes | — | Secret for signing JWT tokens (used by auth, ticket 10) |

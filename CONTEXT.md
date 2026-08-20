@@ -113,6 +113,9 @@ The AI model used for the per-Coverage Extraction pass. Configurable via the `EX
 ## Synthesis Model
 The AI model used for the cross-Coverage Synthesis pass. Configurable via the `SYNTHESIS_MODEL` environment variable.
 
+## Entity Model
+The AI model used for the Story-scoped entity/entity-relation extraction pass. Configurable via the `ENTITY_MODEL` environment variable (ticket 11); defaults to the same model as Extraction Model unless set.
+
 ## User
 A person with credentials (email + bcrypt-hashed password) and a Role, stored in the database. Users authenticate via username/password and receive a JWT in an httpOnly cookie.
 
