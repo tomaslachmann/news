@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { FastifyBaseLogger } from 'fastify'
+import type { AgreementCategory } from '@news-triangulator/shared'
 import { callJsonModel } from './llmClient.js'
 import type { ExtractionResult } from './extractionPass.js'
 import {
@@ -31,9 +32,15 @@ const ContradictionItemSchema = z.object({
 
 // ADR 0030 (ticket 38): the model's own story-level read of how much the sources overlap in
 // what they report -- one judgement for the whole Analysis, never per dimension item or claim.
-// Closed enum, rejected (never coerced) if the model returns anything else.
-export const AgreementCategorySchema = z.enum(['CONFIRMED', 'PARTIAL', 'DISPUTED'])
-export type AgreementCategory = z.infer<typeof AgreementCategorySchema>
+// Closed enum, rejected (never coerced) if the model returns anything else. The literal array
+// below must list the exact same values as shared's `AgreementCategory` -- the `satisfies` cast
+// makes that a compile error instead of a silent drift if one changes without the other.
+export const AgreementCategorySchema = z.enum([
+  'CONFIRMED',
+  'PARTIAL',
+  'DISPUTED',
+]) satisfies z.ZodType<AgreementCategory>
+export type { AgreementCategory }
 
 export const SynthesisResultSchema = z.object({
   agreement: z.array(DimensionItemSchema),

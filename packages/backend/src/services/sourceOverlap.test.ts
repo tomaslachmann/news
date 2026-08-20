@@ -68,6 +68,15 @@ describe('computeSourceOverlapPercentage', () => {
     const dimensions = { agreement: [{ prose: 'x', attributions: [attribution('iDnes')] }] }
     expect(computeSourceOverlapPercentage(dimensions, 0)).toBeNull()
   })
+
+  it('clamps to 100 when inconsistent outlet spellings inflate the distinct count above sourceCount', () => {
+    const dimensions = {
+      agreement: [
+        { prose: 'x', attributions: [attribution('iDnes'), attribution('iDNES.cz'), attribution('Novinky')] },
+      ],
+    }
+    expect(computeSourceOverlapPercentage(dimensions, 2)).toBe(100)
+  })
 })
 
 describe('interpretSourceOverlap', () => {

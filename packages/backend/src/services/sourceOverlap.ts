@@ -33,7 +33,10 @@ export function computeSourceOverlapPercentage(
     (item) => new Set(item.attributions.map((a) => a.outlet)).size
   )
   const mean = outletCounts.reduce((sum, count) => sum + count, 0) / outletCounts.length
-  return Math.round((mean / sourceCount) * 100)
+  // Clamped to 100: `outlet` is free-text from the model (never cross-checked against a
+  // canonical source list, unlike `czechQuote`/`articleUrl`), so two attributions naming the same
+  // real outlet under different spellings can push the distinct count above `sourceCount`.
+  return Math.min(100, Math.round((mean / sourceCount) * 100))
 }
 
 /** Maps an already-computed percentage onto DESIGN-SYSTEM.md §3.3's three-way interpretation —

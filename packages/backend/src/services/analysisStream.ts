@@ -117,10 +117,19 @@ async function runExtractionAndSynthesis(
 
   send({ type: 'extraction-settled' })
 
-  // Re-use cached synthesis result if the stream is reconnected
+  // Re-use cached synthesis result if the stream is reconnected. agreementCategory is merged in
+  // from its own column (ticket 38 / ADR 0030), same reason as mappers/analysis.ts's
+  // toAnalysisDetail — a reconnect for one of the 4 migration-backfilled Analyses would otherwise
+  // re-emit `dimensions` without the field its type declares required.
   const cached = await synthesisRepo.findSynthesisResultByAnalysisId(analysisId)
   if (cached) {
-    send({ type: 'synthesis-complete', dimensions: cached.dimensions as unknown as AnalysisDimensions })
+    send({
+      type: 'synthesis-complete',
+      dimensions: {
+        ...(cached.dimensions as unknown as AnalysisDimensions),
+        agreementCategory: cached.agreementCategory,
+      },
+    })
     return
   }
 
@@ -169,16 +178,14 @@ async function runExtractionAndSynthesis(
     // COMPLETE write — never a completed Analysis without its narrative job. A queue failure
     // rolls the whole transition back, same as this same try/catch already does for a headline
     // failure.
-    await analysisRepo.completeAnalysisWithSynthesis(
-      analysisId,
-      synthesis,
+    await analysisRepo.completeAnalysisWithSynthesis(analysisId, synthesis, {
       headline,
       sourceOverlapPercentage,
-      synthesis.agreementCategory,
-      async (tx) => {
+      agreementCategory: synthesis.agreementCategory,
+      onComplete: async (tx) => {
         await enqueueJob(JobName.Narrative, { analysisId }, { tx })
-      }
-    )
+      },
+    })
     send({ type: 'synthesis-complete', dimensions: synthesis })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Syntéza se nezdařila'

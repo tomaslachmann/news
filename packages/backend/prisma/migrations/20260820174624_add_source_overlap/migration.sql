@@ -16,6 +16,19 @@ ALTER TABLE "SynthesisResult" ADD COLUMN "agreementCategory" "SynthesisAgreement
 -- nullable. sourceOverlapPercentage is left null for these same rows -- computing it
 -- retroactively from the still-present `dimensions` JSON was possible but out of scope for this
 -- migration, and null is the column's own "undefined" state regardless.
-UPDATE "SynthesisResult" SET "agreementCategory" = 'PARTIAL' WHERE "agreementCategory" IS NULL;
+--
+-- Scoped to these 4 specific row ids -- the exact set verified by hand at authoring time -- not a
+-- blanket `WHERE "agreementCategory" IS NULL`. Any row this migration doesn't already know about
+-- (e.g. one inserted between authoring and the migration actually running) is a case nobody has
+-- reviewed; it must fail the NOT NULL constraint below and get raised, not silently receive the
+-- same placeholder. This list is also the queryable record of which agreementCategory values are
+-- fabricated rather than a genuine model judgement, should that distinction ever matter later.
+UPDATE "SynthesisResult" SET "agreementCategory" = 'PARTIAL'
+WHERE id IN (
+  'cmt1qm62x01i34pt20pchu7if',
+  'cmt1rcnlj01iw4pt2vo1ym16v',
+  'cmt1rj5b901js4pt2fefp2y5x',
+  'cmt1rtyii01mu4pt2fvttx8wf'
+);
 
 ALTER TABLE "SynthesisResult" ALTER COLUMN "agreementCategory" SET NOT NULL;

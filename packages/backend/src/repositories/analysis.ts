@@ -299,27 +299,33 @@ export async function disconnect(): Promise<void> {
   await prisma.$disconnect()
 }
 
+export interface CompleteAnalysisWithSynthesisOptions {
+  /** Null when generation was skipped because the Agreement dimension was empty. */
+  headline: string | null
+  /** Ticket 38 / ADR 0030 — derived by `computeSourceOverlapPercentage`. */
+  sourceOverlapPercentage: number | null
+  /** Ticket 38 / ADR 0030 — lifted straight off the already-validated `SynthesisResult` the model
+   *  returned. */
+  agreementCategory: SynthesisAgreementCategory
+  /** Runs inside the same transaction as the writes below (ADR 0028: "vytvoř Draft a naplánuj
+   *  jeho zpracování" is one atomic step) — used by `analysisStream.ts` to enqueue the
+   *  `narrative.generate` job (ticket 15) atomically with the COMPLETE transition, so a queue
+   *  failure rolls the transition back instead of leaving a COMPLETE Analysis with no job ever
+   *  enqueued for it. Same seam `updateAnalysisStatusIfCurrently` already established for ticket
+   *  14's `entity.extract` enqueue — keeps job-queue concerns out of the repository layer. */
+  onComplete?: (tx: Prisma.TransactionClient) => Promise<void>
+}
+
 /** Persists the Synthesis result and the tool-authored headline (see ADR 0021) and flips the
  *  Analysis to COMPLETE, all in one transaction — there is never a window where an Analysis is
- *  COMPLETE without its headline already having been generated. `headline` is null when
- *  generation was skipped because the Agreement dimension was empty. `sourceOverlapPercentage`
- *  (nullable) and `agreementCategory` are ticket 38 / ADR 0030's Source Overlap fields — the
- *  former derived by `computeSourceOverlapPercentage`, the latter lifted straight off the
- *  already-validated `SynthesisResult` the model returned.
- *
- *  `onComplete`, when given, runs inside the same transaction as the writes above (ADR 0028:
- *  "vytvoř Draft a naplánuj jeho zpracování" is one atomic step) — used by `analysisStream.ts`
- *  to enqueue the `narrative.generate` job (ticket 15) atomically with the COMPLETE transition,
- *  so a queue failure rolls the transition back instead of leaving a COMPLETE Analysis with no
- *  job ever enqueued for it. Same seam `updateAnalysisStatusIfCurrently` already established for
- *  ticket 14's `entity.extract` enqueue — keeps job-queue concerns out of the repository layer. */
+ *  COMPLETE without its headline already having been generated. Takes an options object (rather
+ *  than positional params) because this field set has grown once already (ticket 38) and will
+ *  again — an options bag makes the next addition additive at every call site instead of a
+ *  positional insertion that risks transposing two same-typed neighbors. */
 export async function completeAnalysisWithSynthesis(
   analysisId: string,
   dimensions: Prisma.InputJsonValue,
-  headline: string | null,
-  sourceOverlapPercentage: number | null,
-  agreementCategory: SynthesisAgreementCategory,
-  onComplete?: (tx: Prisma.TransactionClient) => Promise<void>
+  { headline, sourceOverlapPercentage, agreementCategory, onComplete }: CompleteAnalysisWithSynthesisOptions
 ): Promise<void> {
   await prisma.$transaction(
     async (tx) => {

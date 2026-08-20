@@ -41,7 +41,10 @@ enum StoryRelationConfidenceTier {
 
 /// Synthesis's own story-level read of how much the sources overlap in what they report --
 /// categorical for the same reason StoryRelationConfidenceTier is (ADR 0022): a raw float
-/// invites being read as credibility. See ADR 0030 (ticket 38).
+/// invites being read as credibility. See ADR 0030 (ticket 38). Matches synthesisPass.ts's
+/// AgreementCategorySchema and shared's AgreementCategory exactly -- kept in sync by hand, same
+/// convention as every other closed enum this schema mirrors from a Zod schema (see
+/// StoryRelationType/EntityType).
 enum SynthesisAgreementCategory {
   CONFIRMED
   PARTIAL

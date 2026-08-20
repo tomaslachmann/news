@@ -13,7 +13,11 @@ describe('SynthesisResult repository against a real Postgres instance', () => {
   it('markNarrativeGenerationFailed sets narrativeGenerationFailedAt without touching narrative/dimensions/headline', async () => {
     const analysis = await createAnalysis({ seedUrl: 'https://example.cz/narrative-fail', seedHeadline: 'x' })
     const dimensions = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
-    await completeAnalysisWithSynthesis(analysis.id, dimensions, 'Generated headline', null, 'PARTIAL')
+    await completeAnalysisWithSynthesis(analysis.id, dimensions, {
+      headline: 'Generated headline',
+      sourceOverlapPercentage: null,
+      agreementCategory: 'PARTIAL',
+    })
 
     await markNarrativeGenerationFailed(analysis.id)
 
@@ -30,7 +34,11 @@ describe('SynthesisResult repository against a real Postgres instance', () => {
       seedHeadline: 'x',
     })
     const dimensions = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
-    await completeAnalysisWithSynthesis(analysis.id, dimensions, null, null, 'PARTIAL')
+    await completeAnalysisWithSynthesis(analysis.id, dimensions, {
+      headline: null,
+      sourceOverlapPercentage: null,
+      agreementCategory: 'PARTIAL',
+    })
 
     const found = await findSynthesisResultByAnalysisId(analysis.id)
 
