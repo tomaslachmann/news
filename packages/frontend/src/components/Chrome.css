@@ -97,7 +97,12 @@
   border-bottom-color: var(--accent);
 }
 
-.sticky {
+/* Element-qualified, not just `.sticky`: Tailwind ships its own `.sticky { position: sticky }`
+   utility, same class name, and (depending on bundling order) can load after this file and win
+   on specificity ties — silently turning `position: fixed` into `position: sticky`, which leaves
+   this element in normal flow (reserving its height) while still transformed off-screen. The
+   rendered `class="sticky"` attribute is unchanged; only this selector is qualified. */
+div.sticky {
   position: fixed;
   inset-inline: 0;
   top: 0;
