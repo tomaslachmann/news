@@ -90,6 +90,20 @@
   color: var(--ink);
   border: var(--bw-hair) solid var(--line);
 }
+/* Chrome/Brave paint their own background on a field they recognize as a saved-credential
+   candidate (typically right after a login submit) via :-webkit-autofill, at a priority plain
+   `background` can't override. The inset box-shadow is the only reliable way to reclaim it —
+   `background-color: transparent !important` alone doesn't work in Chromium. Delayed transition
+   so the swap-back on blur doesn't visibly flash. */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  box-shadow: 0 0 0 1000px var(--surface) inset;
+  transition:
+    background-color 600000s 0s,
+    color 600000s 0s;
+}
 .input::placeholder {
   color: var(--ink-4);
 }
