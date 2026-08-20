@@ -12,6 +12,7 @@ import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import IngestionReviewPage from './pages/IngestionReviewPage'
 import StyleguidePage from './pages/StyleguidePage'
+import NotFoundPage from './pages/NotFoundPage'
 
 /** Every reader-facing page renders inside the site-wide Chrome (masthead/rubnav/utilbar).
  *  `/styleguide` (dev-only, below) is a standalone reference document with its own top bar
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="/analysis/:id" element={<AnalysisPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route element={<AdminLayout />}>
         <Route path="/review/:id" element={<ReviewPage />} />

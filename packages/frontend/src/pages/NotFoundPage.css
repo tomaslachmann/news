@@ -1,0 +1,36 @@
+/* ticket 39 — ds/components.css §8 "KONTEJNERY A STAVY" / design-complete.css, ported for the
+   catch-all 404 route (state-404.html). .page-shell is shared (ds/components.css); .state* is
+   page-scoped here since this is the only real page needing it so far — state-failed.html/
+   state-session.html are listed under the ticket's "Mocked and dev-only" screens, not ported. */
+
+.state-page {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  padding-block: var(--sp-8);
+}
+.state {
+  max-width: 42rem;
+  text-align: center;
+}
+.state__mark {
+  font: 500 4rem / 1 var(--font-serif);
+  color: var(--accent);
+}
+.state__t {
+  margin-top: var(--sp-3);
+  font: 500 var(--text-h1) / 1.08 var(--font-serif);
+}
+.state__d {
+  margin: var(--sp-3) auto 0;
+  max-width: 48ch;
+  font: var(--text-body) / var(--lh-relaxed) var(--font-serif);
+  color: var(--ink-2);
+}
+.state__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-5);
+}
