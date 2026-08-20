@@ -98,6 +98,10 @@
   font-size: var(--text-micro);
   color: var(--ink-3);
 }
+.fig figcaption > :last-child {
+  margin-left: auto;
+  white-space: nowrap;
+}
 
 /* ═══ byline + gauge + chip (ds/components.css §1/§3) ══════════════════════ */
 
@@ -446,27 +450,94 @@
   color: var(--ink-2);
 }
 
-/* Section header, above .cards/.storylist and each rail widget — not part of the canonical
-   ds/components.css vocabulary (e.html's own .sec/.bhead have no CSS backing either — .sec isn't
-   in ds/components.css, and .bhead is used in e.html's markup but no stylesheet, including
-   e.css itself, ever defines it); built from existing tokens only, matching the system's own
-   typographic language (uppercase micro label + a thin rule), not a new visual idiom. */
-.sechead {
+/* Main-column section header ("Ve středu pozornosti", "Další zprávy dne") — e.css's .sec,
+   ported directly (confirmed present, tokens only). */
+.sec {
   display: flex;
   align-items: baseline;
   gap: var(--sp-4);
   margin: var(--sp-6) 0 var(--sp-4);
+}
+.sec h2 {
   font-family: var(--font-sans);
   font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: var(--ls-caps);
   text-transform: uppercase;
-  color: var(--ink);
 }
-.sechead__rule {
+.sec .rule {
   flex: 1;
   height: var(--bw-hair);
   background: var(--line);
+}
+.sec a {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Right-rail section header ("Entity dne", "Minuta", "Nejčtenější", "Jak čteme shodu") — e.css's
+   .bhead, a different, border-bottom treatment from .sec above (confirmed present, tokens only —
+   this was initially missed and replaced with an invented .sechead; corrected). */
+.bhead {
+  display: flex;
+  align-items: baseline;
+  border-bottom: var(--bw-hair) solid var(--ink);
+  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.bhead h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+.bhead span {
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.bhead a {
+  color: var(--accent);
+}
+
+.livedot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent);
+}
+.livedot i {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .livedot i {
+    animation: nt-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes nt-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}
+
+/* Hover-highlight on headline/entity/feed-item links — e.css's .hl, ported directly. */
+.hl {
+  transition: color var(--dur-fast) var(--ease);
+}
+a:hover .hl {
+  color: var(--accent);
 }
 
 .mock-badge {

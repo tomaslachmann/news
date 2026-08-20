@@ -249,14 +249,43 @@ function SampleByline({ story, index, big }: { story: SampleStory; index: number
   )
 }
 
+// ADR 0031: no image field exists in the data model (ADR 0004 keeps article content unstored),
+// so this renders an aspect-ratio placeholder instead of e.html's actual <img> — that's the one
+// deliberate deviation. The caption text itself is e.html's own literal two-line content
+// (IMG_CAPTIONS + "Ilustrační snímek"), unchanged.
 function FigPlaceholder({ img, thumb }: { img: string; thumb?: boolean }) {
   return (
     <figure className={`fig${thumb ? ' fig--thumb' : ''}`}>
       <div className="fig__ph" />
       <figcaption>
-        <span>{IMG_CAPTIONS[img]} — TODO: bez obrázkových dat (ADR 0004)</span>
+        <span>{IMG_CAPTIONS[img]}</span>
+        <span>Ilustrační snímek</span>
       </figcaption>
     </figure>
+  )
+}
+
+/** Main-column section header ("Ve středu pozornosti", "Další zprávy dne") — e.css's `.sec`. */
+function Sec({ title, linkText }: { title: string; linkText: string }) {
+  return (
+    <div className="sec">
+      <h2>{title}</h2>
+      <span className="rule" aria-hidden="true" />
+      <a href="#" onClick={(e) => e.preventDefault()}>
+        {linkText}
+      </a>
+    </div>
+  )
+}
+
+/** Right-rail section header ("Entity dne", "Minuta", "Nejčtenější", "Jak čteme shodu") — e.css's
+ *  `.bhead`, a distinct treatment from `.sec` above (border-bottom, trailing span pushed right). */
+function BHead({ title, trailing }: { title: string; trailing?: React.ReactNode }) {
+  return (
+    <div className="bhead">
+      <h2>{title}</h2>
+      {trailing}
+    </div>
   )
 }
 
@@ -266,14 +295,28 @@ function LeadArticle({ story }: { story: SampleStory }) {
       <span className="chip">
         {story.topic} · analýza {story.sources} zdrojů
       </span>
-      <h1 className="lead__h">{story.title}</h1>
+      <h1 className="lead__h">
+        <a href="#" className="hl" onClick={(e) => e.preventDefault()}>
+          {story.title}
+        </a>
+      </h1>
       <SampleByline story={story} index={0} big />
       <div className="lead__body">
-        <FigPlaceholder img={story.img} />
+        <a href="#" onClick={(e) => e.preventDefault()}>
+          <FigPlaceholder img={story.img} />
+        </a>
         <div>
           <p className="lead__perex">{story.lead}</p>
           <p className="story__meta" style={{ marginTop: '0.9rem' }}>
-            Entity: {story.entities.join(' · ')}
+            Entity:{' '}
+            {story.entities.map((ent, i) => (
+              <span key={ent}>
+                {i > 0 && ' · '}
+                <a href="#" onClick={(e) => e.preventDefault()}>
+                  {ent}
+                </a>
+              </span>
+            ))}
           </p>
           <p className="story__meta" style={{ marginTop: '0.3rem' }}>
             Zdroje: {story.outlets.join(' · ')} a další
@@ -289,9 +332,13 @@ function TwoCards({ stories }: { stories: SampleStory[] }) {
     <div className="cards">
       {stories.map((s, i) => (
         <article className="card" key={s.title}>
-          <FigPlaceholder img={s.img} />
+          <a href="#" onClick={(e) => e.preventDefault()}>
+            <FigPlaceholder img={s.img} />
+          </a>
           <span className="chip">{s.topic}</span>
-          <h3 className="card__h">{s.title}</h3>
+          <a href="#" onClick={(e) => e.preventDefault()}>
+            <h3 className="card__h hl">{s.title}</h3>
+          </a>
           <SampleByline story={s} index={i + 1} />
           <p className="card__p">{s.lead}</p>
         </article>
@@ -307,14 +354,27 @@ function StoryListSection({ stories }: { stories: SampleStory[] }) {
         <article className="story" key={s.title}>
           <div>
             <span className="chip">{s.topic}</span>
-            <h3>{s.title}</h3>
+            <a href="#" onClick={(e) => e.preventDefault()}>
+              <h3 className="hl">{s.title}</h3>
+            </a>
             <SampleByline story={s} index={i + 3} />
             <p className="story__p">{s.lead}</p>
             <p className="story__meta">
-              Entity: {s.entities.join(' · ')} · Zdroje: {s.outlets.join(', ')}
+              Entity:{' '}
+              {s.entities.map((ent, j) => (
+                <span key={ent}>
+                  {j > 0 && ' · '}
+                  <a href="#" onClick={(e) => e.preventDefault()}>
+                    {ent}
+                  </a>
+                </span>
+              ))}{' '}
+              · Zdroje: {s.outlets.join(', ')}
             </p>
           </div>
-          <FigPlaceholder img={s.img} thumb />
+          <a href="#" onClick={(e) => e.preventDefault()}>
+            <FigPlaceholder img={s.img} thumb />
+          </a>
         </article>
       ))}
     </section>
@@ -327,7 +387,16 @@ function EntsPanel() {
   const min = Math.min(...mentions)
   return (
     <section className="ents">
-      <SectionHead title="Entity dne" />
+      <BHead
+        title="Entity dne"
+        trailing={
+          <span>
+            <a href="#" onClick={(e) => e.preventDefault()}>
+              přehled →
+            </a>
+          </span>
+        }
+      />
       <p className="ents__note">Velikost kruhu odpovídá počtu zmínek za 24 hodin.</p>
       {SAMPLE_ENTITIES.map((e) => {
         const size = 26 + Math.round(((e.mentions - min) / (max - min)) * 24)
@@ -341,7 +410,7 @@ function EntsPanel() {
               </span>
             </span>
             <span>
-              <span className="erow__n">{e.name}</span>
+              <span className="erow__n hl">{e.name}</span>
               <span className="erow__k">
                 {e.kind} · {e.sources} zdrojů
               </span>
@@ -366,12 +435,19 @@ function PullQuoteSection() {
 function MinuteFeedSection() {
   return (
     <section>
-      <SectionHead title="Minuta" />
+      <BHead
+        title="Minuta"
+        trailing={
+          <span className="livedot">
+            <i /> průběžně
+          </span>
+        }
+      />
       {SAMPLE_FEED.map((f) => (
         <a className="minute" href="#" key={f.t} onClick={(e) => e.preventDefault()}>
           <span className="minute__t">{f.t}</span>
           <span>
-            <span className="minute__x">{f.title}</span>
+            <span className="minute__x hl">{f.title}</span>
             <span className="minute__s">
               {f.src} zdrojů{f.conflict && <span className="is-bad"> · rozpor</span>}
             </span>
@@ -389,7 +465,7 @@ function ConflictsSection() {
         <h2>Rozpory ve zdrojích</h2>
         {SAMPLE_CONFLICTS.map((c) => (
           <a className="q" href="#" key={c.title} onClick={(e) => e.preventDefault()}>
-            <span className="q__t">{c.title}</span>
+            <span className="q__t hl">{c.title}</span>
             <span className="q__d">{c.detail}</span>
             <span className="byline" style={{ margin: 0 }}>
               shoda <b>{c.pct} %</b>
@@ -405,12 +481,12 @@ function ConflictsSection() {
 function MostReadSection() {
   return (
     <section>
-      <SectionHead title="Nejčtenější" />
+      <BHead title="Nejčtenější" trailing={<span>dnes</span>} />
       {SAMPLE_MOSTREAD.map((m, i) => (
         <a className="minute" href="#" key={m.title} onClick={(e) => e.preventDefault()}>
           <span className="minute__t">{i + 1}.</span>
           <span>
-            <span className="minute__x">{m.title}</span>
+            <span className="minute__x hl">{m.title}</span>
             <span className="minute__s">{m.src} zdrojů</span>
           </span>
         </a>
@@ -422,22 +498,15 @@ function MostReadSection() {
 function LegendSection() {
   return (
     <section>
-      <SectionHead title="Jak čteme shodu" />
+      <BHead title="Jak čteme shodu" />
       <p className="legend">
         <b>Shoda</b> je podíl sledovaných zdrojů, které u dané zprávy uvádějí tvrzení bez věcného rozporu. Pod
-        65 % označujeme zprávu jako <b>rozpornou</b> a uvádíme, v čem se zdroje liší.
+        65 % označujeme zprávu jako <b>rozpornou</b> a uvádíme, v čem se zdroje liší.{' '}
+        <a href="#" onClick={(e) => e.preventDefault()}>
+          Celá metodika →
+        </a>
       </p>
     </section>
-  )
-}
-
-function SectionHead({ title }: { title: string }) {
-  return (
-    <div className="sechead">
-      <h2>{title}</h2>
-      <span className="sechead__rule" aria-hidden="true" />
-      <span className="mock-badge">ukázková data · negrilováno</span>
-    </div>
   )
 }
 
@@ -451,7 +520,6 @@ function DayStatsBar() {
             {t.k}
           </div>
         ))}
-        <span className="mock-badge">ukázková data · negrilováno</span>
       </div>
     </div>
   )
@@ -791,10 +859,10 @@ export default function HomePage() {
           <div>
             <LeadArticle story={lead} />
 
-            <SectionHead title="Ve středu pozornosti" />
+            <Sec title="Ve středu pozornosti" linkText="Vše z dneška" />
             <TwoCards stories={twoCards} />
 
-            <SectionHead title="Další zprávy dne" />
+            <Sec title="Další zprávy dne" linkText="Archiv" />
             <StoryListSection stories={listStories} />
           </div>
 
