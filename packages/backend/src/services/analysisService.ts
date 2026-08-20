@@ -12,6 +12,7 @@ import type {
 import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
 import { fetchPage } from '../pagination.js'
 import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from './articleScraper.js'
+import { settleWithConcurrency } from './concurrency.js'
 import { extractKeywords } from './keywordExtractor.js'
 import { discoverCoverage } from './discovery.js'
 import { resolveSourceByUrl } from './sourceResolver.js'
@@ -25,7 +26,7 @@ import {
   DEDUP_WINDOW_HOURS,
 } from './storyMatching.js'
 import { approveDraft } from './ingestionService.js'
-import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
+import { MAX_COVERAGES_PER_ANALYSIS, MAX_CONCURRENT_COVERAGE_SCRAPES } from './coverageLimits.js'
 import { NotFoundError, ValidationError, ExternalServiceError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
@@ -340,22 +341,20 @@ export async function confirmCoverages(
 
   const pending = await coverageRepo.findCoveragesForAnalysis(analysisId, { onlyStatus: 'PENDING' })
 
-  await Promise.allSettled(
-    pending.map(async (coverage) => {
-      try {
-        const scraped = await scrapeArticle(coverage.articleUrl)
-        const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
-        if (isBlocked) {
-          await coverageRepo.updateCoverage(coverage.id, { status: 'EXTRACTION_FAILED' })
-        } else {
-          await coverageRepo.updateCoverage(coverage.id, { extractedText: scraped.fullText, status: 'OK' })
-        }
-      } catch (err) {
-        log?.warn({ analysisId, coverageId: coverage.id, err }, 'Scraping Coverage article failed')
+  await settleWithConcurrency(pending, MAX_CONCURRENT_COVERAGE_SCRAPES, async (coverage) => {
+    try {
+      const scraped = await scrapeArticle(coverage.articleUrl)
+      const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
+      if (isBlocked) {
         await coverageRepo.updateCoverage(coverage.id, { status: 'EXTRACTION_FAILED' })
+      } else {
+        await coverageRepo.updateCoverage(coverage.id, { extractedText: scraped.fullText, status: 'OK' })
       }
-    })
-  )
+    } catch (err) {
+      log?.warn({ analysisId, coverageId: coverage.id, err }, 'Scraping Coverage article failed')
+      await coverageRepo.updateCoverage(coverage.id, { status: 'EXTRACTION_FAILED' })
+    }
+  })
 
   const updated = await coverageRepo.findCoveragesForAnalysis(analysisId)
 
@@ -365,7 +364,7 @@ export async function confirmCoverages(
   // the earliest point real multi-source extractedText exists for a human-seeded Story
   // (createAnalysis only ever has the single seed article). Unlike approveDraft, there's no single
   // terminal write here to enqueue atomically with — the scrape loop above is already a
-  // best-effort Promise.allSettled over many Coverage rows, not one write. Caught explicitly so a
+  // best-effort settleWithConcurrency pass over many Coverage rows, not one write. Caught explicitly so a
   // queue hiccup degrades (logged, Coverage confirmation still succeeds) rather than failing this
   // whole request the way an unguarded call would.
   try {
