@@ -273,17 +273,15 @@
   color: var(--accent);
   border-color: var(--accent);
 }
-/* Deliberate deviation from e.css: there, .li:has(.chip--bad)'s red left border is permanent
-   (no :hover in that selector). Per direct feedback, made hover-only here instead — the border
-   and the heading color change together as one combined effect when hovering a conflict row,
-   rather than the border always showing and only .hl's own separate a:hover rule touching the
-   heading. */
-.story:has(.chip--bad):hover {
+/* .li:has(.chip--bad)'s red left border, ported from e.css: permanent, driven by the data (a
+   conflict row is marked whether or not you're hovering it) — not a hover effect. The heading
+   color change is the separate hover affordance layered on top, per direct feedback. */
+.story:has(.chip--bad) {
   border-left: var(--bw-rule) solid var(--bad);
   padding-left: var(--sp-3);
   margin-left: calc(var(--sp-3) * -1);
 }
-.story:has(.chip--bad):hover h3 {
+.story:has(.chip--bad):hover h3.hl {
   color: var(--bad);
 }
 @media (max-width: 44rem) {
