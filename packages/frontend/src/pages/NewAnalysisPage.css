@@ -1,35 +1,7 @@
 /* Ported from design-complete.css (ticket 39) — the "missing screens" extension, not
    ds/components.css's original vocabulary (new-analysis.html has no equivalent in the original
-   system). Class names unchanged. .page-shell/.screen-head* duplicate HistoryPage.css's copy of
-   the same source classes — this port keeps CSS scoped per page, matching every other page here. */
-
-.page-shell {
-  max-width: var(--page-max);
-  margin-inline: auto;
-  padding-inline: var(--gutter);
-}
-.screen-head {
-  padding-block: var(--sp-7) var(--sp-5);
-  border-bottom: var(--bw-rule) solid var(--line-strong);
-}
-.screen-head__k {
-  font: 600 var(--text-micro) / 1 var(--font-sans);
-  letter-spacing: var(--ls-caps);
-  text-transform: uppercase;
-  color: var(--accent);
-}
-.screen-head__t {
-  margin-top: var(--sp-2);
-  font: 500 var(--text-h1) / 1.08 var(--font-serif);
-  font-variation-settings: 'opsz' var(--opsz-h1);
-  max-width: var(--measure-head);
-}
-.screen-head__d {
-  margin-top: var(--sp-3);
-  max-width: var(--measure);
-  font: var(--text-body) / var(--lh-relaxed) var(--font-serif);
-  color: var(--ink-2);
-}
+   system). Class names unchanged. .page-shell/.screen-head* moved to the shared ds/components.css
+   once a third page needed them — see that file's own comment. */
 
 .editor {
   padding-block: var(--sp-6);

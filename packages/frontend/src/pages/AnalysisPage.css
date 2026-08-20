@@ -579,7 +579,63 @@ a.threadband:hover {
   }
 }
 
-/* Extraction-progress list, shown while StreamingAnalysis is running. */
+/* Live-streaming state (StreamingAnalysis, the real SSE extraction/synthesis view) — ported
+   directly from analysis-live.html + design-complete.css/ds/components.css, not improvised.
+   analysis-live.html is listed under the ticket's "Mocked and dev-only" screens, but — same
+   distinction as new-analysis.html vs. NewAnalysisPage — that's about the *mockup* having no
+   backend; the live view itself is real, backed by openAnalysisStream's actual SSE, so it ships
+   unguarded like the rest of this page. */
+.live-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  gap: var(--sp-7);
+  padding-block: var(--sp-6);
+}
+.live-phase {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: var(--bw-hair) solid var(--line);
+}
+.phase {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font: var(--text-meta) / 1 var(--font-sans);
+  color: var(--ink-3);
+}
+.phase__n {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: var(--bw-hair) solid var(--line);
+  font: var(--text-micro) / 1 var(--font-mono);
+}
+.phase.is-done {
+  color: var(--ink-2);
+}
+.phase.is-now {
+  color: var(--ink);
+  font-weight: 600;
+}
+.phase.is-now .phase__n {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.live-summary {
+  padding-block: var(--sp-5);
+  border-bottom: var(--bw-hair) solid var(--line);
+}
+.live-summary__n {
+  font: 500 var(--text-h2) / 1.15 var(--font-serif);
+}
+.live-summary__meta {
+  margin-top: var(--sp-2);
+  font: var(--text-small) / 1.4 var(--font-sans);
+  color: var(--ink-3);
+}
 .progress {
   margin-top: var(--sp-4);
   height: 6px;
@@ -589,31 +645,109 @@ a.threadband:hover {
 .progress__done {
   background: var(--accent);
 }
-.exrow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.source-row {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
   gap: var(--sp-3);
-  padding: var(--sp-3) 0;
+  align-items: start;
+  padding-block: var(--sp-4);
   border-bottom: var(--bw-hair) solid var(--line-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-small);
 }
-.exrow__url {
+.source-row__mark {
+  font: var(--text-meta) / 1 var(--font-mono);
   color: var(--ink-3);
-  font-size: var(--text-micro);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding-top: 0.15rem;
+}
+.source-row__name {
+  font: 600 var(--text-small) / 1.2 var(--font-sans);
+}
+.source-row__title {
+  margin-top: 0.2rem;
+  font: var(--text-body) / 1.3 var(--font-serif);
+}
+.source-row__url {
+  margin-top: 0.2rem;
+  font: var(--text-micro) / 1.3 var(--font-mono);
+  color: var(--ink-4);
+  overflow-wrap: anywhere;
+}
+.source-status {
+  font: var(--text-micro) / 1.2 var(--font-sans);
+  color: var(--ink-3);
   white-space: nowrap;
 }
-.exrow__status {
-  white-space: nowrap;
-  font-size: var(--text-micro);
-  color: var(--ink-3);
-}
-.exrow__status.is-ok {
+.source-status.is-ok {
   color: var(--ok);
 }
-.exrow__status.is-bad {
+.source-status.is-error {
   color: var(--bad);
+}
+.live-rail {
+  border-top: var(--bw-rule) solid var(--line-strong);
+  padding-top: var(--sp-3);
+}
+.live-rail h2 {
+  font: 600 var(--text-micro) / 1 var(--font-sans);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+.rail-stat {
+  padding-block: var(--sp-4);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.rail-stat b {
+  display: block;
+  font: 500 var(--text-h2) / 1 var(--font-serif);
+}
+.rail-stat span {
+  font: var(--text-small) / 1.3 var(--font-sans);
+  color: var(--ink-3);
+}
+/* pulsing "probíhá" byline indicator — ds/components.css's .live, same concept as Home's
+   .livedot under e.html's own local alias, redeclared here since keyframes/page CSS don't cross
+   page-CSS-file boundaries. */
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+}
+.live i {
+  display: inline-block;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .live i {
+    animation: live-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes live-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}
+@media (max-width: 58rem) {
+  .live-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 42rem) {
+  .live-phase {
+    overflow-x: auto;
+  }
+  .source-row {
+    grid-template-columns: 1.8rem minmax(0, 1fr);
+  }
+  .source-status {
+    grid-column: 2;
+  }
 }

@@ -28,24 +28,23 @@ type StreamPhase = 'extracting' | 'synthesising' | 'failed'
 interface OutletRow {
   coverageId: string
   outlet: string
+  title?: string
   articleUrl: string
   status: CoverageInfo['status']
   extraction: ExtractionState
 }
 
+/** .source-status stays a plain state word (Čeká/Hotovo/an error) — the reference's own
+ *  information architecture keeps per-row detail simple and moves the claim/citation/framing
+ *  *counts* to the aggregate .rail-stat totals instead, not repeated per source. */
 function ExtractionBadge({ state }: { state: ExtractionState }) {
   if (state.phase === 'pending') {
-    return <span className="exrow__status">Extrahování…</span>
+    return <span className="source-status">Čeká</span>
   }
   if (state.phase === 'complete') {
-    return (
-      <span className="exrow__status is-ok">
-        {state.claimCount} tvrzení · {state.attributedClaimCount} citací · {state.framingSignalCount}{' '}
-        framingových signálů
-      </span>
-    )
+    return <span className="source-status is-ok">Hotovo</span>
   }
-  return <span className="exrow__status is-bad">{state.error}</span>
+  return <span className="source-status is-error">{state.error}</span>
 }
 
 function OutletBadge({ attribution }: { attribution: Attribution }) {
@@ -453,7 +452,7 @@ function ErrorState({ message }: { message: string }) {
   )
 }
 
-function StreamingAnalysis({ id }: { id: string }) {
+function StreamingAnalysis({ id, title }: { id: string; title: string }) {
   const [rows, setRows] = useState<OutletRow[]>([])
   const [streamError, setStreamError] = useState<string | null>(null)
   const [phase, setPhase] = useState<StreamPhase>('extracting')
@@ -468,6 +467,7 @@ function StreamingAnalysis({ id }: { id: string }) {
           event.coverages.map((c) => ({
             coverageId: c.id,
             outlet: c.outlet,
+            title: c.title,
             articleUrl: c.articleUrl,
             status: c.status,
             extraction:
@@ -536,7 +536,10 @@ function StreamingAnalysis({ id }: { id: string }) {
     return (
       <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
         <header className="arthead">
-          <h1 className="arthead__h">Analýza dokončena</h1>
+          <h1 className="arthead__h">{title}</h1>
+          <p style={{ marginTop: 'var(--sp-2)', color: 'var(--ok)', fontSize: 'var(--text-small)' }}>
+            Analýza dokončena
+          </p>
         </header>
         <SumBox dimensions={dimensions} />
         <section>
@@ -572,57 +575,131 @@ function StreamingAnalysis({ id }: { id: string }) {
   const total = rows.length
   const isExtracting = phase === 'extracting'
   const isSynthesising = phase === 'synthesising'
+  const completedRows = rows.filter((r) => r.extraction.phase === 'complete')
+  const claimTotal = completedRows.reduce(
+    (sum, r) => sum + (r.extraction.phase === 'complete' ? r.extraction.claimCount : 0),
+    0
+  )
+  const attributedTotal = completedRows.reduce(
+    (sum, r) => sum + (r.extraction.phase === 'complete' ? r.extraction.attributedClaimCount : 0),
+    0
+  )
+  const framingTotal = completedRows.reduce(
+    (sum, r) => sum + (r.extraction.phase === 'complete' ? r.extraction.framingSignalCount : 0),
+    0
+  )
 
   return (
-    <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
-      <header className="arthead">
-        <h1 className="arthead__h">{isSynthesising ? 'Syntéza analýzy…' : 'Extrakce zdrojů'}</h1>
+    <div className="page-shell">
+      <header className="screen-head">
+        <div className="screen-head__k">Živá analýza</div>
+        <h1 className="screen-head__t">{title}</h1>
+        <div className="byline">
+          <span className="byline__grp">
+            <b>{total}</b> zdrojů
+          </span>
+          <span className="byline__sep">·</span>
+          <span className="byline__grp">
+            <span className="live">
+              <i /> probíhá
+            </span>
+          </span>
+        </div>
       </header>
 
-      {total > 0 && isExtracting && (
-        <>
-          <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
-            Zpracováno {doneCount} z {total} zdrojů
-          </p>
-          <div className="progress">
-            <div className="progress__done" style={{ width: `${(doneCount / total) * 100}%` }} />
-          </div>
-        </>
-      )}
-
-      {isSynthesising && (
-        <p
-          className="note"
-          style={{ marginTop: 'var(--sp-4)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-        >
-          <Loader2 size={14} className="spin" />
-          Probíhá syntéza napříč {rows.filter((r) => r.extraction.phase === 'complete').length} zdroji…
-        </p>
-      )}
-
       {streamError && (
-        <p className="note" style={{ marginTop: 'var(--sp-3)', color: 'var(--bad)' }}>
+        <p style={{ marginTop: 'var(--sp-4)', color: 'var(--bad)', fontSize: 'var(--text-small)' }}>
           {streamError}
         </p>
       )}
 
       {rows.length === 0 && !streamError && (
-        <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
+        <p style={{ marginTop: 'var(--sp-4)', color: 'var(--ink-3)', fontSize: 'var(--text-small)' }}>
           Připojování k datovému proudu analýzy…
         </p>
       )}
 
-      <div style={{ marginTop: 'var(--sp-4)' }}>
-        {rows.map((row) => (
-          <div className="exrow" key={row.coverageId}>
-            <div>
-              <span style={{ fontWeight: 600 }}>{row.outlet}</span>
-              <span className="exrow__url"> — {row.articleUrl}</span>
+      {rows.length > 0 && (
+        <div className="live-wrap">
+          <section>
+            <div className="live-phase">
+              <span className="phase is-done">
+                <span className="phase__n">1</span>Výběr zdrojů
+              </span>
+              <span className={`phase${isExtracting ? ' is-now' : ' is-done'}`}>
+                <span className="phase__n">2</span>Extrakce
+              </span>
+              <span className={`phase${isSynthesising ? ' is-now' : ''}`}>
+                <span className="phase__n">3</span>Syntéza
+              </span>
             </div>
-            <ExtractionBadge state={row.extraction} />
-          </div>
-        ))}
-      </div>
+
+            <div className="live-summary">
+              <h2 className="live-summary__n">
+                {isSynthesising ? 'Probíhá syntéza napříč zdroji' : 'Extrahujeme text a tvrzení ze zdrojů'}
+              </h2>
+              <p className="live-summary__meta">
+                {isSynthesising ? (
+                  <>
+                    <Loader2
+                      size={12}
+                      className="spin"
+                      style={{ verticalAlign: '-2px', marginRight: '0.35rem' }}
+                    />
+                    Syntéza napříč {completedRows.length} zdroji…
+                  </>
+                ) : (
+                  `${doneCount} z ${total} zdrojů hotovo`
+                )}
+              </p>
+              <div className="progress">
+                <div
+                  className="progress__done"
+                  style={{ width: `${total > 0 ? (doneCount / total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+
+            <div>
+              {rows.map((row, i) => (
+                <div className="source-row" key={row.coverageId}>
+                  <span className="source-row__mark">{String(i + 1).padStart(2, '0')}</span>
+                  <div>
+                    <div className="source-row__name">{row.outlet}</div>
+                    <div className="source-row__title">{row.title ?? row.articleUrl}</div>
+                  </div>
+                  <ExtractionBadge state={row.extraction} />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <aside className="live-rail">
+            <h2>Stav analýzy</h2>
+            <div className="rail-stat">
+              <b>
+                {doneCount} z {total}
+              </b>
+              <span>zdrojů hotovo</span>
+            </div>
+            <div className="rail-stat">
+              <b>{claimTotal}</b>
+              <span>extrahovaných tvrzení</span>
+            </div>
+            <div className="rail-stat">
+              <b>{attributedTotal}</b>
+              <span>přiřazených citací</span>
+            </div>
+            <div className="rail-stat">
+              <b>{framingTotal}</b>
+              <span>framingové signály</span>
+            </div>
+            <div className="rail-stat">
+              <span>Po dokončení extrakce začne syntéza společných a rozdílných informací.</span>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   )
 }
@@ -798,7 +875,7 @@ export default function AnalysisPage() {
 
   return (
     <TooltipProvider>
-      <StreamingAnalysis id={id!} />
+      <StreamingAnalysis id={id!} title={analysis.title} />
     </TooltipProvider>
   )
 }
