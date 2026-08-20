@@ -254,6 +254,10 @@
 .story:hover {
   background: color-mix(in oklab, var(--surface-2) 70%, transparent);
 }
+.story h3 {
+  font-size: var(--text-h2);
+  line-height: 1.15;
+}
 .story:hover h3.hl {
   color: var(--accent);
 }
