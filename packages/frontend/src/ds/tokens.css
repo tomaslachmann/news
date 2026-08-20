@@ -1,0 +1,197 @@
+/* ============================================================================
+   News Triangulator — designové tokeny
+   Jediný zdroj pravdy pro barvy, typografii, prostor, linky a pohyb.
+   Nikde jinde v kódu nesmí být zapsaná konkrétní barva ani velikost písma.
+
+   Vrstvy:  tokens.css → base.css → components.css → stránkové soubory
+   ============================================================================ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ── 1. Primitivní barevná paleta (OKLCH) ──────────────────────────────
+     Nepoužívej primitivy přímo v komponentách. Slouží pouze k odvození
+     semantických tokenů níže. */
+
+  --c-paper-50: oklch(98.6% 0.004 85); /* novinový papír, teplý bílý */
+  --c-paper-100: oklch(97% 0.005 85);
+  --c-paper-200: oklch(94.5% 0.006 85);
+
+  --c-ink-900: oklch(21% 0.012 265); /* tisková čerň s modrým spodem */
+  --c-ink-700: oklch(43% 0.012 265);
+  --c-ink-500: oklch(56% 0.01 265);
+  --c-ink-300: oklch(72% 0.01 265);
+
+  --c-night-900: oklch(17% 0.008 265); /* tmavý režim */
+  --c-night-800: oklch(20% 0.008 265);
+  --c-night-700: oklch(23% 0.008 265);
+
+  --c-red-600: oklch(45% 0.155 25); /* redakční červená (světlý režim) */
+  --c-red-400: oklch(70% 0.145 27); /* redakční červená (tmavý režim) */
+  --c-green-600: oklch(46% 0.1 155); /* potvrzeno / vysoká shoda */
+  --c-green-400: oklch(72% 0.12 155);
+  --c-amber-600: oklch(58% 0.12 75); /* částečná shoda */
+  --c-amber-400: oklch(76% 0.13 78);
+
+  /* ── 2. Semantické barvy — světlý režim ───────────────────────────────
+     Toto je jediná sada, kterou komponenty smějí používat. */
+
+  --paper: var(--c-paper-50); /* pozadí stránky */
+  --surface: oklch(100% 0 0); /* karty, boxy, vyvýšené plochy */
+  --surface-2: var(--c-paper-100); /* zebra řádky, patička, hover */
+  --surface-3: var(--c-paper-200); /* prázdné stavy, skeleton */
+
+  --ink: var(--c-ink-900); /* titulky, hlavní text */
+  --ink-2: var(--c-ink-700); /* perex, sekundární text */
+  --ink-3: var(--c-ink-500); /* metadata, popisky, časy */
+  --ink-4: var(--c-ink-300); /* zakázané prvky, vodoznaky */
+
+  --accent: var(--c-red-600); /* jediná akcentní barva značky */
+  --accent-soft: oklch(45% 0.155 25 / 0.09);
+  --accent-ink: oklch(99% 0 0); /* text na plné akcentní ploše */
+
+  --ok: var(--c-green-600); /* shoda ≥ 85 % */
+  --mid: var(--c-amber-600); /* shoda 65–84 % */
+  --bad: var(--c-red-600); /* shoda < 65 %, rozpor */
+
+  --line: oklch(21% 0.012 265 / 0.16); /* dělící linka, rámy */
+  --line-strong: var(--c-ink-900); /* hlavní řez sekce */
+  --line-2: oklch(21% 0.012 265 / 0.09); /* jemné vnitřní linky */
+
+  --photo-filter: none; /* korekce fotografií */
+
+  /* ── 3. Typografie ────────────────────────────────────────────────────
+     Dvě písma, obě variabilní. Serif nese obsah, sans nese systém. */
+
+  --font-serif: 'Newsreader', 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter Tight', 'Inter', system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Fluidní stupnice. Škáluje plynule mezi 390 px a 1440 px.
+     Nikdy nepiš font-size v px mimo tuto stupnici. */
+  --text-micro: clamp(0.6563rem, 0.645rem + 0.05vw, 0.6875rem); /* 10,5–11 px  štítky, popisky */
+  --text-meta: clamp(0.75rem, 0.735rem + 0.07vw, 0.8125rem); /* 12–13 px    metadata, byline */
+  --text-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem); /* 13–14 px    perex v seznamu */
+  --text-body: clamp(0.9688rem, 0.945rem + 0.12vw, 1.0625rem); /* 15,5–17 px  základní text */
+  --text-lead: clamp(1.0625rem, 1.01rem + 0.3vw, 1.1875rem); /* 17–19 px    perex leadu */
+  --text-h4: clamp(1.0313rem, 1rem + 0.16vw, 1.125rem); /* 16,5–18 px  titulek karty */
+  --text-h3: clamp(1.1875rem, 1.11rem + 0.38vw, 1.375rem); /* 19–22 px    titulek článku */
+  --text-h2: clamp(1.3125rem, 1.2rem + 0.55vw, 1.625rem); /* 21–26 px    titulek v seznamu */
+  --text-h1: clamp(1.875rem, 1.35rem + 2.4vw, 3rem); /* 30–48 px    lead */
+  --text-mast: clamp(1.75rem, 1rem + 3.4vw, 3.125rem); /* 28–50 px    značka */
+
+  /* Osa optické velikosti — párovat s velikostí sazby, ne odhadem */
+  --opsz-mast: 72;
+  --opsz-h1: 60;
+  --opsz-h2: 28;
+  --opsz-h3: 28;
+  --opsz-h4: 20;
+  --opsz-body: 16;
+
+  --lh-tight: 1.06; /* velké titulky */
+  --lh-snug: 1.18; /* menší titulky */
+  --lh-normal: 1.58; /* běžný text */
+  --lh-relaxed: 1.48; /* perex */
+
+  --ls-mast: -0.035em;
+  --ls-h1: -0.018em;
+  --ls-h2: -0.011em;
+  --ls-h4: -0.006em;
+  --ls-caps: 0.14em; /* verzálkové nadpisy sekcí */
+
+  --measure: 68ch; /* maximální délka řádku běžného textu */
+  --measure-head: 24ch; /* maximální délka řádku velkého titulku */
+
+  /* ── 4. Prostor — modulární krok 4 px ────────────────────────────────── */
+  --sp-1: 0.25rem; /* 4  */
+  --sp-2: 0.5rem; /* 8  */
+  --sp-3: 0.75rem; /* 12 */
+  --sp-4: 1rem; /* 16 */
+  --sp-5: 1.5rem; /* 24 */
+  --sp-6: 2rem; /* 32 */
+  --sp-7: 2.75rem; /* 44 */
+  --sp-8: 3.75rem; /* 60 */
+  --sp-9: 5rem; /* 80 */
+
+  --gutter: clamp(1rem, 0.4rem + 2vw, 1.75rem); /* vnitřní okraj stránky */
+  --page-max: 1180px; /* šířka sazebního zrcadla */
+  --rail: clamp(17rem, 24vw, 19.5rem); /* pravý sloupec */
+
+  /* ── 5. Linky a tvary ────────────────────────────────────────────────
+     Design nemá zaoblení ani stíny. Hierarchii nese linka a mezera. */
+  --bw-hair: 1px; /* běžná linka */
+  --bw-rule: 2px; /* řez sekce */
+  --radius: 0; /* záměrně nula — jediná výjimka jsou kruhy entit */
+  --shadow: none; /* záměrně žádné stíny */
+
+  /* ── 6. Pohyb ────────────────────────────────────────────────────────
+     Pohyb má vždy funkci. Nikdy dekorace. */
+  --dur-fast: 0.18s; /* hover, barva */
+  --dur-base: 0.25s; /* přepnutí režimu */
+  --dur-slow: 0.28s; /* výsuv lepivé hlavy */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── 7. Vrstvy ───────────────────────────────────────────────────────── */
+  --z-content: 1;
+  --z-sticky: 40;
+  --z-overlay: 60;
+  --z-toast: 80;
+}
+
+/* ── Tmavý režim ─────────────────────────────────────────────────────────
+   Přepisují se pouze semantické tokeny, nikdy primitivy ani rozměry.
+   Světlost pozadí roste s vyvýšeností plochy, opačně než ve světlém režimu. */
+
+:root[data-theme='dark'] {
+  --paper: var(--c-night-900);
+  --surface: var(--c-night-800);
+  --surface-2: var(--c-night-700);
+  --surface-3: oklch(27% 0.008 265);
+
+  --ink: oklch(94% 0.006 85);
+  --ink-2: oklch(78% 0.008 265);
+  --ink-3: oklch(64% 0.01 265);
+  --ink-4: oklch(48% 0.01 265);
+
+  --accent: var(--c-red-400);
+  --accent-soft: oklch(70% 0.145 27 / 0.14);
+  --accent-ink: oklch(16% 0.01 265);
+
+  --ok: var(--c-green-400);
+  --mid: var(--c-amber-400);
+  --bad: var(--c-red-400);
+
+  --line: oklch(94% 0.006 85 / 0.2);
+  --line-strong: oklch(94% 0.006 85 / 0.55);
+  --line-2: oklch(94% 0.006 85 / 0.11);
+
+  --photo-filter: brightness(0.9) contrast(1.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: var(--c-night-900);
+    --surface: var(--c-night-800);
+    --surface-2: var(--c-night-700);
+    --surface-3: oklch(27% 0.008 265);
+
+    --ink: oklch(94% 0.006 85);
+    --ink-2: oklch(78% 0.008 265);
+    --ink-3: oklch(64% 0.01 265);
+    --ink-4: oklch(48% 0.01 265);
+
+    --accent: var(--c-red-400);
+    --accent-soft: oklch(70% 0.145 27 / 0.14);
+    --accent-ink: oklch(16% 0.01 265);
+
+    --ok: var(--c-green-400);
+    --mid: var(--c-amber-400);
+    --bad: var(--c-red-400);
+
+    --line: oklch(94% 0.006 85 / 0.2);
+    --line-strong: oklch(94% 0.006 85 / 0.55);
+    --line-2: oklch(94% 0.006 85 / 0.11);
+
+    --photo-filter: brightness(0.9) contrast(1.02);
+  }
+}

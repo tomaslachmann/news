@@ -1,6 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: ['class'],
+  // Ticket 39 / ADR 0031: driven by data-theme on <html> (absent = follow prefers-color-scheme),
+  // not Tailwind's older `.dark` class strategy — matches ds/tokens.css's own dark-mode selector.
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{ts,tsx,js,jsx}'],
   theme: {
     container: {
