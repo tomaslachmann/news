@@ -1,7 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { PageContainer } from '@/components/PageContainer'
-import { PageTitle } from '@/components/PageTitle'
+import type { AnalysisListItem, PendingAdditionItem, PendingStoryRelationItem } from '@/services/ingestion'
 import {
   usePendingAdditions,
   useVisibleDrafts,
@@ -13,6 +11,51 @@ import {
 } from '@/services/ingestion/hooks'
 import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
+import './IngestionReviewPage.css'
+
+// Below this many sources a Draft is flagged low-confidence — same threshold ReviewPage already
+// warns on ("Při méně než 5 zdrojích může být triangulace omezená"), computed from the real
+// coverageCount rather than a fabricated confidence score.
+const THIN_DRAFT_THRESHOLD = 5
+
+function DraftItem({
+  draft,
+  onApprove,
+  onReject,
+  isApproving,
+  isRejecting,
+}: {
+  draft: AnalysisListItem
+  onApprove: () => void
+  onReject: () => void
+  isApproving: boolean
+  isRejecting: boolean
+}) {
+  const thin = draft.coverageCount < THIN_DRAFT_THRESHOLD
+  return (
+    <article className={`qitem${thin ? ' qitem--flag' : ''}`}>
+      <div className="qitem__k">
+        <span>Koncept</span>
+        <span className="pill">{draft.coverageCount} zdrojů</span>
+        {thin && <span className="chip chip--mid">málo zdrojů</span>}
+      </div>
+      <h3 className="qitem__t">{draft.seedHeadline}</h3>
+      <p className="qitem__m">
+        <span>Vytvořeno {formatDate(draft.createdAt)}</span>
+        <span aria-hidden="true">·</span>
+        <span className="u-mono">{draft.id}</span>
+      </p>
+      <div className="qitem__act">
+        <button className="btn btn--strong" onClick={onApprove} disabled={isApproving}>
+          Schválit
+        </button>
+        <button className="btn" type="button" onClick={onReject} disabled={isRejecting}>
+          Zamítnout
+        </button>
+      </div>
+    </article>
+  )
+}
 
 function DraftsSection() {
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useVisibleDrafts()
@@ -22,76 +65,84 @@ function DraftsSection() {
   const rejectMutation = useRejectDraft()
 
   return (
-    <section>
-      <h2 className="font-serif text-lg font-semibold">Koncepty čekající na schválení</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <section className="qsec">
+      <div className="qsec__h">
+        <h2 className="qsec__t">Koncepty čekající na schválení</h2>
+        {drafts && <span className="qsec__n">{drafts.length}</span>}
+      </div>
+      <p className="qsec__d">
         Nalezeno automaticky sběrem článků. Zobrazují se až po nashromáždění dostatku zdrojů. Schválení vás
         přesměruje na obvyklý krok výběru zdrojů; nic se neanalyzuje, dokud to tam nepotvrdíte.
       </p>
 
-      {isLoading && <p className="mt-4 text-sm text-muted-foreground">Načítání…</p>}
-      {isError && <p className="mt-4 text-sm text-destructive">Nepodařilo se načíst koncepty.</p>}
+      {isLoading && <p className="note">Načítání…</p>}
+      {isError && (
+        <div className="error" style={{ marginTop: 'var(--sp-3)' }}>
+          <p className="error__p">Nepodařilo se načíst koncepty.</p>
+        </div>
+      )}
 
       {drafts && drafts.length === 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">
+        <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
           Momentálně žádné koncepty. Sběr článků běží jen když je spuštěný jeho cron — v lokálním vývoji ho{' '}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">npm run dev</code> samo o sobě nespouští, viz
-          README, sekce Automated Ingestion.
+          <code>npm run dev</code> samo o sobě nespouští, viz README, sekce Automated Ingestion.
         </p>
       )}
 
       {drafts && drafts.length > 0 && (
-        <ul className="mt-4 flex flex-col gap-3">
+        <div className="qsec__l">
           {drafts.map((draft) => (
-            <li
+            <DraftItem
               key={draft.id}
-              className="rounded-lg border bg-card p-4 flex items-center justify-between gap-4"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-serif text-lg font-semibold">{draft.seedHeadline}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatDate(draft.createdAt)} · nalezeno zdrojů: {draft.coverageCount}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={rejectMutation.isPending}
-                  onClick={() => rejectMutation.mutate(draft.id)}
-                >
-                  Zamítnout
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={approveMutation.isPending}
-                  onClick={() =>
-                    approveMutation.mutate(draft.id, {
-                      onSuccess: () => void navigate(`/review/${draft.id}`),
-                    })
-                  }
-                >
-                  Schválit
-                </Button>
-              </div>
-            </li>
+              draft={draft}
+              isApproving={approveMutation.isPending}
+              isRejecting={rejectMutation.isPending}
+              onApprove={() =>
+                approveMutation.mutate(draft.id, { onSuccess: () => void navigate(`/review/${draft.id}`) })
+              }
+              onReject={() => rejectMutation.mutate(draft.id)}
+            />
           ))}
-        </ul>
+        </div>
       )}
 
       {hasNextPage && (
-        <div className="mt-4 flex justify-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void fetchNextPage()}
-            disabled={isFetchingNextPage}
-          >
+        <p style={{ marginTop: 'var(--sp-4)' }}>
+          <button className="btn" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
             {isFetchingNextPage ? 'Načítání…' : 'Načíst další'}
-          </Button>
-        </div>
+          </button>
+        </p>
       )}
     </section>
+  )
+}
+
+function AdditionItem({ addition }: { addition: PendingAdditionItem }) {
+  return (
+    <article className="qitem">
+      <div className="qitem__k">
+        <span>Nové pokrytí</span>
+        <span className="pill">{addition.outlet}</span>
+      </div>
+      <h3 className="qitem__t">{addition.title ?? addition.articleUrl}</h3>
+      <p className="qitem__m">
+        {addition.publishedAt && (
+          <>
+            <span>Vyšlo {formatDate(addition.publishedAt)}</span>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
+        <span>
+          k článku{' '}
+          <Link to={`/analysis/${addition.analysisId}`} className="hl">
+            {addition.analysisSeedHeadline}
+          </Link>
+        </span>
+      </p>
+      <a className="qitem__u" href={addition.articleUrl} target="_blank" rel="noopener noreferrer">
+        {addition.articleUrl}
+      </a>
+    </article>
   )
 }
 
@@ -99,39 +150,86 @@ function PendingAdditionsSection() {
   const { data: additions, isLoading, isError } = usePendingAdditions()
 
   return (
-    <section className="mt-10">
-      <h2 className="font-serif text-lg font-semibold">Možná doplnění k dokončeným článkům</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <section className="qsec">
+      <div className="qsec__h">
+        <h2 className="qsec__t">Možná doplnění k dokončeným článkům</h2>
+        {additions && <span className="qsec__n">{additions.length}</span>}
+      </div>
+      <p className="qsec__d">
         Sběr článků nalezl nové pokrytí události, která je již dokončená. Nic se automaticky nemění — projděte
         si původní článek a rozhodněte sami.
       </p>
 
-      {isLoading && <p className="mt-4 text-sm text-muted-foreground">Načítání…</p>}
-      {isError && <p className="mt-4 text-sm text-destructive">Nepodařilo se načíst čekající doplnění.</p>}
+      {isLoading && <p className="note">Načítání…</p>}
+      {isError && (
+        <div className="error" style={{ marginTop: 'var(--sp-3)' }}>
+          <p className="error__p">Nepodařilo se načíst čekající doplnění.</p>
+        </div>
+      )}
 
       {additions && additions.length === 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">
+        <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
           Momentálně žádná. (Vyžaduje běžící sběr článků — viz vysvětlení výše.)
         </p>
       )}
 
       {additions && additions.length > 0 && (
-        <ul className="mt-4 flex flex-col gap-3">
+        <div className="qsec__l">
           {additions.map((addition) => (
-            <li key={addition.id} className="rounded-lg border bg-card p-4">
-              <p className="utility-label">{addition.outlet}</p>
-              <p className="mt-1 text-sm font-medium leading-snug">{addition.title ?? addition.articleUrl}</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Možné doplnění k{' '}
-                <Link to={`/analysis/${addition.analysisId}`} className="text-primary underline">
-                  {addition.analysisSeedHeadline}
-                </Link>
-              </p>
-            </li>
+            <AdditionItem key={addition.id} addition={addition} />
           ))}
-        </ul>
+        </div>
       )}
     </section>
+  )
+}
+
+function RelationItem({
+  relation,
+  onApprove,
+  onReject,
+  isApproving,
+  isRejecting,
+}: {
+  relation: PendingStoryRelationItem
+  onApprove: () => void
+  onReject: () => void
+  isApproving: boolean
+  isRejecting: boolean
+}) {
+  return (
+    <article className="qitem">
+      <div className="qitem__k">
+        <span>{RELATION_TYPE_LABELS[relation.type]}</span>
+      </div>
+      <div className="pair">
+        <div className="pair__r">
+          <span className="pair__a">Z</span>
+          <span>{relation.fromTitle}</span>
+        </div>
+        <div className="pair__r">
+          <span className="pair__a">Na</span>
+          <span>{relation.toTitle}</span>
+        </div>
+      </div>
+      <p className="qitem__why">
+        <span>Zdůvodnění nástroje</span>
+        {relation.reasoning}
+      </p>
+      <p className="qitem__m">
+        <span>Navrženo {formatDate(relation.createdAt)}</span>
+        <span aria-hidden="true">·</span>
+        <span className="u-mono">{relation.id}</span>
+      </p>
+      <div className="qitem__act">
+        <button className="btn btn--strong" onClick={onApprove} disabled={isApproving}>
+          Schválit
+        </button>
+        <button className="btn" type="button" onClick={onReject} disabled={isRejecting}>
+          Zamítnout
+        </button>
+      </div>
+    </article>
   )
 }
 
@@ -141,63 +239,64 @@ function StoryRelationsSection() {
   const rejectMutation = useRejectStoryRelation()
 
   return (
-    <section className="mt-10">
-      <h2 className="font-serif text-lg font-semibold">Vztahy mezi událostmi čekající na schválení</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <section className="qsec">
+      <div className="qsec__h">
+        <h2 className="qsec__t">Vztahy mezi událostmi čekající na schválení</h2>
+        {relations && <span className="qsec__n">{relations.length}</span>}
+      </div>
+      <p className="qsec__d">
         Nástroj s nižší jistotou navrhl souvislost mezi dvěma událostmi. Potvrďte, pokud dává smysl, nebo
         zamítněte — zamítnutí je trvalé a nástroj tuto dvojici znovu nenabídne.
       </p>
 
-      {isLoading && <p className="mt-4 text-sm text-muted-foreground">Načítání…</p>}
-      {isError && <p className="mt-4 text-sm text-destructive">Nepodařilo se načíst čekající vztahy.</p>}
+      {isLoading && <p className="note">Načítání…</p>}
+      {isError && (
+        <div className="error" style={{ marginTop: 'var(--sp-3)' }}>
+          <p className="error__p">Nepodařilo se načíst čekající vztahy.</p>
+        </div>
+      )}
 
       {relations && relations.length === 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">Momentálně žádné čekající vztahy.</p>
+        <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
+          Momentálně žádné čekající vztahy.
+        </p>
       )}
 
       {relations && relations.length > 0 && (
-        <ul className="mt-4 flex flex-col gap-3">
+        <div className="qsec__l">
           {relations.map((relation) => (
-            <li key={relation.id} className="rounded-lg border bg-card p-4">
-              <p className="utility-label">{RELATION_TYPE_LABELS[relation.type]}</p>
-              <p className="mt-1 text-sm font-medium leading-snug">
-                {relation.fromTitle} <span className="text-muted-foreground">→</span> {relation.toTitle}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">{relation.reasoning}</p>
-              <div className="mt-3 flex shrink-0 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={rejectMutation.isPending}
-                  onClick={() => rejectMutation.mutate(relation.id)}
-                >
-                  Zamítnout
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={approveMutation.isPending}
-                  onClick={() => approveMutation.mutate(relation.id)}
-                >
-                  Schválit
-                </Button>
-              </div>
-            </li>
+            <RelationItem
+              key={relation.id}
+              relation={relation}
+              isApproving={approveMutation.isPending}
+              isRejecting={rejectMutation.isPending}
+              onApprove={() => approveMutation.mutate(relation.id)}
+              onReject={() => rejectMutation.mutate(relation.id)}
+            />
           ))}
-        </ul>
+        </div>
       )}
     </section>
   )
 }
 
+/** Three queues, three different decisions — ds/components.css's own comment on this section:
+ *  nothing publishes or merges without human confirmation. The reference's "run ingestion
+ *  manually" button and "last run" summary line (both driven by sample data in the mockup) have
+ *  no real endpoint behind them in this app and are left out rather than shown inert. */
 export default function IngestionReviewPage() {
   return (
-    <PageContainer>
-      <PageTitle>Kontrola sběru článků</PageTitle>
-      <div className="mt-8">
-        <DraftsSection />
-        <PendingAdditionsSection />
-        <StoryRelationsSection />
-      </div>
-    </PageContainer>
+    <div className="u-wrap">
+      <header className="ahead">
+        <h1 className="ahead__t">Kontrola sběru článků</h1>
+        <p className="ahead__d">
+          Tři fronty, tři různá rozhodnutí. Nic se nezveřejní ani nespojí bez potvrzení člověkem.
+        </p>
+      </header>
+
+      <DraftsSection />
+      <PendingAdditionsSection />
+      <StoryRelationsSection />
+    </div>
   )
 }

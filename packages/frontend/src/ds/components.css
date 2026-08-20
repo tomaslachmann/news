@@ -84,6 +84,10 @@
   color: var(--bad);
   background: var(--accent-soft);
 }
+.chip--mid {
+  border-color: color-mix(in oklab, var(--mid) 50%, var(--line));
+  color: var(--mid);
+}
 
 .gauge {
   display: inline-flex;
@@ -126,4 +130,48 @@ a:hover .hl {
 }
 .kicker--ink {
   color: var(--ink-3);
+}
+
+/* design-complete.css's "missing screens" extension, not ds/components.css's own original
+   vocabulary (no page in news_design's core system used .page-shell/.screen-head — only the
+   utility screens history.html/new-analysis.html/analysis-live.html do). Moved here once a third
+   page needed it (History, NewAnalysis, now Analysis's live-streaming state). */
+.page-shell {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+.screen-head {
+  padding-block: var(--sp-7) var(--sp-5);
+  border-bottom: var(--bw-rule) solid var(--line-strong);
+}
+.screen-head__k {
+  font: 600 var(--text-micro) / 1 var(--font-sans);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.screen-head__t {
+  margin-top: var(--sp-2);
+  font: 500 var(--text-h1) / 1.08 var(--font-serif);
+  font-variation-settings: 'opsz' var(--opsz-h1);
+  max-width: var(--measure-head);
+}
+.screen-head__d {
+  margin-top: var(--sp-3);
+  max-width: var(--measure);
+  font: var(--text-body) / var(--lh-relaxed) var(--font-serif);
+  color: var(--ink-2);
+}
+
+/* Radix Tooltip content (ui/tooltip.tsx) — no reference equivalent exists (news_design is static
+   HTML, nothing there is interactive), so this is new, tokens-only, matching the system's own
+   zero-radius rule (--radius: 0) rather than shadcn's default rounded popover. */
+.tooltip {
+  z-index: 50;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.3rem 0.55rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
 }
