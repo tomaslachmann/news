@@ -1,13 +1,466 @@
 import { useState, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { createAnalysis, discoverSources, attachSeedToMatch } from '@/services/analyses'
-import { useAnalysesList } from '@/services/analyses/hooks'
-import type { AnalysisListItem } from '@news-triangulator/shared'
-import { formatDate } from '@/lib/formatDate'
 import './HomePage.css'
+
+// ============================================================================
+// Sample content — a 1:1 port of e.html's own literal data (shared/data.js +
+// data2.js), not real API data. This is a visual/component port: reusable
+// components (Gauge, SampleByline, LeadArticle, TwoCards, StoryListSection,
+// EntsPanel, MinuteFeedSection, ConflictsSection, MostReadSection) built
+// against this fixed sample content now; wiring them to real Analysis data is
+// separate, later work.
+// ============================================================================
+
+interface SampleStory {
+  title: string
+  lead: string
+  sources: number
+  agreement: number
+  conflict: boolean
+  clock: string
+  topic: string
+  entities: string[]
+  outlets: string[]
+  img: string
+}
+
+// clocks from data2.js overwrite each story's original `time` field before render — only the
+// final clock value actually reaches the page, so that's the only one kept here.
+const SAMPLE_STORIES: SampleStory[] = [
+  {
+    title: 'Vláda schválila úpravu rozpočtu, opozice mluví o skrytém deficitu',
+    lead: 'Sedm redakcí popisuje stejný krok, rozcházejí se ale v čísle výsledného salda — rozdíl činí 18 mld. Kč.',
+    sources: 9,
+    agreement: 62,
+    conflict: true,
+    clock: '15:12',
+    topic: 'Ekonomika',
+    entities: ['Ministerstvo financí', 'Petr Fiala', 'ODS'],
+    outlets: ['ČTK', 'iRozhlas', 'Seznam Zprávy', 'Deník N'],
+    img: 'parlament',
+  },
+  {
+    title: 'ČNB ponechala úrokové sazby bez změny',
+    lead: 'Shodné znění napříč zdroji, tři z nich přebírají identickou formulaci z tiskové zprávy banky.',
+    sources: 12,
+    agreement: 94,
+    conflict: false,
+    clock: '14:41',
+    topic: 'Ekonomika',
+    entities: ['ČNB'],
+    outlets: ['ČTK', 'E15', 'Hospodářské noviny'],
+    img: 'cnb',
+  },
+  {
+    title: 'Jednání o dodávkách munice pro Ukrajinu se posunulo na září',
+    lead: 'Dva zdroje uvádějí odklad kvůli logistice, tři zmiňují politický spor v Radě EU. Původní zdroj nedohledán.',
+    sources: 8,
+    agreement: 55,
+    conflict: true,
+    clock: '14:03',
+    topic: 'Zahraničí',
+    entities: ['Ukrajina', 'Evropská komise', 'NATO'],
+    outlets: ['Reuters', 'ČTK', 'Novinky'],
+    img: 'munice',
+  },
+  {
+    title: 'ČEZ oznámil investici do přenosové sítě na severní Moravě',
+    lead: 'Údaj o objemu investice se mezi zdroji liší dvojnásobně; nejnižší hodnota pochází z výroční zprávy.',
+    sources: 6,
+    agreement: 71,
+    conflict: true,
+    clock: '13:18',
+    topic: 'Energetika',
+    entities: ['ČEZ', 'Ostrava'],
+    outlets: ['ČTK', 'Deník', 'Ekonomický deník'],
+    img: 'energetika',
+  },
+  {
+    title: 'Trump podepsal exekutivní příkaz k dovozním tarifům',
+    lead: 'Agentury se shodují na obsahu, komentáře k dopadu na český export se rozcházejí.',
+    sources: 14,
+    agreement: 88,
+    conflict: false,
+    clock: '12:44',
+    topic: 'Zahraničí',
+    entities: ['Donald Trump', 'Evropská komise'],
+    outlets: ['Reuters', 'AP', 'ČTK', 'BBC'],
+    img: 'eu',
+  },
+  {
+    title: 'Praha upravuje pravidla pro krátkodobé ubytování',
+    lead: 'Shoda na datu účinnosti, rozpor v tom, kolika bytů se změna dotkne.',
+    sources: 7,
+    agreement: 76,
+    conflict: false,
+    clock: '10:29',
+    topic: 'Domácí',
+    entities: ['Praha'],
+    outlets: ['iDNES', 'Seznam Zprávy', 'Pražský deník'],
+    img: 'praha',
+  },
+  {
+    title: 'Babiš vystoupil k výsledkům auditu evropských dotací',
+    lead: 'Citace se v pěti zdrojích liší ve formulaci; jeden zdroj cituje pasáž, která v přepisu není.',
+    sources: 11,
+    agreement: 48,
+    conflict: true,
+    clock: '08:57',
+    topic: 'Domácí',
+    entities: ['Andrej Babiš', 'Evropská komise'],
+    outlets: ['ČTK', 'Deník N', 'Blesk', 'Info.cz'],
+    img: 'tiskovka',
+  },
+  {
+    title: 'NATO potvrdilo termín cvičení ve Střední Evropě',
+    lead: 'Vysoká shoda, primární zdroj dohledán a odkázán ve všech redakcích.',
+    sources: 10,
+    agreement: 91,
+    conflict: false,
+    clock: '06:20',
+    topic: 'Zahraničí',
+    entities: ['NATO', 'Ukrajina'],
+    outlets: ['ČTK', 'Reuters', 'Aktuálně.cz'],
+    img: 'nato',
+  },
+]
+
+const IMG_CAPTIONS: Record<string, string> = {
+  parlament: 'Jednání Poslanecké sněmovny o úpravě rozpočtu',
+  cnb: 'Sídlo centrální banky v centru Prahy',
+  munice: 'Sklad dělostřelecké munice připravené k odeslání',
+  energetika: 'Přenosová soustava na severní Moravě',
+  tiskovka: 'Tisková konference po jednání',
+  praha: 'Historické centrum Prahy s krátkodobým ubytováním',
+  eu: 'Vlajky členských států před institucemi v Bruselu',
+  nato: 'Mnohonárodní vojenské cvičení',
+}
+
+const AUTHORS = [
+  'Jana Křížová',
+  'Martin Bláha',
+  'Tereza Novotná',
+  'Ondřej Sýkora',
+  'Klára Vondráčková',
+  'Pavel Hruška',
+  'Lucie Marešová',
+  'Adam Doležal',
+]
+
+const readingMinutes = (sources: number) => 2 + (sources % 4)
+
+// Entities already sorted by mentions desc, matching data2.js's window.NT.entities.sort().
+const SAMPLE_ENTITIES = [
+  { name: 'Andrej Babiš', kind: 'osoba', mentions: 176, trend: 12, sources: 24 },
+  { name: 'Ukrajina', kind: 'místo', mentions: 158, trend: 8, sources: 27 },
+  { name: 'Petr Fiala', kind: 'osoba', mentions: 148, trend: -4, sources: 21 },
+  { name: 'Donald Trump', kind: 'osoba', mentions: 133, trend: 21, sources: 19 },
+  { name: 'ČNB', kind: 'instituce', mentions: 121, trend: 3, sources: 17 },
+  { name: 'Evropská komise', kind: 'instituce', mentions: 96, trend: -9, sources: 15 },
+  { name: 'NATO', kind: 'instituce', mentions: 88, trend: 5, sources: 14 },
+  { name: 'Praha', kind: 'místo', mentions: 74, trend: 0, sources: 12 },
+  { name: 'ČEZ', kind: 'firma', mentions: 61, trend: 7, sources: 11 },
+  { name: 'Ministerstvo financí', kind: 'instituce', mentions: 54, trend: -2, sources: 9 },
+]
+
+const SAMPLE_TICKER = [
+  { k: 'Zpracováno dnes', v: '1 284 článků' },
+  { k: 'Aktivní zdroje', v: '41' },
+  { k: 'Nové rozpory', v: '12', warn: true },
+  { k: 'Průměrná shoda', v: '73 %' },
+  { k: 'Nejrychlejší zdroj', v: 'ČTK · 3 min' },
+]
+
+const SAMPLE_FEED = [
+  { t: '15:24', title: 'Ministerstvo financí zpřesnilo odhad salda na 241 mld. Kč', src: 4 },
+  { t: '15:11', title: 'Sněmovní výbor odložil hlasování o novele o veřejných zakázkách', src: 3 },
+  { t: '14:58', title: 'Kurz koruny se po jednání ČNB pohybuje u 24,60 za euro', src: 6 },
+  {
+    t: '14:36',
+    title: 'Do stávky se podle odborů zapojilo 38 škol v Moravskoslezském kraji',
+    src: 5,
+    conflict: true,
+  },
+  { t: '14:12', title: 'Rada EU odsunula rozhodnutí o dovozních kvótách na příští týden', src: 7 },
+  { t: '13:49', title: 'ČEZ potvrdil odstávku bloku v Dukovanech na plánované datum', src: 3 },
+  {
+    t: '13:20',
+    title: 'Policie zahájila úkony v trestním řízení kvůli dotacím pro obce',
+    src: 8,
+    conflict: true,
+  },
+  { t: '12:55', title: 'Praha vypsala tendr na obnovu tramvajové trati na Smíchově', src: 2 },
+  { t: '12:31', title: 'Ukrajinská delegace přijede do Prahy koncem měsíce', src: 5 },
+]
+
+const SAMPLE_MOSTREAD = [
+  { title: 'Rozpor: kolik bytů se skutečně dotkne nová pražská vyhláška', src: 7 },
+  { title: 'Tři redakce citují pasáž, která v oficiálním přepisu chybí', src: 11 },
+  { title: 'Jak se za 24 hodin změnilo číslo o objemu investice ČEZ', src: 6 },
+  { title: 'Kdo první uvedl termín září u dodávek munice', src: 8 },
+  { title: 'Přehled: kde se agentury nejčastěji rozcházejí', src: 14 },
+]
+
+const SAMPLE_CONFLICTS = [
+  { title: 'Saldo rozpočtu', detail: 'rozdíl 18 mld. Kč mezi 7 zdroji', pct: 62 },
+  { title: 'Objem investice ČEZ', detail: 'dvojnásobný rozdíl v údaji', pct: 71 },
+  { title: 'Citace z auditu', detail: 'pasáž chybí v primárním přepisu', pct: 48 },
+  { title: 'Termín dodávek munice', detail: 'původní zdroj nedohledán', pct: 55 },
+]
+
+function Gauge({ pct, big }: { pct: number; big?: boolean }) {
+  const on = Math.round(pct / 10)
+  return (
+    <span className={`gauge${big ? ' gauge--lg' : ''}`} role="img" aria-label={`Shoda zdrojů ${pct} procent`}>
+      {Array.from({ length: 10 }, (_, i) => (
+        <i key={i} className={i < on ? `is-on${pct < 65 ? ' is-bad' : ''}` : ''} />
+      ))}
+    </span>
+  )
+}
+
+function SampleByline({ story, index, big }: { story: SampleStory; index: number; big?: boolean }) {
+  return (
+    <div className="byline">
+      <span className="byline__who">{AUTHORS[index % AUTHORS.length]}</span>
+      <span className="byline__sep">·</span>
+      <span className="byline__time">{story.clock}</span>
+      <span className="byline__sep">·</span>
+      <span>{readingMinutes(story.sources)} min čtení</span>
+      <span className="byline__sep">·</span>
+      <span>
+        <b>{story.sources}</b> zdrojů
+      </span>
+      <span className="byline__sep">·</span>
+      <span className="byline__grp">
+        shoda <b>{story.agreement} %</b>
+        <Gauge pct={story.agreement} big={big} />
+      </span>
+      {story.conflict ? (
+        <span className="chip chip--bad">rozpor</span>
+      ) : (
+        <span className="chip chip--ok">primární zdroj</span>
+      )}
+    </div>
+  )
+}
+
+function FigPlaceholder({ img, thumb }: { img: string; thumb?: boolean }) {
+  return (
+    <figure className={`fig${thumb ? ' fig--thumb' : ''}`}>
+      <div className="fig__ph" />
+      <figcaption>
+        <span>{IMG_CAPTIONS[img]} — TODO: bez obrázkových dat (ADR 0004)</span>
+      </figcaption>
+    </figure>
+  )
+}
+
+function LeadArticle({ story }: { story: SampleStory }) {
+  return (
+    <article className="lead">
+      <span className="chip">
+        {story.topic} · analýza {story.sources} zdrojů
+      </span>
+      <h1 className="lead__h">{story.title}</h1>
+      <SampleByline story={story} index={0} big />
+      <div className="lead__body">
+        <FigPlaceholder img={story.img} />
+        <div>
+          <p className="lead__perex">{story.lead}</p>
+          <p className="story__meta" style={{ marginTop: '0.9rem' }}>
+            Entity: {story.entities.join(' · ')}
+          </p>
+          <p className="story__meta" style={{ marginTop: '0.3rem' }}>
+            Zdroje: {story.outlets.join(' · ')} a další
+          </p>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function TwoCards({ stories }: { stories: SampleStory[] }) {
+  return (
+    <div className="cards">
+      {stories.map((s, i) => (
+        <article className="card" key={s.title}>
+          <FigPlaceholder img={s.img} />
+          <span className="chip">{s.topic}</span>
+          <h3 className="card__h">{s.title}</h3>
+          <SampleByline story={s} index={i + 1} />
+          <p className="card__p">{s.lead}</p>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function StoryListSection({ stories }: { stories: SampleStory[] }) {
+  return (
+    <section className="storylist">
+      {stories.map((s, i) => (
+        <article className="story" key={s.title}>
+          <div>
+            <span className="chip">{s.topic}</span>
+            <h3>{s.title}</h3>
+            <SampleByline story={s} index={i + 3} />
+            <p className="story__p">{s.lead}</p>
+            <p className="story__meta">
+              Entity: {s.entities.join(' · ')} · Zdroje: {s.outlets.join(', ')}
+            </p>
+          </div>
+          <FigPlaceholder img={s.img} thumb />
+        </article>
+      ))}
+    </section>
+  )
+}
+
+function EntsPanel() {
+  const mentions = SAMPLE_ENTITIES.map((e) => e.mentions)
+  const max = Math.max(...mentions)
+  const min = Math.min(...mentions)
+  return (
+    <section className="ents">
+      <SectionHead title="Entity dne" />
+      <p className="ents__note">Velikost kruhu odpovídá počtu zmínek za 24 hodin.</p>
+      {SAMPLE_ENTITIES.map((e) => {
+        const size = 26 + Math.round(((e.mentions - min) / (max - min)) * 24)
+        const cls = e.trend > 0 ? 'is-up' : e.trend < 0 ? 'is-down' : ''
+        const trend = e.trend > 0 ? `+${e.trend} %` : e.trend < 0 ? `${e.trend} %` : '0 %'
+        return (
+          <a className="erow" href="#" key={e.name} onClick={(ev) => ev.preventDefault()}>
+            <span className="erow__c">
+              <span className="erow__dot" style={{ inlineSize: size, blockSize: size }}>
+                {e.mentions}
+              </span>
+            </span>
+            <span>
+              <span className="erow__n">{e.name}</span>
+              <span className="erow__k">
+                {e.kind} · {e.sources} zdrojů
+              </span>
+            </span>
+            <span className={`erow__t ${cls}`}>{trend}</span>
+          </a>
+        )
+      })}
+    </section>
+  )
+}
+
+function PullQuoteSection() {
+  return (
+    <section className="pull">
+      <q>Tři redakce citují pasáž, která se v oficiálním přepisu nenachází.</q>
+      <cite>Z dnešní analýzy rozporů</cite>
+    </section>
+  )
+}
+
+function MinuteFeedSection() {
+  return (
+    <section>
+      <SectionHead title="Minuta" />
+      {SAMPLE_FEED.map((f) => (
+        <a className="minute" href="#" key={f.t} onClick={(e) => e.preventDefault()}>
+          <span className="minute__t">{f.t}</span>
+          <span>
+            <span className="minute__x">{f.title}</span>
+            <span className="minute__s">
+              {f.src} zdrojů{f.conflict && <span className="is-bad"> · rozpor</span>}
+            </span>
+          </span>
+        </a>
+      ))}
+    </section>
+  )
+}
+
+function ConflictsSection() {
+  return (
+    <section>
+      <div className="qbox">
+        <h2>Rozpory ve zdrojích</h2>
+        {SAMPLE_CONFLICTS.map((c) => (
+          <a className="q" href="#" key={c.title} onClick={(e) => e.preventDefault()}>
+            <span className="q__t">{c.title}</span>
+            <span className="q__d">{c.detail}</span>
+            <span className="byline" style={{ margin: 0 }}>
+              shoda <b>{c.pct} %</b>
+              <Gauge pct={c.pct} />
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function MostReadSection() {
+  return (
+    <section>
+      <SectionHead title="Nejčtenější" />
+      {SAMPLE_MOSTREAD.map((m, i) => (
+        <a className="minute" href="#" key={m.title} onClick={(e) => e.preventDefault()}>
+          <span className="minute__t">{i + 1}.</span>
+          <span>
+            <span className="minute__x">{m.title}</span>
+            <span className="minute__s">{m.src} zdrojů</span>
+          </span>
+        </a>
+      ))}
+    </section>
+  )
+}
+
+function LegendSection() {
+  return (
+    <section>
+      <SectionHead title="Jak čteme shodu" />
+      <p className="legend">
+        <b>Shoda</b> je podíl sledovaných zdrojů, které u dané zprávy uvádějí tvrzení bez věcného rozporu. Pod
+        65 % označujeme zprávu jako <b>rozpornou</b> a uvádíme, v čem se zdroje liší.
+      </p>
+    </section>
+  )
+}
+
+function SectionHead({ title }: { title: string }) {
+  return (
+    <div className="sechead">
+      <h2>{title}</h2>
+      <span className="sechead__rule" aria-hidden="true" />
+      <span className="mock-badge">ukázková data · negrilováno</span>
+    </div>
+  )
+}
+
+function DayStatsBar() {
+  return (
+    <div className="daystats">
+      <div className="u-wrap daystats__in">
+        {SAMPLE_TICKER.map((t) => (
+          <div className={`stat${t.warn ? ' stat--warn' : ''}`} key={t.k}>
+            <b>{t.v}</b>
+            {t.k}
+          </div>
+        ))}
+        <span className="mock-badge">ukázková data · negrilováno</span>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// Real, working functionality — the seed-URL submission flow (unchanged
+// behavior from before this ticket, only re-skinned).
+// ============================================================================
 
 const MATCHED_STATUS_LABELS: Record<'draft' | 'pending' | 'complete', string> = {
   draft: 'Koncept',
@@ -320,185 +773,40 @@ function SeedSubmitSection() {
   )
 }
 
-function Byline({ item }: { item: AnalysisListItem }) {
-  return (
-    <p className="byline">
-      <span>Sestaveno z {item.coverageCount} zdrojů</span>
-      <span className="byline__sep">·</span>
-      <b>{formatDate(item.createdAt)}</b>
-    </p>
-  )
-}
-
-function SectionHead({ title }: { title: string }) {
-  return (
-    <div className="sechead">
-      <h2>{title}</h2>
-      <span className="sechead__rule" aria-hidden="true" />
-    </div>
-  )
-}
-
-/** TODO(grill): "trending entities in the last 24h" has no backend behind it — no aggregation
- *  query exists, and tickets 40-44 (entity resolution/wiki) are about per-entity detail pages,
- *  not a per-day mention-trend computation. Sample data only, dev-only. */
-function EntbandMock() {
-  const sample = [
-    { name: 'Andrej Babiš', mentions: 176 },
-    { name: 'Petr Fiala', mentions: 148 },
-    { name: 'ČNB', mentions: 61 },
-    { name: 'EU', mentions: 54 },
-  ]
-  return (
-    <section>
-      <SectionHead title="Entity dne" />
-      <p className="mock-badge">ukázková data · negrilováno</p>
-      <div className="entband">
-        {sample.map((e) => (
-          <div className="entband__i" key={e.name}>
-            <span className="entband__dot">{e.mentions}</span>
-            <span className="entband__n">{e.name}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/** TODO(grill): a "minute service" ticker has no backend behind it — no event stream/timeline
- *  exists at this granularity. Sample data only, dev-only. */
-function MinuteMock() {
-  const sample = [
-    { t: '14:32', x: 'Vláda oznámila termín tiskové konference k rozpočtu.' },
-    { t: '13:58', x: 'ČNB zveřejnila zápis z jednání bankovní rady.' },
-  ]
-  return (
-    <section>
-      <SectionHead title="Minutový servis" />
-      <p className="mock-badge">ukázková data · negrilováno</p>
-      {sample.map((m) => (
-        <div className="minute" key={m.t}>
-          <span className="minute__t">{m.t}</span>
-          <span className="minute__x">{m.x}</span>
-        </div>
-      ))}
-    </section>
-  )
-}
-
-/** TODO(grill): a "stories today" counter strip has no aggregation query behind it. Sample data
- *  only, dev-only. */
-function DayStatsMock() {
-  return (
-    <div className="daystats">
-      <div className="u-wrap daystats__in">
-        <div className="stat">
-          <b>12</b>nových analýz
-        </div>
-        <div className="stat">
-          <b>47</b>zdrojů dnes
-        </div>
-        <div className="stat stat--warn">
-          <b>3</b>rozporné zprávy
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function HomePage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
-  const { data } = useAnalysesList()
-  const items = (data?.pages[0]?.items ?? []).filter((i) => i.status === 'complete')
-  const [lead, ...rest] = items
-  const cards = rest.slice(0, 2)
-  const storyItems = rest.slice(2, 8)
+  const [lead, ...restStories] = SAMPLE_STORIES
+  const twoCards = restStories.slice(0, 2)
+  const listStories = restStories.slice(2)
 
   return (
     <>
-      {import.meta.env.DEV && <DayStatsMock />}
+      <DayStatsBar />
 
       <main className="u-wrap">
         {isAdmin && <SeedSubmitSection />}
 
-        {items.length === 0 ? (
-          <div className="box">
-            <p>Zatím žádné dokončené analýzy k zobrazení.</p>
+        <div className="layout">
+          <div>
+            <LeadArticle story={lead} />
+
+            <SectionHead title="Ve středu pozornosti" />
+            <TwoCards stories={twoCards} />
+
+            <SectionHead title="Další zprávy dne" />
+            <StoryListSection stories={listStories} />
           </div>
-        ) : (
-          <div className="layout">
-            <div>
-              {lead && (
-                <article className="lead">
-                  <h1 className="lead__h">
-                    <Link to={`/analysis/${lead.id}`}>{lead.title}</Link>
-                  </h1>
-                  <div className="lead__body">
-                    <div className="fig">
-                      <div className="fig__ph" />
-                      <figcaption>
-                        <span>Ilustrační fotografie — TODO: bez obrázkových dat (ADR 0004)</span>
-                      </figcaption>
-                    </div>
-                    <div>
-                      <Byline item={lead} />
-                    </div>
-                  </div>
-                </article>
-              )}
 
-              {cards.length > 0 && (
-                <>
-                  <SectionHead title="Další zprávy" />
-                  <div className="cards">
-                    {cards.map((item) => (
-                      <article className="card" key={item.id}>
-                        <div className="fig fig--thumb">
-                          <div className="fig__ph" />
-                        </div>
-                        <h3 className="card__h">
-                          <Link to={`/analysis/${item.id}`}>{item.title}</Link>
-                        </h3>
-                        <Byline item={item} />
-                      </article>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {storyItems.length > 0 && (
-                <>
-                  <SectionHead title="Přehled" />
-                  <ul className="storylist" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {storyItems.map((item) => (
-                      <li className="story" key={item.id}>
-                        <div>
-                          <h3>
-                            <Link to={`/analysis/${item.id}`}>{item.title}</Link>
-                          </h3>
-                          <p className="story__meta">
-                            Sestaveno z {item.coverageCount} zdrojů · {formatDate(item.createdAt)}
-                          </p>
-                        </div>
-                        <div className="fig fig--thumb">
-                          <div className="fig__ph" />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-
-            {import.meta.env.DEV && (
-              <aside className="layout__rail">
-                <EntbandMock />
-                <MinuteMock />
-              </aside>
-            )}
-          </div>
-        )}
+          <aside className="layout__rail">
+            <EntsPanel />
+            <PullQuoteSection />
+            <MinuteFeedSection />
+            <ConflictsSection />
+            <MostReadSection />
+            <LegendSection />
+          </aside>
+        </div>
       </main>
     </>
   )

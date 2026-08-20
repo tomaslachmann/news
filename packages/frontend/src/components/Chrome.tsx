@@ -13,18 +13,29 @@ const THEME_LABEL: Record<'system' | 'light' | 'dark', string> = {
   dark: 'Tmavý režim',
 }
 
-/** Route links shared by `.rubnav` (full header) and `.sticky__nav` (condensed header) — the
- *  design system's own rubnav slot is editorial rubrics, which this product's data model doesn't
- *  have (no Story.primaryCategory yet); re-purposed for this app's actual primary nav instead,
- *  per ADR 0031 ("ticket 26's structural decisions survive; its styling does not"). `NavLink` sets
+// TODO(grill): matches e.html's own RUBS list exactly. This product has no Story.primaryCategory
+// field (docs/spec-event-graph.md's Out of Scope) — not a real filter yet, styled identically to
+// the reference (no dashed/disabled treatment) since the reference itself doesn't mark them as
+// placeholders either.
+const RUBRICS = ['Domácí', 'Ekonomika', 'Svět', 'Energetika', 'Regiony', 'Sport', 'Kultura']
+
+/** Route links shared by `.rubnav` (full header) and `.sticky__nav` (condensed header) — appended
+ *  after the topic rubrics above so History/Admin pages stay reachable. `NavLink` sets
  *  `aria-current="page"` on the active route automatically — `.rubnav a[aria-current='page']`
- *  (ds/components.css) styles it, no className function needed. */
-function PrimaryNav() {
+ *  (ds/components.css) styles it, no className function needed. `compact` mirrors chrome.js's own
+ *  `RUBS.slice(0, 5)` behavior for the condensed sticky header. */
+function PrimaryNav({ compact = false }: { compact?: boolean }) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
+  const rubrics = compact ? RUBRICS.slice(0, 5) : RUBRICS
 
   return (
     <>
+      {rubrics.map((r) => (
+        <a href="#" key={r} onClick={(e) => e.preventDefault()}>
+          {r}
+        </a>
+      ))}
       <NavLink to="/history">{isAdmin ? 'Historie' : 'Články'}</NavLink>
       {isAdmin && (
         <>
@@ -74,7 +85,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
             News <em>Triangulator</em>
           </Link>
           <nav className="sticky__nav" aria-label="Zkratky">
-            <PrimaryNav />
+            <PrimaryNav compact />
           </nav>
           <span className="sticky__bar" aria-hidden="true" />
         </div>
