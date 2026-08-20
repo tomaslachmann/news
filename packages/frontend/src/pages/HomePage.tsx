@@ -292,7 +292,7 @@ function BHead({ title, trailing }: { title: string; trailing?: React.ReactNode 
 function LeadArticle({ story }: { story: SampleStory }) {
   return (
     <article className="lead">
-      <span className="chip">
+      <span className="kicker">
         {story.topic} · analýza {story.sources} zdrojů
       </span>
       <h1 className="lead__h">
@@ -335,7 +335,7 @@ function TwoCards({ stories }: { stories: SampleStory[] }) {
           <a href="#" onClick={(e) => e.preventDefault()}>
             <FigPlaceholder img={s.img} />
           </a>
-          <span className="chip">{s.topic}</span>
+          <span className="kicker kicker--ink">{s.topic}</span>
           <a href="#" onClick={(e) => e.preventDefault()}>
             <h3 className="card__h hl">{s.title}</h3>
           </a>
@@ -353,7 +353,7 @@ function StoryListSection({ stories }: { stories: SampleStory[] }) {
       {stories.map((s, i) => (
         <article className="story" key={s.title}>
           <div>
-            <span className="chip">{s.topic}</span>
+            <span className="kicker kicker--ink">{s.topic}</span>
             <a href="#" onClick={(e) => e.preventDefault()}>
               <h3 className="hl">{s.title}</h3>
             </a>

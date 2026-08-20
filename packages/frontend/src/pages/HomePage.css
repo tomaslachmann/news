@@ -540,6 +540,22 @@ a:hover .hl {
   color: var(--accent);
 }
 
+/* Topic/eyebrow label above a headline (e.g. "Ekonomika · analýza 9 zdrojů") — e.css's .kicker,
+   a plain colored uppercase label, not a bordered badge. Was wrongly using .chip (a real bordered
+   badge, correctly still used for the rozpor/primární zdroj byline badges) — corrected. */
+.kicker {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-block;
+}
+.kicker--ink {
+  color: var(--ink-3);
+}
+
 .mock-badge {
   font-family: var(--font-mono);
   font-size: var(--text-micro);
