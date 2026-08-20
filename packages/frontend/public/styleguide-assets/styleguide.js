@@ -255,11 +255,15 @@
     </div>`
   const sum = document.getElementById('sgSum')
   if (sum) {
+    // ticket 39: widened from 3 to 4 columns to carry all four Analysis Dimensions — the
+    // reference's own third column ("Nepotvrzeno"/open questions) had no data behind it and is
+    // repurposed here for uniqueReporting instead of dropped outright; framing is new, --mid.
     sum.className = 'sumbox'
     sum.innerHTML =
       col('agree', 'Zdroje se shodují', A.summary.agree) +
       col('differ', 'Zdroje se rozcházejí', A.summary.differ) +
-      col('open', 'Nepotvrzeno', A.summary.open)
+      col('open', 'Unikátní zprávy', A.summary.open) +
+      col('framing', 'Framing', A.summary.framing)
   }
 
   // Marginálie ve všech třech stavech.

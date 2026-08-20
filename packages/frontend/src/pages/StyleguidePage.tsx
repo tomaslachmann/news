@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import styleguideHtml from './styleguide-content.html?raw'
 import '@/components/Chrome.css'
+import './AnalysisPage.css'
 import './StyleguidePage.css'
 
 // Ported verbatim from news_design's shared/data*.js, ds/ui.js, ds/admin.js, ds/styleguide.js —

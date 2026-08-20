@@ -39,6 +39,9 @@ window.NT.article = {
       'Termín, od kdy má úprava platit: dva zdroje uvádějí září, pět říjen.',
     ],
     open: ['Dopad na rozpočty krajů. Tři zdroje ho zmiňují, primární doklad se nepodařilo dohledat.'],
+    // ticket 39: 4. sloupec přidaný nad rámec reference — nese Framing dimenzi (ADR 0012 / čtyři
+    // dimenze analýzy), barva --mid, žádný nový akcent.
+    framing: ['Tři redakce vedou zprávu jako „škrty“, dvě jako „úpravu stropů“ — stejná čísla, jiný rámec.'],
   },
 
   // Tvrzení po jednom. Toto je jádro produktu: nikoli „článek je pravdivý“,

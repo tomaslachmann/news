@@ -31,7 +31,7 @@ Each of these is visually compared against its reference HTML before being check
 - [x] **`/login`** — `login.html`. Stays the internal-tool framing ticket 26 established
 - [x] **`/`** — `e.html`. `.lead`, `.story` / `.storylist`, `.card`, `.minute`, `.daystats`, `.entband`
 - [x] **`/history`** — `history.html`. Filter bar, sort, search, pagination, states
-- [ ] **`/analysis/:id`** — `article.html`. The largest single item: `.arthead`, `.byline`, `.prose`, `.claim`, `.sumbox`, `.compare` / `.cmp` / `.vals`, `.qcmp`, `.srclist`, `.threadband`, `.artfoot`. Radix tabs are retained for the four dimensions
+- [x] **`/analysis/:id`** — `article.html`. The largest single item: `.arthead`, `.byline`, `.prose`, `.claim`, `.sumbox`, `.compare` / `.cmp` / `.vals`, `.qcmp`, `.srclist`, `.threadband`, `.artfoot`. Deviation from this ticket's own original text, confirmed with the user during implementation: Radix Tabs are **dropped**, not retained — `article.html` itself has no tabs anywhere, and CLAUDE.md frames the Narrative as a *presentation* of the four dimensions, not a peer of them. The page is one flowing article instead (sumbox → narrative → contradiction detail → uniqueReporting → framing → thread → related). `.vals`, `.qcmp` and the entities rail panel ship `import.meta.env.DEV`-guarded with sample data — no real data exists behind a fixed 3-source quote comparison, discrete per-source values, or entity extraction today
 - [ ] **`/review/:id`** — `admin-sources.html`'s source-selection step is the closest reference; the existing page's behaviour is unchanged
 - [ ] **`/admin/users`** — `admin-users.html`
 - [ ] **`/admin/ingestion`** — `admin-review.html`
@@ -39,9 +39,9 @@ Each of these is visually compared against its reference HTML before being check
 
 ## Design changes we are making on top of the reference
 
-- [ ] `.sumbox` is widened from three columns to **four**, to carry all four Analysis Dimensions: `+` agreement, `×` contradiction, `?` uniqueReporting, `~` framing. The fourth takes `--mid`; no new accent colour is introduced (rule #2). The reference's third column ("open questions") has no data behind it and is dropped. **`styleguide.html` is updated in the same commit** — otherwise it stops being a valid reference immediately
-- [ ] `.byline`'s share is labelled **"překryv zdrojů"**, not "shoda", and reads from ticket 38. Below 5 sources the gauge is withheld and only the chip and source count show
-- [ ] The author signature in `.byline` and `.artfoot` is replaced with a machine attribution ("Sestaveno z N zdrojů"). Articles here are tool-authored; a human name under one would misrepresent them, and the design's own admin rule #1 ("rozhraní nikdy nepředstírá, že rozhodl nástroj") is the same principle
+- [x] `.sumbox` is widened from three columns to **four**, to carry all four Analysis Dimensions: `+` agreement, `×` contradiction, `?` uniqueReporting, `~` framing. The fourth takes `--mid`; no new accent colour is introduced (rule #2). The reference's third column ("open questions") has no data behind it — its `?`/ink-3 styling is repurposed for uniqueReporting rather than dropped outright. `styleguide-content.html` + `styleguide-assets/styleguide.js`/`data3.js` updated in the same commit
+- [ ] `.byline`'s share is labelled **"překryv zdrojů"**, not "shoda", and reads from ticket 38. Below 5 sources the gauge is withheld and only the chip and source count show. Still blocked on ticket 38 — the `/analysis/:id` byline ships with source-count + framing-signal-count only for now, no gauge and no "shoda" substitute (a dimension-count ratio isn't the same metric as source overlap; showing one labelled as the other would misrepresent it)
+- [x] The author signature in `.byline` and `.artfoot` is replaced with a machine attribution ("Sestaveno z N zdrojů"). Articles here are tool-authored; a human name under one would misrepresent them, and the design's own admin rule #1 ("rozhraní nikdy nepředstírá, že rozhodl nástroj") is the same principle
 - [ ] Photography: `.fig` renders as an `aspect-ratio` placeholder box with no `<img>` element at all — the data model has no image field and ADR 0004 keeps article content unstored. Each placeholder carries a `TODO` naming what would fill it
 
 ## Mocked and dev-only
