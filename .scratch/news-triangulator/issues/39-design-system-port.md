@@ -30,7 +30,7 @@ Each of these is visually compared against its reference HTML before being check
 - [x] **`/styleguide`** — `styleguide.html` ported as a dev-only route, so a token change can be checked the way §1 requires
 - [x] **`/login`** — `login.html`. Stays the internal-tool framing ticket 26 established
 - [x] **`/`** — `e.html`. `.lead`, `.story` / `.storylist`, `.card`, `.minute`, `.daystats`, `.entband`
-- [ ] **`/history`** — `history.html`. Filter bar, sort, search, pagination, states
+- [x] **`/history`** — `history.html`. Filter bar, sort, search, pagination, states
 - [ ] **`/analysis/:id`** — `article.html`. The largest single item: `.arthead`, `.byline`, `.prose`, `.claim`, `.sumbox`, `.compare` / `.cmp` / `.vals`, `.qcmp`, `.srclist`, `.threadband`, `.artfoot`. Radix tabs are retained for the four dimensions
 - [ ] **`/review/:id`** — `admin-sources.html`'s source-selection step is the closest reference; the existing page's behaviour is unchanged
 - [ ] **`/admin/users`** — `admin-users.html`
