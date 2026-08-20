@@ -3,20 +3,21 @@ import { registerJobWorker } from './jobs/registerWorker.js'
 import { JobName } from './jobs/jobDefinitions.js'
 import { runEntityRelationJob } from './jobs/entityRelationJob.js'
 import { runNarrativeJob } from './jobs/narrativeJob.js'
+import { runThreadRecomputeJob } from './jobs/threadRecomputeJob.js'
 import { makeConsoleLogger } from './jobs/consoleLogger.js'
 import * as analysisRepo from './repositories/analysis.js'
 import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
 import * as storyRelationRepo from './repositories/storyRelation.js'
 import * as synthesisResultRepo from './repositories/synthesisResult.js'
+import * as threadRepo from './repositories/thread.js'
 
 const workerLog = makeConsoleLogger()
 
-// Ticket 17 adds its own handler via registerJobWorker() alongside these.
 const start = async () => {
   try {
     await getQueueClient()
-    // The two queues are independent — registered concurrently so their pg-boss declaration
+    // The three queues are independent — registered concurrently so their pg-boss declaration
     // latencies don't add up on every process start/restart.
     await Promise.all([
       registerJobWorker(JobName.EntityRelation, (payload) =>
@@ -45,8 +46,22 @@ const start = async () => {
           workerLog
         )
       ),
+      registerJobWorker(JobName.ThreadRecompute, (payload) =>
+        runThreadRecomputeJob(
+          payload,
+          {
+            findFollowUpComponent: threadRepo.findFollowUpComponent,
+            anyExistingThreadForStories: threadRepo.anyExistingThreadForStories,
+            findAgreementForTitle: threadRepo.findAgreementForTitle,
+            upsertThreadFromComponent: threadRepo.upsertThreadFromComponent,
+          },
+          workerLog
+        )
+      ),
     ])
-    console.log('Worker started; entity.extract and narrative.generate handlers registered.')
+    console.log(
+      'Worker started; entity.extract, narrative.generate, and thread.recompute handlers registered.'
+    )
   } catch (err) {
     console.error(err)
     process.exit(1)

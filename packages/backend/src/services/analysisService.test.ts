@@ -9,6 +9,7 @@ import * as storyVerificationModule from './storyVerification.js'
 import * as embeddingClientModule from './embeddingClient.js'
 import * as ingestionServiceModule from './ingestionService.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
+import * as threadRepo from '../repositories/thread.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as jobsEnqueue from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
@@ -32,6 +33,7 @@ vi.mock('./storyVerification.js')
 vi.mock('./embeddingClient.js')
 vi.mock('./ingestionService.js')
 vi.mock('../repositories/storyRelation.js')
+vi.mock('../repositories/thread.js')
 vi.mock('../jobs/enqueue.js')
 vi.mock('../repositories/matchDecision.js')
 
@@ -710,6 +712,7 @@ describe('getAnalysisDetail', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(storyRelationRepo.findPublishedRelationsForStory).mockResolvedValue([])
+    vi.mocked(threadRepo.findThreadForStory).mockResolvedValue(null)
   })
 
   const OK_COVERAGE = {
@@ -789,6 +792,88 @@ describe('getAnalysisDetail', () => {
     expect(result.relatedEvents).toEqual([
       { analysisId: 'a-other', title: 'Other generated headline', type: 'FOLLOW_UP', coverageCount: 4 },
     ])
+  })
+
+  it('includes the Thread summary when this Story belongs to one with at least 2 linkable members', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+    vi.mocked(threadRepo.findThreadForStory).mockResolvedValue({
+      title: 'Vícedílná kauza',
+      memberCount: 2,
+      members: [
+        { analysisId: 'a1', seedHeadline: 'Headline', headline: null, status: 'COMPLETE', position: 0 },
+        {
+          analysisId: 'a2',
+          seedHeadline: 'Other',
+          headline: 'Other headline',
+          status: 'COMPLETE',
+          position: 1,
+        },
+      ],
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(threadRepo.findThreadForStory).toHaveBeenCalledWith('s1')
+    expect(result.thread).toEqual({
+      title: 'Vícedílná kauza',
+      memberCount: 2,
+      members: [
+        { analysisId: 'a1', title: 'Headline', isCurrent: true },
+        { analysisId: 'a2', title: 'Other headline', isCurrent: false },
+      ],
+    })
+  })
+
+  it('omits the Thread summary when fewer than 2 members are currently linkable (COMPLETE)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+    vi.mocked(threadRepo.findThreadForStory).mockResolvedValue({
+      title: 'Vícedílná kauza',
+      memberCount: 2,
+      members: [
+        { analysisId: 'a1', seedHeadline: 'Headline', headline: null, status: 'COMPLETE', position: 0 },
+        { analysisId: 'a2', seedHeadline: 'Other', headline: null, status: 'PENDING', position: 1 },
+      ],
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(result.thread).toBeUndefined()
+  })
+
+  it('does not fetch the Thread when the Analysis is not COMPLETE', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(threadRepo.findThreadForStory).not.toHaveBeenCalled()
+    expect(result.thread).toBeUndefined()
   })
 
   it("returns the cached narrative verbatim — generation is the narrative.generate job's job (ticket 15), not this read path", async () => {

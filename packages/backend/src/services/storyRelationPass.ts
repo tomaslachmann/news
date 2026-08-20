@@ -15,6 +15,8 @@ import type { ExtractedEntity, ExtractedEntityRelation } from './entityTypes.js'
 import type { RawRelationCandidateStory } from '../repositories/storyRelation.js'
 import type { EntityForScoring, EntityRelationForScoring } from '../repositories/entity.js'
 import { runStageOrThrow } from './pipelineStage.js'
+import { enqueueJob } from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/storyRelation.txt'), 'utf8')
 
@@ -125,14 +127,33 @@ export async function linkStoryRelations(
       try {
         const verdict = await confirmStoryRelation(current, candidateStory, log)
         if (!verdict.related) return
+        const status = verdict.confidenceTier === 'HIGH' ? 'PUBLISHED' : 'PENDING_REVIEW'
         await deps.createStoryRelation({
           fromStoryId: storyId,
           toStoryId: candidateStory.storyId,
           type: verdict.type,
           confidenceTier: verdict.confidenceTier,
           reasoning: verdict.reasoning,
-          status: verdict.confidenceTier === 'HIGH' ? 'PUBLISHED' : 'PENDING_REVIEW',
+          status,
         })
+        // thread.recompute (ticket 17, ADR 0028): enqueued right after a StoryRelation transitions
+        // to FOLLOW_UP/PUBLISHED — not atomic with the write above (see ticket 17's Answer on why
+        // this is a deliberate, narrower risk than tickets 14/15/16's own atomic enqueues; a missed
+        // enqueue here self-heals the moment any other edge in the same connected component is
+        // confirmed). Its own try/catch, separate from the one below: the StoryRelation is already
+        // persisted at this point, so a failure here must log as an enqueue failure specifically,
+        // not fold into the generic "confirmation or persistence failed" message below, which would
+        // wrongly suggest no relation was created at all.
+        if (verdict.type === 'FOLLOW_UP' && status === 'PUBLISHED') {
+          try {
+            await enqueueJob(JobName.ThreadRecompute, { seedStoryId: storyId })
+          } catch (err) {
+            log?.error(
+              { storyId, candidateStoryId: candidateStory.storyId, err },
+              'Failed to enqueue thread.recompute after persisting a FOLLOW_UP/PUBLISHED StoryRelation'
+            )
+          }
+        }
       } catch (err) {
         log?.warn(
           { storyId, candidateStoryId: candidateStory.storyId, err },

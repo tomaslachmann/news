@@ -45,6 +45,22 @@ enum StoryRelationStatus {
   REJECTED
 }
 
+enum ThreadStatus {
+  ACTIVE
+  DORMANT
+  CLOSED
+}
+
+/// REACTION is declared (ADR 0029's own schema) but never produced by ticket 17's `inferRole` —
+/// see that ticket's Answer. Kept for a future role-inference refinement that wants it without a
+/// schema change.
+enum ThreadRole {
+  ORIGIN
+  DEVELOPMENT
+  REACTION
+  RESOLUTION
+}
+
 /// Matches entityTypes.ts's EntityTypeSchema exactly — kept in sync by hand, same convention as
 /// every other closed enum this schema mirrors from a Zod schema (see StoryRelationType).
 enum EntityType {
@@ -121,6 +137,9 @@ model Story {
   analysis             Analysis?
   relationsFrom        StoryRelation[]       @relation("StoryRelationFrom")
   relationsTo          StoryRelation[]       @relation("StoryRelationTo")
+  /// A Story belongs to at most one Thread (ticket 17) — null until a FOLLOW_UP edge involving
+  /// it is ever confirmed.
+  threadMember         ThreadMember?
   /// Lightweight, non-authoritative entity signal extracted once (ticket 34), used only as
   /// candidate-scoring evidence for Story-to-Story relation linking (ticket 35) — never a
   /// knowledge graph, never surfaced to a reader/Admin as ground truth. Normalized into
@@ -227,6 +246,47 @@ model StoryRelation {
   /// The Admin review queue's findPendingReviewRelations query: filter by status, order by
   /// createdAt.
   @@index([status, createdAt])
+}
+
+/// A materialized connected component over PUBLISHED FOLLOW_UP StoryRelation edges (ticket 17,
+/// ADR 0029) — `StoryRelation` stays the source of truth, `Thread`/`ThreadMember` are a derived
+/// read model rebuilt by the `thread.recompute` job (§8.6, docs/audit.md) whenever a relevant edge
+/// is confirmed. Exists to show a reader the full multi-stage arc a pairwise "related Events"
+/// list can't ("a detention, then an official's statement, then the other side's response," each
+/// otherwise looking like its own unrelated Story).
+model Thread {
+  id           String         @id @default(cuid())
+  /// Generated once, at Thread creation, from Agreement across every member — never regenerated
+  /// as new members join (see threadTitlePass.ts / ticket 17's Answer).
+  title        String
+  /// Not yet linked from any route in this ticket (see ticket 17's Answer, Q3/Q5) — declared to
+  /// match ADR 0029's already-accepted schema, ready for a future dedicated Thread page.
+  slug         String         @unique
+  firstEventAt DateTime
+  lastEventAt  DateTime
+  status       ThreadStatus   @default(ACTIVE)
+  memberCount  Int            @default(0)
+  members      ThreadMember[]
+
+  /// "All ACTIVE Threads, most recently active first" — no reader surface queries this yet
+  /// (ticket 17's Answer, Q5); declared because ADR 0029's accepted schema already specifies it.
+  @@index([status, lastEventAt])
+}
+
+model ThreadMember {
+  threadId String
+  thread   Thread     @relation(fields: [threadId], references: [id])
+  /// A Story belongs to at most one Thread.
+  storyId  String     @unique
+  story    Story      @relation(fields: [storyId], references: [id])
+  /// Ordered by eventTime (falling back to createdAt, ticket 16), never createdAt directly —
+  /// re-derived wholesale on every recompute (replaceThreadMembers), not incrementally patched.
+  position Int
+  role     ThreadRole
+  addedAt  DateTime   @default(now())
+
+  @@id([threadId, storyId])
+  @@index([threadId, position])
 }
 
 model Analysis {

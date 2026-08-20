@@ -802,7 +802,7 @@ describe('approveStoryRelation', () => {
     createdAt: new Date(),
   }
 
-  it('transitions a pending relation to PUBLISHED', async () => {
+  it('transitions a pending relation to PUBLISHED and enqueues thread.recompute (FOLLOW_UP)', async () => {
     vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
     vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
 
@@ -813,6 +813,29 @@ describe('approveStoryRelation', () => {
       'PENDING_REVIEW',
       'PUBLISHED'
     )
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(JobName.ThreadRecompute, {
+      seedStoryId: PENDING_RELATION.fromStoryId,
+    })
+  })
+
+  it('does not enqueue thread.recompute when the approved relation is RELATED, not FOLLOW_UP', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue({
+      ...PENDING_RELATION,
+      type: 'RELATED',
+    })
+    vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
+
+    await approveStoryRelation('r1')
+
+    expect(jobsEnqueue.enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it('does not throw when enqueueing thread.recompute fails — the approval itself already succeeded', async () => {
+    vi.mocked(storyRelationRepo.findStoryRelationById).mockResolvedValue(PENDING_RELATION)
+    vi.mocked(storyRelationRepo.updateStoryRelationStatusIfCurrently).mockResolvedValue(true)
+    vi.mocked(jobsEnqueue.enqueueJob).mockRejectedValue(new Error('queue down'))
+
+    await expect(approveStoryRelation('r1')).resolves.toBeUndefined()
   })
 
   it('throws NotFoundError when the relation does not exist', async () => {

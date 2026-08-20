@@ -31,12 +31,12 @@ describe('pg-boss job queue infrastructure against a real Postgres instance', ()
       return Promise.resolve()
     })
 
-    const jobId = await enqueueJob(JobName.ThreadRecompute, { threadId: 'thread-integration-1' })
+    const jobId = await enqueueJob(JobName.ThreadRecompute, { seedStoryId: 'story-integration-1' })
     expect(jobId).not.toBeNull()
 
     await waitUntil(() => received.length > 0)
 
-    expect(received).toEqual([{ threadId: 'thread-integration-1' }])
+    expect(received).toEqual([{ seedStoryId: 'story-integration-1' }])
   })
 })
 

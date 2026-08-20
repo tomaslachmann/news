@@ -4,6 +4,7 @@ import type {
   AnalysisListItem,
   DimensionItem,
   RelatedEventItem,
+  ThreadSummaryItem,
 } from '@news-triangulator/shared'
 import type {
   AnalysisWithDetails,
@@ -32,7 +33,8 @@ export function resolveDisplayTitle(headline: string | null | undefined, seedHea
 
 export function toAnalysisDetail(
   analysis: AnalysisWithDetails,
-  relatedEvents: RelatedEventItem[]
+  relatedEvents: RelatedEventItem[],
+  thread?: ThreadSummaryItem
 ): AnalysisDetail {
   return {
     id: analysis.id,
@@ -49,6 +51,7 @@ export function toAnalysisDetail(
       ? (analysis.synthesisResult.narrative as unknown as DimensionItem[])
       : undefined,
     relatedEvents,
+    thread,
   }
 }
 

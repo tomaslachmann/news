@@ -14,6 +14,7 @@ export type LlmCallSite =
   | 'headline'
   | 'entityExtraction'
   | 'storyRelation'
+  | 'threadTitle'
 
 export async function callJsonModel(
   model: string,

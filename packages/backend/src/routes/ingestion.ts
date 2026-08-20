@@ -68,7 +68,7 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     '/api/admin/ingestion/story-relations/:id/approve',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      await ingestionService.approveStoryRelation(request.params.id)
+      await ingestionService.approveStoryRelation(request.params.id, request.log)
       return reply.code(200).send({ ok: true })
     }
   )

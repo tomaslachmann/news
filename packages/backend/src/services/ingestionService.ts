@@ -337,7 +337,7 @@ export async function listPendingStoryRelations(): Promise<PendingStoryRelationI
   return rows.map(toPendingStoryRelationItem)
 }
 
-export async function approveStoryRelation(id: string): Promise<void> {
+export async function approveStoryRelation(id: string, log?: FastifyBaseLogger): Promise<void> {
   const relation = await storyRelationRepo.findStoryRelationById(id)
   if (!relation) throw new NotFoundError('Vztah nenalezen')
   if (relation.status !== 'PENDING_REVIEW') throw new ValidationError('Schválit lze pouze čekající vztahy')
@@ -350,6 +350,17 @@ export async function approveStoryRelation(id: string): Promise<void> {
     'PUBLISHED'
   )
   if (!transitioned) throw new ValidationError('Vztah mezitím změnil stav; zkuste to prosím znovu')
+
+  // thread.recompute (ticket 17, ADR 0028): the second of the two real trigger points a
+  // StoryRelation can reach FOLLOW_UP/PUBLISHED from — see storyRelationPass.ts's own enqueue for
+  // the auto-linking path and ticket 17's Answer for why this isn't atomic with the write above.
+  if (relation.type === 'FOLLOW_UP') {
+    try {
+      await enqueueJob(JobName.ThreadRecompute, { seedStoryId: relation.fromStoryId })
+    } catch (err) {
+      log?.error({ relationId: id, err }, 'Failed to enqueue thread.recompute after approving a relation')
+    }
+  }
 }
 
 /** Permanent — a rejected pair is never re-evaluated or re-surfaced by a later
