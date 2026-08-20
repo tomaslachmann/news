@@ -1,13 +1,13 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { PageContainer } from '@/components/PageContainer'
-import { PageTitle } from '@/components/PageTitle'
 import { useAuth } from '@/context/AuthContext'
 import { createAnalysis, discoverSources, attachSeedToMatch } from '@/services/analyses'
+import { useAnalysesList } from '@/services/analyses/hooks'
+import type { AnalysisListItem } from '@news-triangulator/shared'
+import { formatDate } from '@/lib/formatDate'
+import './HomePage.css'
 
 const MATCHED_STATUS_LABELS: Record<'draft' | 'pending' | 'complete', string> = {
   draft: 'Koncept',
@@ -45,19 +45,24 @@ function KeywordChip({
   onDelete: () => void
 }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border bg-secondary px-3 py-1 text-sm">
+    <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
       <input
-        className="bg-transparent outline-none min-w-[4rem] max-w-[16rem]"
+        className="u-sans"
+        style={{
+          background: 'transparent',
+          border: 0,
+          outline: 'none',
+          width: `${Math.max(4, value.length)}ch`,
+        }}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{ width: `${Math.max(4, value.length)}ch` }}
         aria-label="Klíčové slovo"
       />
       <button
         type="button"
         onClick={onDelete}
-        className="text-muted-foreground hover:text-foreground"
         aria-label="Odebrat klíčové slovo"
+        className="btn btn--ghost btn--micro"
       >
         <X size={12} />
       </button>
@@ -108,13 +113,11 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
   const activeKeywords = entries.filter((e) => e.value.trim().length > 0)
 
   return (
-    <section className="mt-8 max-w-2xl">
-      <h2 className="font-serif text-lg font-semibold mb-1">Klíčová slova pro vyhledávání</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Klíčová slova můžete před vyhledáváním pokrytí upravit, odebrat nebo přidat.
-      </p>
+    <div style={{ marginTop: 'var(--sp-5)' }}>
+      <h2 className="login__t">Klíčová slova pro vyhledávání</h2>
+      <p className="login__n">Klíčová slova můžete před vyhledáváním pokrytí upravit, odebrat nebo přidat.</p>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
         {entries.map((entry) => (
           <KeywordChip
             key={entry.id}
@@ -125,9 +128,10 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
         ))}
       </div>
 
-      <div className="flex gap-2 mb-6">
-        <Input
+      <div style={{ display: 'flex', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
+        <input
           ref={addInputRef}
+          className="input"
           value={newKeyword}
           onChange={(e) => setNewKeyword(e.target.value)}
           placeholder="Přidat klíčové slovo…"
@@ -137,23 +141,28 @@ function KeywordsStep({ analysisId, initialKeywords }: { analysisId: string; ini
               addKeyword()
             }
           }}
-          className="max-w-xs"
         />
-        <Button type="button" variant="outline" onClick={addKeyword} disabled={!newKeyword.trim()}>
+        <button type="button" className="btn" onClick={addKeyword} disabled={!newKeyword.trim()}>
           Přidat
-        </Button>
+        </button>
       </div>
 
       {discoverMutation.isError && (
-        <p className="text-sm text-destructive mb-4">{discoverMutation.error.message}</p>
+        <div className="error" style={{ marginBottom: 'var(--sp-4)' }}>
+          <p className="error__p">{discoverMutation.error.message}</p>
+        </div>
       )}
 
       {activeKeywords.length > 0 && (
-        <Button onClick={() => discoverMutation.mutate()} disabled={discoverMutation.isPending}>
+        <button
+          className="btn btn--primary"
+          onClick={() => discoverMutation.mutate()}
+          disabled={discoverMutation.isPending}
+        >
           {discoverMutation.isPending ? 'Vyhledávání pokrytí…' : 'Vyhledat zdroje'}
-        </Button>
+        </button>
       )}
-    </section>
+    </div>
   )
 }
 
@@ -191,31 +200,35 @@ function MatchedStep({
   }
 
   return (
-    <section className="mt-8 max-w-2xl">
-      <h2 className="font-serif text-lg font-semibold mb-1">Tato událost už se sleduje</h2>
-      <p className="text-sm text-muted-foreground mb-4">
+    <div style={{ marginTop: 'var(--sp-5)' }}>
+      <h2 className="login__t">Tato událost už se sleduje</h2>
+      <p className="login__n">
         Odkaz vypadá jako stejná událost jako existující analýza „{title}“ (
         {MATCHED_STATUS_LABELS[matchedStatus]}).
       </p>
 
       {attachMutation.isError && (
-        <p className="text-sm text-destructive mb-4">{attachMutation.error.message}</p>
+        <div className="error" style={{ marginBottom: 'var(--sp-4)' }}>
+          <p className="error__p">{attachMutation.error.message}</p>
+        </div>
       )}
 
-      <div className="flex gap-2">
-        <Button onClick={handleContinue} disabled={attachMutation.isPending}>
+      <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+        <button className="btn btn--primary" onClick={handleContinue} disabled={attachMutation.isPending}>
           {attachMutation.isPending ? 'Připojování…' : 'Pokračovat'}
-        </Button>
-        <Button type="button" variant="outline" onClick={onCreateSeparately}>
+        </button>
+        <button type="button" className="btn" onClick={onCreateSeparately}>
           Vytvořit samostatně
-        </Button>
+        </button>
       </div>
-    </section>
+    </div>
   )
 }
 
-export default function HomePage() {
-  const { user } = useAuth()
+/** Admin-only — the app's only way to start a new Analysis. Kept on `/` itself rather than moved
+ *  to its own route (the ticket's reference `new-analysis.html` is a separate, richer mockup with
+ *  no backend behind it, unlike this flow, which is real and already shipped). */
+function SeedSubmitSection() {
   const [state, setState] = useState<PageState>({ step: 'input' })
   const [urlValue, setUrlValue] = useState('')
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -253,19 +266,19 @@ export default function HomePage() {
   }
 
   return (
-    <PageContainer>
-      <PageTitle>News Triangulator</PageTitle>
-      <p className="mt-2 text-muted-foreground">
-        Vložte odkaz na český zpravodajský článek a zjistěte, jak stejnou událost popisují různá média.
+    <div className="box" style={{ marginBottom: 'var(--sp-6)' }}>
+      <p className="abar__tag" style={{ marginBottom: 'var(--sp-3)' }}>
+        Interní · nová analýza
       </p>
 
-      {user?.role === 'ADMIN' && state.step === 'input' && (
-        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-3 max-w-2xl">
-          <label htmlFor="seed-url" className="text-sm font-medium">
+      {state.step === 'input' && (
+        <form onSubmit={handleSubmit} className="field">
+          <label className="field__l" htmlFor="seed-url">
             Odkaz na výchozí článek
           </label>
-          <div className="flex gap-2">
-            <Input
+          <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+            <input
+              className="input"
               id="seed-url"
               type="url"
               value={urlValue}
@@ -276,13 +289,17 @@ export default function HomePage() {
               placeholder="https://www.irozhlas.cz/…"
               required
               disabled={createMutation.isPending}
-              className="flex-1"
+              style={{ flex: 1 }}
             />
-            <Button type="submit" disabled={createMutation.isPending}>
+            <button className="btn btn--primary" type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Analyzování…' : 'Analyzovat'}
-            </Button>
+            </button>
           </div>
-          {urlError && <p className="text-sm text-destructive">{urlError}</p>}
+          {urlError && (
+            <div className="error" style={{ marginTop: 'var(--sp-2)' }}>
+              <p className="error__p">{urlError}</p>
+            </div>
+          )}
         </form>
       )}
 
@@ -299,6 +316,190 @@ export default function HomePage() {
       {state.step === 'keywords' && (
         <KeywordsStep analysisId={state.analysisId} initialKeywords={state.keywords} />
       )}
-    </PageContainer>
+    </div>
+  )
+}
+
+function Byline({ item }: { item: AnalysisListItem }) {
+  return (
+    <p className="byline">
+      <span>Sestaveno z {item.coverageCount} zdrojů</span>
+      <span className="byline__sep">·</span>
+      <b>{formatDate(item.createdAt)}</b>
+    </p>
+  )
+}
+
+function SectionHead({ title }: { title: string }) {
+  return (
+    <div className="sechead">
+      <h2>{title}</h2>
+      <span className="sechead__rule" aria-hidden="true" />
+    </div>
+  )
+}
+
+/** TODO(grill): "trending entities in the last 24h" has no backend behind it — no aggregation
+ *  query exists, and tickets 40-44 (entity resolution/wiki) are about per-entity detail pages,
+ *  not a per-day mention-trend computation. Sample data only, dev-only. */
+function EntbandMock() {
+  const sample = [
+    { name: 'Andrej Babiš', mentions: 176 },
+    { name: 'Petr Fiala', mentions: 148 },
+    { name: 'ČNB', mentions: 61 },
+    { name: 'EU', mentions: 54 },
+  ]
+  return (
+    <section>
+      <SectionHead title="Entity dne" />
+      <p className="mock-badge">ukázková data · negrilováno</p>
+      <div className="entband">
+        {sample.map((e) => (
+          <div className="entband__i" key={e.name}>
+            <span className="entband__dot">{e.mentions}</span>
+            <span className="entband__n">{e.name}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** TODO(grill): a "minute service" ticker has no backend behind it — no event stream/timeline
+ *  exists at this granularity. Sample data only, dev-only. */
+function MinuteMock() {
+  const sample = [
+    { t: '14:32', x: 'Vláda oznámila termín tiskové konference k rozpočtu.' },
+    { t: '13:58', x: 'ČNB zveřejnila zápis z jednání bankovní rady.' },
+  ]
+  return (
+    <section>
+      <SectionHead title="Minutový servis" />
+      <p className="mock-badge">ukázková data · negrilováno</p>
+      {sample.map((m) => (
+        <div className="minute" key={m.t}>
+          <span className="minute__t">{m.t}</span>
+          <span className="minute__x">{m.x}</span>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+/** TODO(grill): a "stories today" counter strip has no aggregation query behind it. Sample data
+ *  only, dev-only. */
+function DayStatsMock() {
+  return (
+    <div className="daystats">
+      <div className="u-wrap daystats__in">
+        <div className="stat">
+          <b>12</b>nových analýz
+        </div>
+        <div className="stat">
+          <b>47</b>zdrojů dnes
+        </div>
+        <div className="stat stat--warn">
+          <b>3</b>rozporné zprávy
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function HomePage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
+  const { data } = useAnalysesList()
+  const items = (data?.pages[0]?.items ?? []).filter((i) => i.status === 'complete')
+  const [lead, ...rest] = items
+  const cards = rest.slice(0, 2)
+  const storyItems = rest.slice(2, 8)
+
+  return (
+    <>
+      {import.meta.env.DEV && <DayStatsMock />}
+
+      <main className="u-wrap">
+        {isAdmin && <SeedSubmitSection />}
+
+        {items.length === 0 ? (
+          <div className="box">
+            <p>Zatím žádné dokončené analýzy k zobrazení.</p>
+          </div>
+        ) : (
+          <div className="layout">
+            <div>
+              {lead && (
+                <article className="lead">
+                  <h1 className="lead__h">
+                    <Link to={`/analysis/${lead.id}`}>{lead.title}</Link>
+                  </h1>
+                  <div className="lead__body">
+                    <div className="fig">
+                      <div className="fig__ph" />
+                      <figcaption>
+                        <span>Ilustrační fotografie — TODO: bez obrázkových dat (ADR 0004)</span>
+                      </figcaption>
+                    </div>
+                    <div>
+                      <Byline item={lead} />
+                    </div>
+                  </div>
+                </article>
+              )}
+
+              {cards.length > 0 && (
+                <>
+                  <SectionHead title="Další zprávy" />
+                  <div className="cards">
+                    {cards.map((item) => (
+                      <article className="card" key={item.id}>
+                        <div className="fig fig--thumb">
+                          <div className="fig__ph" />
+                        </div>
+                        <h3 className="card__h">
+                          <Link to={`/analysis/${item.id}`}>{item.title}</Link>
+                        </h3>
+                        <Byline item={item} />
+                      </article>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {storyItems.length > 0 && (
+                <>
+                  <SectionHead title="Přehled" />
+                  <ul className="storylist" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {storyItems.map((item) => (
+                      <li className="story" key={item.id}>
+                        <div>
+                          <h3>
+                            <Link to={`/analysis/${item.id}`}>{item.title}</Link>
+                          </h3>
+                          <p className="story__meta">
+                            Sestaveno z {item.coverageCount} zdrojů · {formatDate(item.createdAt)}
+                          </p>
+                        </div>
+                        <div className="fig fig--thumb">
+                          <div className="fig__ph" />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            {import.meta.env.DEV && (
+              <aside className="layout__rail">
+                <EntbandMock />
+                <MinuteMock />
+              </aside>
+            )}
+          </div>
+        )}
+      </main>
+    </>
   )
 }
