@@ -10,6 +10,8 @@ import type {
   PatchCoveragesBody,
   SseEvent,
   RelatedEventItem,
+  ThreadSummaryItem,
+  ThreadMemberItem,
   Page,
 } from '@news-triangulator/shared'
 import { cursorQueryParam } from '../pagination'
@@ -26,6 +28,8 @@ export type {
   PatchCoveragesBody,
   SseEvent,
   RelatedEventItem,
+  ThreadSummaryItem,
+  ThreadMemberItem,
   Page,
 }
 

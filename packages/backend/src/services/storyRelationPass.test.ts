@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as llmClientModule from './llmClient.js'
+import { enqueueJob } from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 import {
   confirmStoryRelation,
   linkStoryRelations,
@@ -9,6 +11,7 @@ import {
 import { ExternalServiceError } from '../errors.js'
 
 vi.mock('./llmClient.js')
+vi.mock('../jobs/enqueue.js')
 
 const CURRENT = {
   anchorHeadline: 'Story A headline',
@@ -154,6 +157,42 @@ describe('linkStoryRelations', () => {
       reasoning: 'r2',
       status: 'PENDING_REVIEW',
     })
+    // thread.recompute (ticket 17): only for the FOLLOW_UP/PUBLISHED relation, never for the
+    // RELATED/PENDING_REVIEW one.
+    expect(enqueueJob).toHaveBeenCalledTimes(1)
+    expect(enqueueJob).toHaveBeenCalledWith(JobName.ThreadRecompute, { seedStoryId: 'story-current' })
+  })
+
+  it('does not enqueue thread.recompute for a LOW-confidence FOLLOW_UP (PENDING_REVIEW, not PUBLISHED)', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      related: true,
+      type: 'FOLLOW_UP',
+      confidenceTier: 'LOW',
+      reasoning: 'r',
+    })
+    const createStoryRelation = vi.fn().mockResolvedValue(undefined)
+
+    await linkStoryRelations('story-current', CURRENT_INPUT, [makeCandidate('c1')], TOTAL_STORIES, {
+      createStoryRelation,
+    })
+
+    expect(enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it('does not enqueue thread.recompute for a HIGH-confidence RELATED relation (PUBLISHED, but not FOLLOW_UP)', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      related: true,
+      type: 'RELATED',
+      confidenceTier: 'HIGH',
+      reasoning: 'r',
+    })
+    const createStoryRelation = vi.fn().mockResolvedValue(undefined)
+
+    await linkStoryRelations('story-current', CURRENT_INPUT, [makeCandidate('c1')], TOTAL_STORIES, {
+      createStoryRelation,
+    })
+
+    expect(enqueueJob).not.toHaveBeenCalled()
   })
 
   it('does not persist anything for a candidate the model judges unrelated', async () => {

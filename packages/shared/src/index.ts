@@ -236,6 +236,27 @@ export interface RelatedEventItem {
   coverageCount: number
 }
 
+/** One member of the Thread this Analysis's Story belongs to (ticket 17) — chronological order,
+ *  `isCurrent` marks which member is the Analysis actually being viewed. Deliberately carries no
+ *  role (`ORIGIN`/`DEVELOPMENT`/`REACTION`/`RESOLUTION`) — see ticket 17's Answer, Q2: a role
+ *  label risks reading as the tool asserting narrative closure/causation about a real event, the
+ *  same overclaim ADR 0012 already guards against elsewhere. */
+export interface ThreadMemberItem {
+  analysisId: string
+  title: string
+  isCurrent: boolean
+}
+
+/** The multi-stage arc (`Thread`) this Analysis's Story belongs to, if any — most Analyses never
+ *  accumulate a FOLLOW_UP chain, so this is absent far more often than present. A materialized,
+ *  periodically-recomputed view over `StoryRelation`'s `FOLLOW_UP` edges (ADR 0029, ticket 17),
+ *  not a live query — see `thread.recompute`. */
+export interface ThreadSummaryItem {
+  title: string
+  memberCount: number
+  members: ThreadMemberItem[]
+}
+
 export interface AnalysisDetail {
   id: string
   seedUrl: string
@@ -252,4 +273,6 @@ export interface AnalysisDetail {
   /** Other Events (Stories) this one has been linked to — see ticket 37. Empty, not undefined,
    *  when there are none, so callers never need an extra existence check. */
   relatedEvents: RelatedEventItem[]
+  /** The longer-running storyline this one is part of, if any — see ticket 17. */
+  thread?: ThreadSummaryItem
 }

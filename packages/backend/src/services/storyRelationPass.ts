@@ -15,6 +15,8 @@ import type { ExtractedEntity, ExtractedEntityRelation } from './entityTypes.js'
 import type { RawRelationCandidateStory } from '../repositories/storyRelation.js'
 import type { EntityForScoring, EntityRelationForScoring } from '../repositories/entity.js'
 import { runStageOrThrow } from './pipelineStage.js'
+import { enqueueJob } from '../jobs/enqueue.js'
+import { JobName } from '../jobs/jobDefinitions.js'
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/storyRelation.txt'), 'utf8')
 
@@ -125,14 +127,23 @@ export async function linkStoryRelations(
       try {
         const verdict = await confirmStoryRelation(current, candidateStory, log)
         if (!verdict.related) return
+        const status = verdict.confidenceTier === 'HIGH' ? 'PUBLISHED' : 'PENDING_REVIEW'
         await deps.createStoryRelation({
           fromStoryId: storyId,
           toStoryId: candidateStory.storyId,
           type: verdict.type,
           confidenceTier: verdict.confidenceTier,
           reasoning: verdict.reasoning,
-          status: verdict.confidenceTier === 'HIGH' ? 'PUBLISHED' : 'PENDING_REVIEW',
+          status,
         })
+        // thread.recompute (ticket 17, ADR 0028): enqueued right after a StoryRelation transitions
+        // to FOLLOW_UP/PUBLISHED — not atomic with the write above (see ticket 17's Answer on why
+        // this is a deliberate, narrower risk than tickets 14/15/16's own atomic enqueues; a missed
+        // enqueue here self-heals the moment any other edge in the same connected component is
+        // confirmed). Best-effort, degrading with the rest of this candidate's own try/catch.
+        if (verdict.type === 'FOLLOW_UP' && status === 'PUBLISHED') {
+          await enqueueJob(JobName.ThreadRecompute, { seedStoryId: storyId })
+        }
       } catch (err) {
         log?.warn(
           { storyId, candidateStoryId: candidateStory.storyId, err },

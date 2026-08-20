@@ -26,7 +26,11 @@ export interface JobPayload {
     coverageIds: string[]
   }
   [JobName.Narrative]: { analysisId: string }
-  [JobName.ThreadRecompute]: { threadId: string }
+  // `seedStoryId`, not a Thread id (ticket 13's original placeholder) — a Thread may not exist
+  // yet when the triggering FOLLOW_UP edge is confirmed; the job derives the whole connected
+  // component from this one Story and finds-or-creates the Thread itself (see ticket 17's
+  // Answer, docs/audit.md §8.6/§9.8).
+  [JobName.ThreadRecompute]: { seedStoryId: string }
 }
 
 // A repeated LLM failure is either a persistent outage (more retries won't help) or a genuine

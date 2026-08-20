@@ -146,10 +146,14 @@ describe('Entity repository against a real Postgres instance', () => {
   })
 
   it('countStories reflects the total number of Stories created', async () => {
+    // >= before+1, not ===: this integration DB is shared across every test file, run in
+    // parallel — another file creating a Story between the two reads below is expected, not a
+    // bug. The point of this assertion is only that countStories picks up a newly created Story
+    // at all.
     const before = await countStories()
 
     await createAnalysis({ seedUrl: 'https://example.cz/entity-e9', seedHeadline: 'x' })
 
-    expect(await countStories()).toBe(before + 1)
+    expect(await countStories()).toBeGreaterThanOrEqual(before + 1)
   })
 })

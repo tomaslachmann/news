@@ -12,6 +12,7 @@ import {
   type DimensionItem,
   type CoverageInfo,
   type RelatedEventItem,
+  type ThreadSummaryItem,
 } from '@/services/analyses'
 import { useAnalysisDetail } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
@@ -313,6 +314,35 @@ function RelatedEventsSection({ events }: { events: RelatedEventItem[] }) {
   )
 }
 
+/** ticket 17: a longer-running storyline this Article is part of — chronological, unlabeled (no
+ *  role shown, see ticket 17's Answer, Q2) list of every other linkable stage. The current
+ *  Article appears in the list too (not a link, so a reader always sees where "here" sits in the
+ *  arc), rather than being filtered out. */
+function ThreadSection({ thread }: { thread: ThreadSummaryItem | undefined }) {
+  if (!thread) return null
+
+  return (
+    <section className="mt-10">
+      <h2 className="font-serif text-lg font-semibold">Součást delší linie: {thread.title}</h2>
+      <ol className="mt-4 flex flex-col gap-3">
+        {thread.members.map((member) =>
+          member.isCurrent ? (
+            <li key={member.analysisId} className="rounded-lg border bg-muted p-4 font-medium">
+              {member.title} <span className="text-sm text-muted-foreground">(tento článek)</span>
+            </li>
+          ) : (
+            <li key={member.analysisId} className="rounded-lg border bg-card p-4">
+              <Link to={`/analysis/${member.analysisId}`} className="hover:underline">
+                {member.title}
+              </Link>
+            </li>
+          )
+        )}
+      </ol>
+    </section>
+  )
+}
+
 function ErrorState({ message }: { message: string }) {
   return (
     <PageContainer width="default">
@@ -515,6 +545,7 @@ export default function AnalysisPage() {
       <PageContainer width="default">
         <PageTitle size="sm">{analysis.title}</PageTitle>
         <ResultsTabs dimensions={analysis.synthesisResult} narrative={analysis.narrative} />
+        <ThreadSection thread={analysis.thread} />
         <RelatedEventsSection events={analysis.relatedEvents} />
       </PageContainer>
     )

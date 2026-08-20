@@ -31,11 +31,13 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
+import * as threadRepo from '../repositories/thread.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import { toCoverageInfo } from '../mappers/coverage.js'
 import { toAnalysisDetail, toAnalysisListItem, resolveDisplayTitle, STATUS_MAP } from '../mappers/analysis.js'
 import { toRelatedEvents } from '../mappers/storyRelation.js'
+import { toThreadSummary } from '../mappers/thread.js'
 
 /** Submits a seed URL. Ticket 27/ADR 0019: before creating a new Analysis, checks whether the
  *  seed already matches an open Story within the dedup window — the same embedding-match +
@@ -361,18 +363,24 @@ export async function getAnalysisDetail(analysisId: string): Promise<AnalysisDet
   // job (ticket 15), enqueued atomically when the Analysis reaches COMPLETE — this endpoint never
   // triggers an LLM call itself any more.
 
-  // AnalysisPage only ever renders relatedEvents for a COMPLETE Analysis (a Draft/PENDING/FAILED
-  // one never reaches that branch) — skip the extra StoryRelation/Story/Analysis join entirely
-  // for every other status rather than fetching data that can never be shown.
-  const relatedEvents =
-    analysis.status === 'COMPLETE'
-      ? toRelatedEvents(
-          analysis.storyId,
-          await storyRelationRepo.findPublishedRelationsForStory(analysis.storyId)
-        )
-      : []
+  // AnalysisPage only ever renders relatedEvents/thread for a COMPLETE Analysis (a
+  // Draft/PENDING/FAILED one never reaches that branch) — skip the extra joins entirely for
+  // every other status rather than fetching data that can never be shown.
+  let relatedEvents: AnalysisDetail['relatedEvents'] = []
+  let thread: AnalysisDetail['thread']
+  if (analysis.status === 'COMPLETE') {
+    relatedEvents = toRelatedEvents(
+      analysis.storyId,
+      await storyRelationRepo.findPublishedRelationsForStory(analysis.storyId)
+    )
+    const rawThread = await threadRepo.findThreadForStory(analysis.storyId)
+    // A Thread with fewer than 2 currently-linkable (COMPLETE) members has nothing for a reader
+    // to navigate to beyond this page itself — not worth showing (ticket 17's Answer, Q3).
+    const summary = rawThread ? toThreadSummary(analysis.id, rawThread) : undefined
+    thread = summary && summary.members.length >= 2 ? summary : undefined
+  }
 
-  return toAnalysisDetail(analysis, relatedEvents)
+  return toAnalysisDetail(analysis, relatedEvents, thread)
 }
 
 export async function listAnalyses(
