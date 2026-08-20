@@ -4,7 +4,7 @@
 
 This exists because the design system's `.byline` — described in `DESIGN-SYSTEM.md` as "nosný prvek celého produktu" — is built around a share-with-a-gauge, and nothing in the current data model produces one. See ADR 0030 for what the number is, what it is not, and why it is derived rather than asked for.
 
-**Blocked by:** None — can start immediately. Ticket 39 does *not* wait on this; it renders the byline without the gauge until this lands.
+**Blocked by:** None — can start immediately. (For the reverse direction: the design-system-port ticket does *not* wait on this one — it renders the byline without the gauge until this lands.)
 
 **Status:** ready-for-agent
 
