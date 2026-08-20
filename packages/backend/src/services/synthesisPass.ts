@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { FastifyBaseLogger } from 'fastify'
+import type { AgreementCategory } from '@news-triangulator/shared'
 import { callJsonModel } from './llmClient.js'
 import type { ExtractionResult } from './extractionPass.js'
 import {
@@ -29,11 +30,24 @@ const ContradictionItemSchema = z.object({
   attributions: z.array(AttributionSchema).length(2),
 })
 
+// ADR 0030 (ticket 38): the model's own story-level read of how much the sources overlap in
+// what they report -- one judgement for the whole Analysis, never per dimension item or claim.
+// Closed enum, rejected (never coerced) if the model returns anything else. The literal array
+// below must list the exact same values as shared's `AgreementCategory` -- the `satisfies` cast
+// makes that a compile error instead of a silent drift if one changes without the other.
+export const AgreementCategorySchema = z.enum([
+  'CONFIRMED',
+  'PARTIAL',
+  'DISPUTED',
+]) satisfies z.ZodType<AgreementCategory>
+export type { AgreementCategory }
+
 export const SynthesisResultSchema = z.object({
   agreement: z.array(DimensionItemSchema),
   contradiction: z.array(ContradictionItemSchema),
   uniqueReporting: z.array(DimensionItemSchema),
   framing: z.array(DimensionItemSchema),
+  agreementCategory: AgreementCategorySchema,
 })
 
 export type SynthesisResult = z.infer<typeof SynthesisResultSchema>
@@ -64,6 +78,10 @@ function dropFailingItems(result: SynthesisResult, sourceTextByUrl: Map<string, 
     contradiction: filterValidAttributedItems(result.contradiction, sourceTextByUrl),
     uniqueReporting: filterValidAttributedItems(result.uniqueReporting, sourceTextByUrl),
     framing: filterValidAttributedItems(result.framing, sourceTextByUrl),
+    // Not a quote-bearing field -- nothing here can fail verification, so it always passes
+    // through unchanged. Dropping items from `agreement` above does not retroactively make this
+    // judgement wrong; it's a story-level read, not derived from which items survive repair.
+    agreementCategory: result.agreementCategory,
   }
 }
 

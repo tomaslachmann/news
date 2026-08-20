@@ -39,6 +39,18 @@ enum StoryRelationConfidenceTier {
   LOW
 }
 
+/// Synthesis's own story-level read of how much the sources overlap in what they report --
+/// categorical for the same reason StoryRelationConfidenceTier is (ADR 0022): a raw float
+/// invites being read as credibility. See ADR 0030 (ticket 38). Matches synthesisPass.ts's
+/// AgreementCategorySchema and shared's AgreementCategory exactly -- kept in sync by hand, same
+/// convention as every other closed enum this schema mirrors from a Zod schema (see
+/// StoryRelationType/EntityType).
+enum SynthesisAgreementCategory {
+  CONFIRMED
+  PARTIAL
+  DISPUTED
+}
+
 enum StoryRelationStatus {
   PUBLISHED
   PENDING_REVIEW
@@ -358,6 +370,19 @@ model SynthesisResult {
   analysisId                  String    @unique
   analysis                    Analysis  @relation(fields: [analysisId], references: [id])
   dimensions                  Json
+  /// Source Overlap (ticket 38, ADR 0030): counted, never model-generated -- for each item in
+  /// `dimensions.agreement`, the number of distinct outlets among its attributions, meaned and
+  /// divided by the Analysis's source count, as a whole-number percentage. Null means "undefined
+  /// for this Analysis" (an empty `agreement` dimension has nothing to measure), never "not
+  /// computed yet" -- see computeSourceOverlapPercentage (services/sourceOverlap.ts). The four
+  /// rows that existed when this column was added were backfilled to null (not retroactively
+  /// computed) rather than left to block the migration -- see its own comment.
+  sourceOverlapPercentage     Int?
+  /// Source Overlap (ticket 38, ADR 0030): the model's own story-level read, returned alongside
+  /// the four dimensions in the same structured-output call (SynthesisResultSchema). The four
+  /// rows that existed when this column was added never had this judged by the model; they were
+  /// backfilled to PARTIAL as a neutral placeholder -- see the migration's own comment.
+  agreementCategory           SynthesisAgreementCategory
   narrative                   Json?
   /// Tool-authored, short Czech headline for the Article — generated once, eagerly, from only
   /// the Agreement dimension, in the same transaction that marks the Analysis COMPLETE (see

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as analysisRepo from '../repositories/analysis.js'
+import type { CompleteAnalysisWithSynthesisOptions } from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as synthesisRepo from '../repositories/synthesisResult.js'
 import * as extractionPassModule from './extractionPass.js'
@@ -25,6 +26,12 @@ vi.mock('../jobs/enqueue.js')
 vi.mock('../repositories/adminActionLog.js')
 
 const ACTOR_ID = 'admin1'
+
+// Typed so the object literals below don't assign `expect.any(Function)`'s `any` into a
+// statically-typed `onComplete` property (@typescript-eslint/no-unsafe-assignment).
+const anyOnComplete = expect.any(Function) as unknown as NonNullable<
+  CompleteAnalysisWithSynthesisOptions['onComplete']
+>
 
 const ANALYSIS = {
   id: 'a1',
@@ -87,6 +94,7 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'CONFIRMED' as const,
     }
     vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue(synthesis)
     vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue('Vláda schválila rozpočet')
@@ -105,12 +113,12 @@ describe('runAnalysisStream', () => {
       'synthesis-complete',
     ])
     expect(headlinePassModule.runHeadlinePass).toHaveBeenCalledWith(synthesis.agreement, undefined)
-    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith(
-      'a1',
-      synthesis,
-      'Vláda schválila rozpočet',
-      expect.any(Function)
-    )
+    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith('a1', synthesis, {
+      headline: 'Vláda schválila rozpočet',
+      sourceOverlapPercentage: 100,
+      agreementCategory: 'CONFIRMED',
+      onComplete: anyOnComplete,
+    })
     expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
       actorId: ACTOR_ID,
       action: 'analysis.synthesis_triggered',
@@ -135,14 +143,13 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'CONFIRMED',
     })
     vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue('Headline')
     const tx = {} as never
-    vi.mocked(analysisRepo.completeAnalysisWithSynthesis).mockImplementation(
-      async (_id, _dims, _headline, onComplete) => {
-        await onComplete?.(tx)
-      }
-    )
+    vi.mocked(analysisRepo.completeAnalysisWithSynthesis).mockImplementation(async (_id, _dims, options) => {
+      await options.onComplete?.(tx)
+    })
 
     await runAnalysisStream('a1', {
       onReady: vi.fn(),
@@ -170,18 +177,19 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'DISPUTED',
     })
     vi.mocked(headlinePassModule.runHeadlinePass).mockResolvedValue(null)
 
     const send = vi.fn()
     await runAnalysisStream('a1', { onReady: vi.fn(), send, onClientClose: () => {}, actorId: ACTOR_ID })
 
-    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith(
-      'a1',
-      expect.anything(),
-      null,
-      expect.any(Function)
-    )
+    expect(analysisRepo.completeAnalysisWithSynthesis).toHaveBeenCalledWith('a1', expect.anything(), {
+      headline: null,
+      sourceOverlapPercentage: null,
+      agreementCategory: 'DISPUTED',
+      onComplete: anyOnComplete,
+    })
   })
 
   it('does not complete the Analysis when headline generation fails, same as any other Synthesis-stage failure', async () => {
@@ -200,6 +208,7 @@ describe('runAnalysisStream', () => {
       contradiction: [],
       uniqueReporting: [],
       framing: [],
+      agreementCategory: 'CONFIRMED',
     })
     vi.mocked(headlinePassModule.runHeadlinePass).mockRejectedValue(new Error('headline LLM down'))
     vi.mocked(analysisRepo.updateAnalysisStatus).mockResolvedValue(undefined)

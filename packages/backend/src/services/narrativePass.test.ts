@@ -10,6 +10,7 @@ const EMPTY_DIMENSIONS: SynthesisResult = {
   contradiction: [],
   uniqueReporting: [],
   framing: [],
+  agreementCategory: 'DISPUTED',
 }
 
 const SOURCES = [

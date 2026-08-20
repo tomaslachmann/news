@@ -44,8 +44,15 @@ export function toAnalysisDetail(
     createdAt: analysis.createdAt.toISOString(),
     status: STATUS_MAP[analysis.status],
     coverages: analysis.coverages.map(toCoverageInfo),
+    // agreementCategory lives on its own SynthesisResult column (ticket 38 / ADR 0030), not only
+    // inside `dimensions` — the 4 Analyses backfilled by that migration have a `dimensions` blob
+    // that predates the field entirely, so it must be merged in from the column rather than read
+    // off the JSON cast alone.
     synthesisResult: analysis.synthesisResult
-      ? (analysis.synthesisResult.dimensions as unknown as AnalysisDimensions)
+      ? {
+          ...(analysis.synthesisResult.dimensions as unknown as AnalysisDimensions),
+          agreementCategory: analysis.synthesisResult.agreementCategory,
+        }
       : undefined,
     narrative: analysis.synthesisResult?.narrative
       ? (analysis.synthesisResult.narrative as unknown as DimensionItem[])

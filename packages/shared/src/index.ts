@@ -45,11 +45,18 @@ export interface ContradictionItem {
   attributions: Attribution[]
 }
 
+/** Ticket 38 / ADR 0030 — the model's own story-level read of how much the sources overlap in
+ *  what they report. Categorical, for the same reason StoryRelationTypeLabel-adjacent confidence
+ *  is (ADR 0022): a raw float invites being read as credibility. Distinct from, and not derived
+ *  from, the counted `sourceOverlapPercentage` a completed Analysis also carries. */
+export type AgreementCategory = 'CONFIRMED' | 'PARTIAL' | 'DISPUTED'
+
 export interface AnalysisDimensions {
   agreement: DimensionItem[]
   contradiction: ContradictionItem[]
   uniqueReporting: DimensionItem[]
   framing: DimensionItem[]
+  agreementCategory: AgreementCategory
 }
 
 export type SseEvent =
