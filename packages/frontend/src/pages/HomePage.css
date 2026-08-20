@@ -1,10 +1,11 @@
 /* ticket 39 — 1:1 port of e.html's home page: canonical ds/components.css class names where a
    canonical equivalent exists (.lead, .card/.cards, .story/.storylist, .minute, .daystats,
-   .byline, .gauge, .chip, .ents/.erow, .pull), plus a few page-only classes e.html itself uses
-   with no canonical equivalent at all (.qbox/.q, .legend — confirmed absent from
-   ds/components.css, ported from e.css directly). Content is e.html's own literal sample data
-   (shared/data.js + data2.js), not real API data — this is a visual/component port; wiring real
-   data is separate, later work per the user's explicit direction. */
+   .ents/.erow, .pull), plus a few page-only classes e.html itself uses with no canonical
+   equivalent at all (.qbox/.q, .legend — confirmed absent from ds/components.css, ported from
+   e.css directly). Content is e.html's own literal sample data (shared/data.js + data2.js), not
+   real API data — this is a visual/component port; wiring real data is separate, later work per
+   the user's explicit direction. .byline/.chip/.gauge/.kicker/.hl/.layout moved to the shared
+   ds/components.css once AnalysisPage needed them too — see that file's own header comment. */
 
 .daystats {
   border-bottom: var(--bw-hair) solid var(--line-2);
@@ -46,32 +47,6 @@
   color: var(--accent);
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--rail);
-  gap: 0 var(--sp-6);
-  padding-block: var(--sp-5) var(--sp-8);
-}
-.layout__rail {
-  border-left: var(--bw-hair) solid var(--line-2);
-  padding-left: var(--sp-5);
-}
-.layout__rail > section {
-  margin-bottom: var(--sp-6);
-}
-@media (max-width: 62rem) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .layout__rail {
-    border-left: 0;
-    padding-left: 0;
-    border-top: var(--bw-hair) solid var(--line-strong);
-    padding-top: var(--sp-5);
-    margin-top: var(--sp-4);
-  }
-}
-
 /* ADR 0031: no image field exists in the data model (ADR 0004 keeps article content unstored),
    so .fig renders as an aspect-ratio placeholder box rather than an <img> — an empty area is
    more honest than hotlinking a source's own image or showing a broken-image icon. e.html's own
@@ -101,85 +76,6 @@
 .fig figcaption > :last-child {
   margin-left: auto;
   white-space: nowrap;
-}
-
-/* ═══ byline + gauge + chip (ds/components.css §1/§3) ══════════════════════ */
-
-.byline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem 0.6rem;
-  margin: var(--sp-3) 0;
-  font-family: var(--font-sans);
-  font-optical-sizing: none;
-  font-size: var(--text-meta);
-  color: var(--ink-3);
-}
-.byline b {
-  color: var(--ink);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.byline__who {
-  color: var(--ink-2);
-}
-.byline__time {
-  color: var(--accent);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.byline__sep {
-  color: var(--line);
-}
-.byline__grp {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  white-space: nowrap;
-}
-
-.chip {
-  display: inline-block;
-  font-family: var(--font-sans);
-  font-optical-sizing: none;
-  font-size: var(--text-micro);
-  letter-spacing: 0.05em;
-  border: var(--bw-hair) solid var(--line);
-  padding: 0.12rem 0.4rem;
-  color: var(--ink-2);
-}
-.chip--ok {
-  border-color: color-mix(in oklab, var(--ok) 50%, var(--line));
-  color: var(--ok);
-}
-.chip--bad {
-  border-color: color-mix(in oklab, var(--bad) 45%, var(--line));
-  color: var(--bad);
-  background: var(--accent-soft);
-}
-
-.gauge {
-  display: inline-flex;
-  gap: 2px;
-  align-items: center;
-  vertical-align: middle;
-}
-.gauge i {
-  display: block;
-  inline-size: 5px;
-  block-size: 10px;
-  background: var(--line-2);
-}
-.gauge i.is-on {
-  background: color-mix(in oklab, var(--ink) 80%, transparent);
-}
-.gauge i.is-on.is-bad {
-  background: var(--bad);
-}
-.gauge--lg i {
-  inline-size: 6px;
-  block-size: 13px;
 }
 
 /* ═══ lead / cards / storylist (ds/components.css §5) ══════════════════════ */
@@ -543,30 +439,6 @@
       opacity: 0.25;
     }
   }
-}
-
-/* Hover-highlight on headline/entity/feed-item links — e.css's .hl, ported directly. */
-.hl {
-  transition: color var(--dur-fast) var(--ease);
-}
-a:hover .hl {
-  color: var(--accent);
-}
-
-/* Topic/eyebrow label above a headline (e.g. "Ekonomika · analýza 9 zdrojů") — e.css's .kicker,
-   a plain colored uppercase label, not a bordered badge. Was wrongly using .chip (a real bordered
-   badge, correctly still used for the rozpor/primární zdroj byline badges) — corrected. */
-.kicker {
-  font-family: var(--font-sans);
-  font-size: var(--text-micro);
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--accent);
-  display: inline-block;
-}
-.kicker--ink {
-  color: var(--ink-3);
 }
 
 .mock-badge {

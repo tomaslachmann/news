@@ -16,6 +16,7 @@ import './ds/tokens.css'
 import './ds/fonts.css'
 import './ds/base.css'
 import './ds/controls.css'
+import './ds/components.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {
