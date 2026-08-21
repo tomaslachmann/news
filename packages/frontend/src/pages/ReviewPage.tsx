@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
 import { formatDate } from '@/lib/formatDate'
+import { analysisPath } from '@/lib/analysisRoutes'
 import './ReviewPage.css'
 
 type PageMode = 'select' | 'confirming' | 'results'
@@ -62,7 +63,7 @@ export default function ReviewPage() {
         await patchCoverages(id!, { confirmedIds: allIds, manualTexts: pendingManual })
       }
     },
-    onSuccess: () => navigate(`/analysis/${id}`),
+    onSuccess: () => navigate(analysisPath(id!)),
   })
 
   const addCustomUrl = () => {

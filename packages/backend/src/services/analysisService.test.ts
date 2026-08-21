@@ -797,7 +797,42 @@ describe('getAnalysisDetail', () => {
   it('throws NotFoundError when the Analysis does not exist', async () => {
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue(null)
 
-    await expect(getAnalysisDetail('missing')).rejects.toThrow(NotFoundError)
+    await expect(getAnalysisDetail('missing', true)).rejects.toThrow(NotFoundError)
+  })
+
+  it.each(['DRAFT', 'PENDING', 'FAILED'] as const)(
+    'throws NotFoundError for a non-Admin caller when the Analysis is %s, never leaking its in-progress internals (ticket 52)',
+    async (status) => {
+      vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+        id: 'a1',
+        storyId: 's1',
+        seedUrl: 'https://example.cz/x',
+        seedHeadline: 'Headline',
+        status,
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        coverages: [],
+        synthesisResult: null,
+      })
+
+      await expect(getAnalysisDetail('a1', false)).rejects.toThrow(NotFoundError)
+    }
+  )
+
+  it('returns the Analysis for a non-Admin caller once it is COMPLETE (ticket 52)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+
+    const result = await getAnalysisDetail('a1', false)
+
+    expect(result.status).toBe('complete')
   })
 
   it('maps the Analysis, its coverages, and synthesis result to AnalysisDetail', async () => {
@@ -812,7 +847,7 @@ describe('getAnalysisDetail', () => {
       synthesisResult: null,
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.status).toBe('complete')
     expect(result.coverages).toEqual([])
@@ -848,7 +883,7 @@ describe('getAnalysisDetail', () => {
       },
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.sourceOverlap).toEqual({ percentage: 70, sourceCount: 1, tier: 'mid' })
   })
@@ -885,7 +920,7 @@ describe('getAnalysisDetail', () => {
       },
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.coverages).toHaveLength(4)
     expect(result.sourceOverlap?.sourceCount).toBe(1)
@@ -913,7 +948,7 @@ describe('getAnalysisDetail', () => {
       },
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.sourceOverlap).toBeUndefined()
   })
@@ -947,7 +982,7 @@ describe('getAnalysisDetail', () => {
       },
     ])
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(storyRelationRepo.findPublishedRelationsForStory).toHaveBeenCalledWith('s1')
     expect(result.relatedEvents).toEqual([
@@ -981,7 +1016,7 @@ describe('getAnalysisDetail', () => {
       ],
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(threadRepo.findThreadForStory).toHaveBeenCalledWith('s1')
     expect(result.thread).toEqual({
@@ -1014,7 +1049,7 @@ describe('getAnalysisDetail', () => {
       ],
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.thread).toBeUndefined()
   })
@@ -1031,7 +1066,7 @@ describe('getAnalysisDetail', () => {
       synthesisResult: null,
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(threadRepo.findThreadForStory).not.toHaveBeenCalled()
     expect(result.thread).toBeUndefined()
@@ -1067,7 +1102,7 @@ describe('getAnalysisDetail', () => {
       },
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.narrative).toEqual(cachedDocument)
   })
@@ -1107,7 +1142,7 @@ describe('getAnalysisDetail', () => {
       },
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.leadImage).toEqual({
       imageUrl: 'https://upload.wikimedia.org/thumb/Prague_Castle.jpg',
@@ -1139,7 +1174,7 @@ describe('getAnalysisDetail', () => {
       },
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.leadImage).toBeUndefined()
   })
@@ -1166,7 +1201,7 @@ describe('getAnalysisDetail', () => {
       },
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(result.narrative).toBeUndefined()
   })
@@ -1183,7 +1218,7 @@ describe('getAnalysisDetail', () => {
       synthesisResult: null,
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(storyRelationRepo.findPublishedRelationsForStory).not.toHaveBeenCalled()
     expect(result.relatedEvents).toEqual([])
@@ -1204,7 +1239,7 @@ describe('getAnalysisDetail', () => {
       { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON', imageUrl: null },
     ])
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(entityRepo.findEntityMentionsForStory).toHaveBeenCalledWith('s1')
     // toEntityMentionItem (mappers/analysis.ts) drops imageUrl — the "Entity ve zprávě" rail never
@@ -1226,7 +1261,7 @@ describe('getAnalysisDetail', () => {
       synthesisResult: null,
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(entityRepo.findEntityMentionsForStory).not.toHaveBeenCalled()
     expect(result.entities).toEqual([])
@@ -1252,7 +1287,7 @@ describe('getAnalysisDetail', () => {
       },
     ])
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(entityRepo.findEntityRelationsForStory).toHaveBeenCalledWith('s1')
     expect(result.entityRelations).toEqual([
@@ -1277,7 +1312,7 @@ describe('getAnalysisDetail', () => {
       synthesisResult: null,
     })
 
-    const result = await getAnalysisDetail('a1')
+    const result = await getAnalysisDetail('a1', true)
 
     expect(entityRepo.findEntityRelationsForStory).not.toHaveBeenCalled()
     expect(result.entityRelations).toEqual([])
@@ -1304,7 +1339,7 @@ describe('getAnalysisDetail', () => {
         narrativeImage: null,
       },
     })
-    expect((await getAnalysisDetail('a1')).title).toBe('Generated headline')
+    expect((await getAnalysisDetail('a1', true)).title).toBe('Generated headline')
 
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValueOnce({
       id: 'a2',
@@ -1316,7 +1351,7 @@ describe('getAnalysisDetail', () => {
       coverages: [],
       synthesisResult: null,
     })
-    expect((await getAnalysisDetail('a2')).title).toBe('Working title')
+    expect((await getAnalysisDetail('a2', true)).title).toBe('Working title')
   })
 })
 

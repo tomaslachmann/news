@@ -13,6 +13,7 @@ import {
 } from '@/services/ingestion/hooks'
 import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
+import { analysisPath } from '@/lib/analysisRoutes'
 import { LoadMoreButton } from '@/components/LoadMoreButton'
 import './IngestionReviewPage.css'
 
@@ -169,7 +170,7 @@ function AdditionItem({
         )}
         <span>
           k článku{' '}
-          <Link to={`/analysis/${addition.analysisId}`} className="hl">
+          <Link to={analysisPath(addition.analysisId)} className="hl">
             {addition.analysisSeedHeadline}
           </Link>
         </span>
@@ -228,7 +229,7 @@ function PendingAdditionsSection() {
               isRejecting={rejectMutation.isPending}
               onApprove={() =>
                 approveMutation.mutate(addition.id, {
-                  onSuccess: () => void navigate(`/analysis/${addition.analysisId}`),
+                  onSuccess: () => void navigate(analysisPath(addition.analysisId)),
                 })
               }
               onReject={() => rejectMutation.mutate(addition.id)}

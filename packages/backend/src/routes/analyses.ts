@@ -130,9 +130,12 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
     return reply.code(200).send(response)
   })
 
-  // GET /api/analyses/:id — return analysis with its coverages
+  // GET /api/analyses/:id — return analysis with its coverages. Non-Admin (including
+  // unauthenticated) callers only ever see a COMPLETE Analysis — see getAnalysisDetail's own
+  // docstring (ticket 52).
   fastify.get<{ Params: { id: string } }>('/api/analyses/:id', async (request, reply) => {
-    const response = await analysisService.getAnalysisDetail(request.params.id)
+    const isAdmin = verifyAuthCookie(request)?.role === 'ADMIN'
+    const response = await analysisService.getAnalysisDetail(request.params.id, isAdmin)
     return reply.code(200).send(response)
   })
 }

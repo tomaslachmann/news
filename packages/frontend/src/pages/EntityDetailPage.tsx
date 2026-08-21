@@ -4,6 +4,7 @@ import { useEntityDetail } from '@/services/entities/hooks'
 import { LoadMoreButton } from '@/components/LoadMoreButton'
 import { formatDate } from '@/lib/formatDate'
 import { ENTITY_TYPE_LABELS, ENTITY_RELATION_TYPE_LABELS } from '@/lib/entityTypeLabels'
+import { articlePath } from '@/lib/analysisRoutes'
 import './EntityDetailPage.css'
 
 export default function EntityDetailPage() {
@@ -75,9 +76,13 @@ export default function EntityDetailPage() {
           <p className="note">Tuto entitu zatím žádná zpráva nezmiňuje.</p>
         ) : (
           <>
+            {/* Both links below always point at /article/:id (ticket 52), unconditionally —
+                findEventsForEntity/findRelationsForEntity already only ever surface a COMPLETE
+                Analysis (ADR 0035), so there's no in-progress case to branch on here the way
+                HistoryPage's ArchiveRow has to. */}
             <div className="evlist">
               {events.map((e) => (
-                <Link className="evrow" to={`/analysis/${e.analysisId}`} key={e.analysisId}>
+                <Link className="evrow" to={articlePath(e.analysisId)} key={e.analysisId}>
                   <span className="evrow__t hl">{e.title}</span>
                   <span className="evrow__d">{formatDate(e.createdAt)}</span>
                 </Link>
@@ -114,7 +119,7 @@ export default function EntityDetailPage() {
                     {r.otherEntity.canonicalName}
                   </Link>
                   <span className="erel__by">
-                    tvrdí <Link to={`/analysis/${r.assertedBy.analysisId}`}>{r.assertedBy.title}</Link>
+                    tvrdí <Link to={articlePath(r.assertedBy.analysisId)}>{r.assertedBy.title}</Link>
                   </span>
                 </span>
               </li>

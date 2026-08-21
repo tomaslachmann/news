@@ -1,27 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Gauge } from '@/components/Gauge'
-import { NarrativeArticle } from '@/components/NarrativeArticle'
-import {
-  openAnalysisStream,
-  MIN_SOURCES_FOR_GAUGE,
-  type AnalysisDetail,
-  type Attribution,
-  type AnalysisDimensions,
-  type DimensionItem,
-  type CoverageInfo,
-  type RelatedEventItem,
-  type ThreadSummaryItem,
-  type EntityMentionItem,
-} from '@/services/analyses'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { SumBox, CompareList } from '@/components/AnalysisDimensionSections'
+import { openAnalysisStream, type AnalysisDimensions, type CoverageInfo } from '@/services/analyses'
 import { useAnalysisDetail } from '@/services/analyses/hooks'
-import { useAuth } from '@/context/AuthContext'
-import { formatDate } from '@/lib/formatDate'
-import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
-import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
-import { WordingDemoSection, ValueVariantsDemoSection } from './AnalysisPage.devDemos'
+import { articlePath } from '@/lib/analysisRoutes'
 import './AnalysisPage.css'
 
 type ExtractionState =
@@ -53,256 +37,10 @@ function ExtractionBadge({ state }: { state: ExtractionState }) {
   return <span className="source-status is-error">{state.error}</span>
 }
 
-function OutletBadge({ attribution }: { attribution: Attribution }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <a href={attribution.articleUrl} target="_blank" rel="noopener noreferrer" className="chip">
-          {attribution.outlet}
-        </a>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p className="max-w-xs">{attribution.czechQuote}</p>
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-const MAX_REFERENCE_EXCERPT_LENGTH = 100
-
-function truncateExcerpt(text: string): string {
-  if (text.length <= MAX_REFERENCE_EXCERPT_LENGTH) return text
-  return text.slice(0, MAX_REFERENCE_EXCERPT_LENGTH).trimEnd() + '…'
-}
-
-/** Deviation on top of the reference (ticket's own planned design change): widened from 3
- *  columns to 4 to carry all four Analysis Dimensions — +agreement, ×contradiction,
- *  ?uniqueReporting, ~framing (the fourth takes --mid, no new accent colour introduced). The
- *  reference's own third column ("open questions") has no data behind it; its "?"/ink-3 styling
- *  is reused for uniqueReporting instead rather than dropped outright. All four columns render
- *  unconditionally, even empty — the reader should see nothing was forgotten, not just absence. */
-function SumBox({ dimensions }: { dimensions: AnalysisDimensions }) {
-  const total =
-    dimensions.agreement.length +
-    dimensions.contradiction.length +
-    dimensions.uniqueReporting.length +
-    dimensions.framing.length
-  if (total === 0) return null
-
-  const col = (mod: string, title: string, items: DimensionItem[]) => (
-    <div className={`sumbox__col sumbox--${mod}`}>
-      <p className="sumbox__t">
-        {title}
-        <span className="sumbox__n">{items.length}</span>
-      </p>
-      <ul className="sumbox__l">
-        {items.map((item, i) => (
-          <li key={i}>
-            <span>{truncateExcerpt(item.prose)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-
-  return (
-    <div className="sumbox">
-      {col('agree', 'Zdroje se shodují', dimensions.agreement)}
-      {col('differ', 'Zdroje se rozcházejí', dimensions.contradiction)}
-      {col('open', 'Unikátní zprávy', dimensions.uniqueReporting)}
-      {col('framing', 'Framing', dimensions.framing)}
-    </div>
-  )
-}
-
-/** One row per dimension item — .compare/.cmp, the reference's "which sentence has how much
- *  support" list. markConflict adds the red left-border rozpor treatment (:has(.chip--bad) in
- *  AnalysisPage.css), used only for the contradiction dimension. Outlet attributions render as
- *  plain .chip badges in .cmp__v in place of the reference's .vals structured value list — our
- *  data is prose + attributions, never discrete per-source values. */
-function CompareList({
-  items,
-  coverageCount,
-  markConflict,
-}: {
-  items: DimensionItem[]
-  coverageCount: number
-  markConflict?: boolean
-}) {
-  if (items.length === 0) {
-    return <p className="note">V této kategorii nic není.</p>
-  }
-  return (
-    <ol className="compare">
-      {items.map((item, i) => (
-        <li className="cmp" key={i}>
-          <p className="cmp__t">{item.prose}</p>
-          <div className="cmp__m">
-            <span>
-              <b>{item.attributions.length}</b> z {coverageCount} zdrojů
-            </span>
-            {markConflict && <span className="chip chip--bad">rozpor</span>}
-          </div>
-          <div className="cmp__v">
-            {item.attributions.map((a, j) => (
-              <OutletBadge key={j} attribution={a} />
-            ))}
-          </div>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-/** Ticket 38 / ADR 0030 supplies `analysis.sourceOverlap`. Withheld below
- *  MIN_SOURCES_FOR_GAUGE sources — a ten-segment bar over that few sources implies precision the
- *  data doesn't have — in which case the byline stays source-count + framing-signal-count only,
- *  same as before ticket 38 shipped. Gated on `sourceOverlap.sourceCount`, not
- *  `analysis.coverages.length`: the percentage was computed from successfully-extracted sources
- *  only, which can be fewer than every attached Coverage (one whose scrape succeeded but
- *  extraction failed schema validation still counts toward `coverages.length`). */
-function AnalysisByline({
-  analysis,
-  dimensions,
-}: {
-  analysis: AnalysisDetail
-  dimensions: AnalysisDimensions
-}) {
-  const gaugeInfo =
-    analysis.sourceOverlap && analysis.sourceOverlap.sourceCount >= MIN_SOURCES_FOR_GAUGE
-      ? analysis.sourceOverlap
-      : undefined
-  return (
-    <div className="byline">
-      <span className="byline__grp">
-        <b>{analysis.coverages.length}</b> zdrojů
-      </span>
-      {gaugeInfo && (
-        <>
-          <span className="byline__sep">·</span>
-          <span className="byline__grp">
-            překryv zdrojů <b>{gaugeInfo.percentage} %</b>
-            <Gauge
-              pct={gaugeInfo.percentage}
-              bad={gaugeInfo.tier === 'bad'}
-              ariaLabel={`Překryv zdrojů ${gaugeInfo.percentage} procent`}
-            />
-          </span>
-        </>
-      )}
-      {dimensions.framing.length > 0 && (
-        <>
-          <span className="byline__sep">·</span>
-          <span className="byline__grp">{dimensions.framing.length} framingových signálů</span>
-        </>
-      )}
-    </div>
-  )
-}
-
-function SourceList({ coverages }: { coverages: CoverageInfo[] }) {
-  if (coverages.length === 0) return null
-  return (
-    <ol className="srclist">
-      {coverages.map((c) => (
-        <li className="srcrow" key={c.id}>
-          <span className="srcrow__w">
-            {c.outlet}
-            {c.status === 'extraction-failed' && <span className="chip chip--bad">selhalo</span>}
-            {c.status === 'pending' && <span className="chip">čeká</span>}
-          </span>
-          {c.publishedAt && <span className="srcrow__t">{formatDate(c.publishedAt)}</span>}
-          <span className="srcrow__b">
-            <a href={c.articleUrl} target="_blank" rel="noopener noreferrer">
-              → Číst originál
-            </a>
-          </span>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-/** ticket 17: a longer-running storyline this Article is part of. The reference's own
- *  .threadband is a single teaser band linking out to a thread.html detail page we don't have
- *  (no /thread route exists yet) — used here instead as the row style for every real member of
- *  the thread, each linking to its own /analysis/:id, since that's the real destination we do
- *  have. The current Article appears in the list too, non-linked, so a reader always sees where
- *  "here" sits in the arc. */
-function ThreadSection({ thread }: { thread: ThreadSummaryItem | undefined }) {
-  if (!thread) return null
-  return (
-    <section>
-      <div className="sechead">
-        <h2 className="sechead__t">Součást vlákna: {thread.title}</h2>
-        <span className="sechead__rule" />
-      </div>
-      {thread.members.map((member) =>
-        member.isCurrent ? (
-          <div className="threadband" key={member.analysisId}>
-            <span className="threadband__h">{member.title}</span>
-            <span className="threadband__m">tento článek</span>
-          </div>
-        ) : (
-          <Link className="threadband" to={`/analysis/${member.analysisId}`} key={member.analysisId}>
-            <span className="threadband__h hl">{member.title}</span>
-          </Link>
-        )
-      )}
-    </section>
-  )
-}
-
-function RelatedEventsSection({ events }: { events: RelatedEventItem[] }) {
-  if (events.length === 0) return null
-  return (
-    <section>
-      <div className="sechead">
-        <h2 className="sechead__t">Další zprávy</h2>
-        <span className="sechead__rule" />
-      </div>
-      <div className="cards">
-        {events.map((event) => (
-          <article className="card" key={event.analysisId}>
-            <span className="kicker kicker--ink">{RELATION_TYPE_LABELS[event.type]}</span>
-            <Link to={`/analysis/${event.analysisId}`}>
-              <h3 className="card__h hl">{event.title}</h3>
-            </Link>
-            <p className="card__p">zdrojů: {event.coverageCount}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/** "Entity ve zprávě" rail (ticket 43) — every entity this Article's Story mentions, most
- *  salient first (backend-ordered), each linking to its own `/entity/:key` page so a reader can
- *  navigate into the entity graph without a separate search. */
-function EntityMentionsSection({ entities }: { entities: EntityMentionItem[] }) {
-  if (entities.length === 0) return null
-  return (
-    <section>
-      <div className="railhead">
-        <h2 className="railhead__t">Entity ve zprávě</h2>
-        <span className="railhead__x">{entities.length}</span>
-      </div>
-      <div className="ents">
-        {entities.map((e) => (
-          <Link className="erow" to={`/entity/${e.key}`} key={e.key}>
-            <span className="erow__dot">{ENTITY_TYPE_LABELS[e.type][0]}</span>
-            <span>
-              <span className="erow__n hl">{e.canonicalName}</span>
-              <span className="erow__k">{ENTITY_TYPE_LABELS[e.type]}</span>
-            </span>
-          </Link>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function ErrorState({ message }: { message: string }) {
+/** Exported for `ArticlePage` too (ticket 52) — a genuine fetch/network failure is a different
+ *  situation from "this Analysis isn't published yet," and deserves this retryable treatment
+ *  rather than being folded into `NotFoundPage`'s "doesn't exist" framing. */
+export function ErrorState({ message }: { message: string }) {
   return (
     <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
       <p className="note" style={{ color: 'var(--bad)', fontSize: 'var(--text-body)' }}>
@@ -583,144 +321,13 @@ function StreamingAnalysis({ id, title }: { id: string; title: string }) {
   )
 }
 
-/** The real, complete Article page — .arthead/.byline/.sumbox/.prose/.claim/.compare/.threadband/
- *  .artfoot/.cards, flowing continuously (no tabs, see AnalysisPage.css's file header). */
-function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
-  const dimensions = analysis.synthesisResult as AnalysisDimensions
-  const coverageCount = analysis.coverages.length
-  const totalItems =
-    dimensions.agreement.length +
-    dimensions.contradiction.length +
-    dimensions.uniqueReporting.length +
-    dimensions.framing.length
-  const topContradiction = [...dimensions.contradiction].sort(
-    (a, b) => b.attributions.length - a.attributions.length
-  )[0]
-
-  return (
-    <>
-      <div className="u-wrap">
-        <nav className="crumbs" aria-label="Cesta">
-          <Link to="/">Domů</Link>
-          {analysis.thread && (
-            <>
-              <span className="crumbs__sep">/</span>
-              <span>{analysis.thread.title}</span>
-            </>
-          )}
-          <span className="crumbs__sep">/</span>
-          <span aria-current="page">{analysis.title}</span>
-        </nav>
-      </div>
-
-      <div className="u-wrap layout">
-        <article className="artbody">
-          <header className="arthead">
-            <h1 className="arthead__h">{analysis.title}</h1>
-            <AnalysisByline analysis={analysis} dimensions={dimensions} />
-          </header>
-
-          {totalItems > 0 && <SumBox dimensions={dimensions} />}
-
-          {analysis.narrative && analysis.narrative.blocks.length > 0 && (
-            <NarrativeArticle document={analysis.narrative} leadImage={analysis.leadImage} />
-          )}
-
-          {topContradiction && (
-            <div className="claim claim--bad">
-              <span className="claim__l">Tvrzení v rozporu</span>
-              <p className="claim__t">{topContradiction.prose}</p>
-              <p className="claim__d">
-                {topContradiction.attributions.length} z {coverageCount} zdrojů:{' '}
-                {topContradiction.attributions.map((a) => a.outlet).join(', ')}
-              </p>
-            </div>
-          )}
-
-          {dimensions.agreement.length > 0 && (
-            <section>
-              <div className="sechead">
-                <h2 className="sechead__t">Shoda</h2>
-                <span className="sechead__rule" />
-              </div>
-              <CompareList items={dimensions.agreement} coverageCount={coverageCount} />
-            </section>
-          )}
-
-          <section aria-labelledby="cmpT">
-            <div className="sechead">
-              <h2 className="sechead__t" id="cmpT">
-                Srovnání tvrzení
-              </h2>
-              <span className="sechead__rule" />
-            </div>
-            <CompareList items={dimensions.contradiction} coverageCount={coverageCount} markConflict />
-          </section>
-
-          {import.meta.env.DEV && <ValueVariantsDemoSection />}
-          {import.meta.env.DEV && <WordingDemoSection />}
-
-          {dimensions.uniqueReporting.length > 0 && (
-            <section>
-              <div className="sechead">
-                <h2 className="sechead__t">Unikátní zprávy</h2>
-                <span className="sechead__rule" />
-              </div>
-              <CompareList items={dimensions.uniqueReporting} coverageCount={coverageCount} />
-            </section>
-          )}
-
-          {dimensions.framing.length > 0 && (
-            <section>
-              <div className="sechead">
-                <h2 className="sechead__t">Framing</h2>
-                <span className="sechead__rule" />
-              </div>
-              <CompareList items={dimensions.framing} coverageCount={coverageCount} />
-            </section>
-          )}
-
-          <ThreadSection thread={analysis.thread} />
-
-          <div className="artfoot">
-            <p className="artfoot__n">Sestaveno z {coverageCount} zdrojů</p>
-            <p className="artfoot__r">{formatDate(analysis.createdAt, 'long')}</p>
-          </div>
-
-          <RelatedEventsSection events={analysis.relatedEvents} />
-        </article>
-
-        <aside className="layout__rail">
-          <section aria-labelledby="srcT">
-            <div className="railhead">
-              <h2 className="railhead__t" id="srcT">
-                Zdroje této zprávy
-              </h2>
-              <span className="railhead__x">{coverageCount}</span>
-            </div>
-            <SourceList coverages={analysis.coverages} />
-          </section>
-
-          <EntityMentionsSection entities={analysis.entities} />
-
-          <section>
-            <div className="box">
-              <p className="box__t">Poznámka k metodice</p>
-              <p className="note">
-                Zprávu skládáme z nezávislých zdrojů. Neposuzujeme, kdo má pravdu. Ukazujeme, na čem se zdroje
-                shodují, v čem se liší a co zůstává bez primárního dokladu.
-              </p>
-            </div>
-          </section>
-        </aside>
-      </div>
-    </>
-  )
-}
-
+/** The Admin-only Analysis-monitoring view (ticket 52 — moved here from the now-public
+ *  `/article/:id`, see `ArticlePage`). Keeps every in-progress state (draft/pending/streaming/
+ *  failed) exactly as before; a COMPLETE Analysis redirects to its canonical public URL instead of
+ *  re-rendering the finished Article here too — one canonical URL for a finished piece, Admin
+ *  included, rather than maintaining the same render logic at two routes. */
 export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>()
-  const { user } = useAuth()
   const { data: analysis, isLoading, isError } = useAnalysisDetail(id)
 
   if (isLoading) {
@@ -739,13 +346,11 @@ export default function AnalysisPage() {
     return (
       <div className="u-wrap" style={{ paddingBlock: 'var(--sp-6)' }}>
         <p className="note">Tento článek se ještě posuzuje a zatím není dostupný.</p>
-        {user?.role === 'ADMIN' && (
-          <p style={{ marginTop: 'var(--sp-3)' }}>
-            <Link to="/admin/ingestion" className="btn btn--micro">
-              Přejít do fronty ke schválení
-            </Link>
-          </p>
-        )}
+        <p style={{ marginTop: 'var(--sp-3)' }}>
+          <Link to="/admin/ingestion" className="btn btn--micro">
+            Přejít do fronty ke schválení
+          </Link>
+        </p>
       </div>
     )
   }
@@ -755,11 +360,7 @@ export default function AnalysisPage() {
   }
 
   if (analysis.status === 'complete' && analysis.synthesisResult) {
-    return (
-      <TooltipProvider>
-        <CompleteAnalysis analysis={analysis} />
-      </TooltipProvider>
-    )
+    return <Navigate to={articlePath(id!)} replace />
   }
 
   return (

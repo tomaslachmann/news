@@ -5,6 +5,7 @@ import { useAnalysesList } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/formatDate'
 import { ANALYSIS_STATUS_LABELS } from '@/lib/analysisStatusLabels'
+import { articlePath, analysisPath } from '@/lib/analysisRoutes'
 import { LoadMoreButton } from '@/components/LoadMoreButton'
 import './HistoryPage.css'
 
@@ -18,9 +19,15 @@ const STATE_MODIFIER: Record<AnalysisListItem['status'], string> = {
 type StatusFilter = 'all' | AnalysisListItem['status']
 type SortOrder = 'newest' | 'oldest' | 'most-sources'
 
+/** Ticket 52: a non-Admin's list here only ever contains COMPLETE items (the API's own
+ *  `GET /api/analyses` gate — see analyses.ts), so `/article/:id` is always right for them. An
+ *  Admin's "Historie analýz" view still lists every status, and still needs to click through to
+ *  the monitoring view for a not-yet-complete item — `/article/:id` would just show "not found"
+ *  there, since it never renders the in-progress states. */
 function ArchiveRow({ item }: { item: AnalysisListItem }) {
+  const href = item.status === 'complete' ? articlePath(item.id) : analysisPath(item.id)
   return (
-    <Link to={`/analysis/${item.id}`} className="archive-row">
+    <Link to={href} className="archive-row">
       <div className={`archive-state ${STATE_MODIFIER[item.status]}`}>
         {ANALYSIS_STATUS_LABELS[item.status]}
       </div>
