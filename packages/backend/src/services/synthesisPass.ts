@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { FastifyBaseLogger } from 'fastify'
 import type { AgreementCategory, AnalysisDimensions } from '@news-triangulator/shared'
@@ -20,15 +21,33 @@ const AttributionSchema = z.object({
   articleUrl: z.string(),
 })
 
-export const DimensionItemSchema = z.object({
-  prose: z.string(),
-  attributions: z.array(AttributionSchema).min(1),
-})
+// `id` is never asked of the model — the raw item shape below has no `id` field. It's attached by
+// `.transform()` immediately as each item is parsed, so `SynthesisResultSchema.parse(...)`'s
+// return value already has stable ids on every item (ticket 47 / ADR 0034), generated once here
+// and never re-derived from an array index (which `verifyAndRepair`'s retry can reshuffle).
+// `dimensionItemId` on a NarrativeAssertion cites this id directly. The `id: string` local
+// widens node:crypto's branded UUID-template-literal return type to a plain `string` via a
+// declared variable (not an `as` cast) — callers only need `id: string` (shared's DimensionItem/
+// ContradictionItem), and a branded literal type here would force every fixture/test id to
+// itself look like a UUID rather than any plain string.
+function newItemId(): string {
+  const id: string = randomUUID()
+  return id
+}
 
-const ContradictionItemSchema = z.object({
-  prose: z.string(),
-  attributions: z.array(AttributionSchema).length(2),
-})
+export const DimensionItemSchema = z
+  .object({
+    prose: z.string(),
+    attributions: z.array(AttributionSchema).min(1),
+  })
+  .transform((item) => ({ ...item, id: newItemId() }))
+
+const ContradictionItemSchema = z
+  .object({
+    prose: z.string(),
+    attributions: z.array(AttributionSchema).length(2),
+  })
+  .transform((item) => ({ ...item, id: newItemId() }))
 
 // ADR 0030 (ticket 38): the model's own story-level read of how much the sources overlap in
 // what they report -- one judgement for the whole Analysis, never per dimension item or claim.

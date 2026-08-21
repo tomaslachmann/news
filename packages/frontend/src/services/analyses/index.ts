@@ -15,6 +15,10 @@ import type {
   Page,
   SourceOverlapInfo,
   EntityMentionItem,
+  AnalysisEntityRelationItem,
+  NarrativeDocument,
+  NarrativeBlock,
+  NarrativeInline,
 } from '@news-triangulator/shared'
 import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
 import { cursorQueryParam } from '../pagination'
@@ -36,6 +40,10 @@ export type {
   Page,
   SourceOverlapInfo,
   EntityMentionItem,
+  AnalysisEntityRelationItem,
+  NarrativeDocument,
+  NarrativeBlock,
+  NarrativeInline,
 }
 export { MIN_SOURCES_FOR_GAUGE }
 

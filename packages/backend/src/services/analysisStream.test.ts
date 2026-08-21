@@ -90,7 +90,9 @@ describe('runAnalysisStream', () => {
     vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
     vi.mocked(extractionPassModule.runExtractionPass).mockResolvedValue(VALID_EXTRACTION)
     const synthesis = {
-      agreement: [{ prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] }],
+      agreement: [
+        { id: 'i1', prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] },
+      ],
       contradiction: [],
       uniqueReporting: [],
       framing: [],
@@ -139,7 +141,9 @@ describe('runAnalysisStream', () => {
     vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
     vi.mocked(extractionPassModule.runExtractionPass).mockResolvedValue(VALID_EXTRACTION)
     vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue({
-      agreement: [{ prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] }],
+      agreement: [
+        { id: 'i1', prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] },
+      ],
       contradiction: [],
       uniqueReporting: [],
       framing: [],
@@ -204,7 +208,9 @@ describe('runAnalysisStream', () => {
     vi.mocked(synthesisRepo.findSynthesisResultByAnalysisId).mockResolvedValue(null)
     vi.mocked(extractionPassModule.runExtractionPass).mockResolvedValue(VALID_EXTRACTION)
     vi.mocked(synthesisPassModule.runSynthesisPass).mockResolvedValue({
-      agreement: [{ prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] }],
+      agreement: [
+        { id: 'i1', prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'x', articleUrl: 'x' }] },
+      ],
       contradiction: [],
       uniqueReporting: [],
       framing: [],

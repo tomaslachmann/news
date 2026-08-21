@@ -7,6 +7,7 @@ vi.mock('./llmClient.js')
 
 const AGREEMENT: SynthesisResult['agreement'] = [
   {
+    id: 'i1',
     prose: 'Vláda dnes schválila státní rozpočet.',
     attributions: [
       { outlet: 'iDnes', czechQuote: 'Vláda dnes schválila rozpočet', articleUrl: 'https://idnes.cz/x' },

@@ -1,8 +1,9 @@
 import type {
   AnalysisDetail,
+  AnalysisEntityRelationItem,
   AnalysisListItem,
-  DimensionItem,
   EntityMentionItem,
+  NarrativeDocument,
   RelatedEventItem,
   ThreadSummaryItem,
 } from '@news-triangulator/shared'
@@ -12,7 +13,7 @@ import type {
   AnalysisStatus,
   DraftListRow,
 } from '../repositories/analysis.js'
-import type { EntityMentionRow } from '../repositories/entity.js'
+import type { EntityMentionRow, EntityRelationForStoryRow } from '../repositories/entity.js'
 import { toCoverageInfo } from './coverage.js'
 import { interpretSourceOverlap } from '../services/sourceOverlap.js'
 import { countValidExtractions } from '../services/extractionPass.js'
@@ -39,11 +40,19 @@ export function toEntityMentionItem(row: EntityMentionRow): EntityMentionItem {
   return { key: row.key, canonicalName: row.canonicalName, type: row.type }
 }
 
+/** Ticket 47 / ADR 0034 — every relation is already scoped to this one Analysis's own Story, so
+ *  unlike `toEntityRelationItem` (mappers/entity.ts, an Entity page's cross-Story view), no
+ *  `direction`/`assertedBy` disambiguation is needed here. */
+export function toAnalysisEntityRelationItem(row: EntityRelationForStoryRow): AnalysisEntityRelationItem {
+  return { id: row.id, type: row.type, fromEntity: row.fromEntity, toEntity: row.toEntity }
+}
+
 export function toAnalysisDetail(
   analysis: AnalysisWithDetails,
   relatedEvents: RelatedEventItem[],
   thread: ThreadSummaryItem | undefined,
-  entities: EntityMentionItem[]
+  entities: EntityMentionItem[],
+  entityRelations: AnalysisEntityRelationItem[]
 ): AnalysisDetail {
   return {
     id: analysis.id,
@@ -75,11 +84,12 @@ export function toAnalysisDetail(
           }
         : undefined,
     narrative: analysis.synthesisResult?.narrative
-      ? (analysis.synthesisResult.narrative as unknown as DimensionItem[])
+      ? (analysis.synthesisResult.narrative as unknown as NarrativeDocument)
       : undefined,
     relatedEvents,
     thread,
     entities,
+    entityRelations,
   }
 }
 

@@ -774,6 +774,7 @@ describe('getAnalysisDetail', () => {
     vi.mocked(storyRelationRepo.findPublishedRelationsForStory).mockResolvedValue([])
     vi.mocked(threadRepo.findThreadForStory).mockResolvedValue(null)
     vi.mocked(entityRepo.findEntityMentionsForStory).mockResolvedValue([])
+    vi.mocked(entityRepo.findEntityRelationsForStory).mockResolvedValue([])
   })
 
   const OK_COVERAGE = {
@@ -1034,12 +1035,14 @@ describe('getAnalysisDetail', () => {
   })
 
   it("returns the cached narrative verbatim — generation is the narrative.generate job's job (ticket 15), not this read path", async () => {
-    const cachedSegments = [
-      {
-        prose: 'Uloženo v mezipaměti.',
-        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
-      },
-    ]
+    const cachedDocument = {
+      version: 1,
+      blocks: [{ type: 'paragraph', children: [{ type: 'text', text: 'Uloženo v mezipaměti.' }] }],
+      assertions: [],
+      entityRefs: [],
+      sourceRefs: [],
+      valueRefs: [],
+    }
     vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
       id: 'a1',
       storyId: 's1',
@@ -1054,7 +1057,7 @@ describe('getAnalysisDetail', () => {
         dimensions: DIMENSIONS,
         sourceOverlapPercentage: null,
         agreementCategory: 'PARTIAL',
-        narrative: cachedSegments,
+        narrative: cachedDocument,
         headline: null,
         narrativeGenerationFailedAt: null,
       },
@@ -1062,7 +1065,7 @@ describe('getAnalysisDetail', () => {
 
     const result = await getAnalysisDetail('a1')
 
-    expect(result.narrative).toEqual(cachedSegments)
+    expect(result.narrative).toEqual(cachedDocument)
   })
 
   it('returns no narrative, without attempting generation, when none has been cached yet (pending or failed job alike)', async () => {
@@ -1148,6 +1151,57 @@ describe('getAnalysisDetail', () => {
 
     expect(entityRepo.findEntityMentionsForStory).not.toHaveBeenCalled()
     expect(result.entities).toEqual([])
+  })
+
+  it("fetches this Story's entity relations and includes them as entityRelations (ticket 47 / ADR 0034)", async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+    vi.mocked(entityRepo.findEntityRelationsForStory).mockResolvedValue([
+      {
+        id: 'rel1',
+        type: 'REPRESENTS',
+        fromEntity: { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON' },
+        toEntity: { key: 'country:poland', canonicalName: 'Poland', type: 'COUNTRY' },
+      },
+    ])
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(entityRepo.findEntityRelationsForStory).toHaveBeenCalledWith('s1')
+    expect(result.entityRelations).toEqual([
+      {
+        id: 'rel1',
+        type: 'REPRESENTS',
+        fromEntity: { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON' },
+        toEntity: { key: 'country:poland', canonicalName: 'Poland', type: 'COUNTRY' },
+      },
+    ])
+  })
+
+  it('does not fetch entity relations when the Analysis is not COMPLETE', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(entityRepo.findEntityRelationsForStory).not.toHaveBeenCalled()
+    expect(result.entityRelations).toEqual([])
   })
 
   it('prefers the generated headline as title when present, falling back to the working title otherwise', async () => {

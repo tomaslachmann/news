@@ -53,6 +53,7 @@ describe('runSynthesisPass', () => {
     const result = await runSynthesisPass(SOURCES)
 
     expect(result.agreement).toHaveLength(1)
+    expect(result.agreement[0]?.id).toEqual(expect.any(String))
     expect(result.agreementCategory).toBe('CONFIRMED')
     expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(1)
     const [, , userContent] = vi.mocked(llmClientModule.callJsonModel).mock.calls[0]
@@ -62,6 +63,47 @@ describe('runSynthesisPass', () => {
       { outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', extraction: EMPTY_EXTRACTION },
       { outlet: 'Novinky', articleUrl: 'https://novinky.cz/y', extraction: EMPTY_EXTRACTION },
     ])
+  })
+
+  it('gives every dimension item its own stable id, never asked of the model', async () => {
+    vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({
+      agreement: [
+        {
+          prose: 'Oba zdroje potvrzují schválení rozpočtu.',
+          attributions: [
+            {
+              outlet: 'iDnes',
+              czechQuote: 'Vláda dnes schválila rozpočet',
+              articleUrl: 'https://idnes.cz/x',
+            },
+          ],
+        },
+      ],
+      contradiction: [
+        {
+          prose: 'Zdroje se neshodují.',
+          attributions: [
+            {
+              outlet: 'iDnes',
+              czechQuote: 'Vláda dnes schválila rozpočet',
+              articleUrl: 'https://idnes.cz/x',
+            },
+            { outlet: 'Novinky', czechQuote: 'Vláda schválila rozpočet', articleUrl: 'https://novinky.cz/y' },
+          ],
+        },
+      ],
+      uniqueReporting: [],
+      framing: [],
+      agreementCategory: 'CONFIRMED',
+    })
+
+    const result = await runSynthesisPass(SOURCES)
+
+    expect(result.agreement[0]?.id).toEqual(expect.any(String))
+    expect(result.contradiction[0]?.id).toEqual(expect.any(String))
+    expect(result.agreement[0]?.id).not.toBe(result.contradiction[0]?.id)
+    // Never the LLM's own JSON — the mocked response above never included an `id` field at all.
+    expect(llmClientModule.callJsonModel).toHaveBeenCalledTimes(1)
   })
 
   it('rejects a response whose agreementCategory is outside the closed enum, never coercing it', async () => {
