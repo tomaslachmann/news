@@ -8,7 +8,7 @@ render as in-text annotations, not raw markup or a disconnected list. See
 
 **Blocked by:** 47.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] New rendering component consuming `NarrativeDocument.blocks`, rendering each
       `NarrativeInline` run (`text`/`entity`/`source`/`value`) inline within paragraphs, headings,
