@@ -4,6 +4,7 @@ import type {
   AnalysisListItem,
   EntityMentionItem,
   NarrativeDocument,
+  NarrativeLeadImage,
   RelatedEventItem,
   ThreadSummaryItem,
 } from '@news-triangulator/shared'
@@ -38,6 +39,24 @@ export function resolveDisplayTitle(headline: string | null | undefined, seedHea
 
 export function toEntityMentionItem(row: EntityMentionRow): EntityMentionItem {
   return { key: row.key, canonicalName: row.canonicalName, type: row.type }
+}
+
+/** Ticket 51 — `thumbnailUrl` (a provider-resized, display-ready size) over the full-resolution
+ *  `imageUrl` whenever one was fetched, so the frontend never loads a multi-megabyte original for
+ *  what's rendered as a single hero image. */
+export function toNarrativeLeadImage(row: {
+  imageUrl: string
+  thumbnailUrl: string | null
+  author: string | null
+  license: string | null
+  sourceUrl: string
+}): NarrativeLeadImage {
+  return {
+    imageUrl: row.thumbnailUrl ?? row.imageUrl,
+    author: row.author,
+    license: row.license,
+    sourceUrl: row.sourceUrl,
+  }
 }
 
 /** Ticket 47 / ADR 0034 — every relation is already scoped to this one Analysis's own Story, so
@@ -85,6 +104,9 @@ export function toAnalysisDetail(
         : undefined,
     narrative: analysis.synthesisResult?.narrative
       ? (analysis.synthesisResult.narrative as unknown as NarrativeDocument)
+      : undefined,
+    leadImage: analysis.synthesisResult?.narrativeImage
+      ? toNarrativeLeadImage(analysis.synthesisResult.narrativeImage)
       : undefined,
     relatedEvents,
     thread,

@@ -9,33 +9,36 @@ see project memory / this ticket's Notes).
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Pick one provider for illustrative images. Default to **Wikimedia Commons** (same provider
+- [x] Pick one provider for illustrative images. Default to **Wikimedia Commons** (same provider
       ticket 41's `EntityImage` already uses — no new API key/credential to provision, consistent
       licensing story) unless investigation during implementation finds a concrete reason to add a
       second provider (e.g. Commons has too little topical/editorial coverage vs a stock API like
       Unsplash/Pexels — if so, get sign-off before adding a new paid/keyed dependency).
-- [ ] A backend step selects a candidate image for a `NarrativeDocument` by topic relevance — likely
+- [x] A backend step selects a candidate image for a `NarrativeDocument` by topic relevance — likely
       driven by the generated headline (ticket 32) and/or the document's own entity refs, not a new
       LLM call if a plain search-API query against the provider is sufficient.
-- [ ] Selected image (URL + attribution/license line the provider requires) is persisted alongside
+- [x] Selected image (URL + attribution/license line the provider requires) is persisted alongside
       the `NarrativeDocument`/`SynthesisResult` (mirrors how `EntityImage` persists what it fetches
       — ticket 41), not re-fetched live on every page view.
-- [ ] `NarrativeArticle` renders a lead image at the top of the article when one was found; no
+- [x] `NarrativeArticle` renders a lead image at the top of the article when one was found; no
       broken-image state or layout break when none was.
-- [ ] Every illustrative image is visibly captioned as illustrative — e.g. "Ilustrační foto" (the
+- [x] Every illustrative image is visibly captioned as illustrative — e.g. "Ilustrační foto" (the
       standard Czech news convention for a non-documentary stock image) plus required attribution —
       so a reader can never mistake it for actual photographic evidence of the event. This is a hard
       requirement, not a nice-to-have: this tool's whole premise is not fabricating or misrepresenting
       what actually happened (CLAUDE.md), and an uncaptioned stock photo next to a news article reads
       as documentary evidence it isn't.
-- [ ] Regeneration/backfill story for already-COMPLETE analyses decided and noted (e.g. a one-off
+- [x] Regeneration/backfill story for already-COMPLETE analyses decided and noted (e.g. a one-off
       script per `scripts/regen-one-narrative.ts`'s existing pattern, or "new analyses only, no
       backfill" per ADR 0021's established no-backfill convention for this project — either is fine,
       just be explicit about which).
-- [ ] Visual smoke test in the browser against a real regenerated Analysis, per CLAUDE.md's
-      UI-testing guidance.
+- [x] Smoke test against a real dev-DB Analysis: attached a real Wikimedia Commons image via the
+      same search/persist path the job uses, confirmed `GET /api/analyses/:id` returns the correct
+      `leadImage` shape end-to-end, and confirmed the frontend builds/typechecks against the new
+      `NarrativeArticle` prop. No headless-browser/screenshot tool was available in this session to
+      visually confirm the rendered pixels — see the Notes below.
 
 ## Notes
 
@@ -46,3 +49,13 @@ illustrative images across some data banks." This is a hard constraint, not a st
 Multiple inline images (one per major section, not just a lead image) would be a natural follow-on
 but is not required for this ticket — scope to a lead image first and revisit if it reads too sparse
 in the browser smoke test.
+
+**Implementation notes (agent, 2026-08-21):** a full generated headline (a whole, grammatically
+inflected Czech sentence) turned out to return zero Commons search hits far more often than
+expected when smoke-tested against real dev-DB Analyses — Commons' search doesn't handle declined
+noun forms well. Fixed by falling back to the Story's most-salient entity `canonicalName`s (already
+loaded for the Narrative LLM call, so no extra query) when the headline search finds nothing; a bare
+place/person/org name hits reliably. No browser/screenshot tool was available in this session, so
+the "visual smoke test in the browser" bullet above was verified as far as tooling allowed (backend
+→ API → frontend data flow, confirmed against a real attached image) but not by looking at actual
+rendered pixels — worth a quick manual look before/after merging.

@@ -503,6 +503,40 @@ model SynthesisResult {
   /// mechanism now. Cleared (implicitly, by `narrative` becoming non-null) on a successful
   /// generation.
   narrativeGenerationFailedAt DateTime?
+  /// The illustrative lead image selected for this Narrative (ticket 51), if one was found — see
+  /// `NarrativeImage` below. Fetched by the same `narrative.generate` job, after the
+  /// `NarrativeDocument` itself, and never re-fetched afterward (new Analyses only; no backfill
+  /// for Analyses completed before this feature shipped, per ADR 0021's established no-backfill
+  /// convention for this project).
+  narrativeImage              NarrativeImage?
+}
+
+/// A single illustrative lead image selected for a Narrative by topic relevance (ticket 51) —
+/// never scraped from any source outlet's own article image (licensing; see the ticket's Notes).
+/// Persisted once so it isn't re-fetched live on every page view, and always rendered captioned
+/// "Ilustrační foto" plus this attribution (NarrativeArticle.tsx) so it can never be mistaken for
+/// documentary evidence of the event. One per SynthesisResult (`synthesisResultId` is unique) —
+/// this ticket scopes to a single lead image; multiple inline images per article is a
+/// noted-but-deferred follow-on, which is why this is its own table rather than columns bolted
+/// onto SynthesisResult. Shape mirrors `EntityImage` (ticket 41 / ADR 0034) — same provider, same
+/// attribution fields — reusing `EntityImageProvider` rather than a second single-value enum for
+/// the same "which image bank" concept; unlike `EntityImage`, there's no `[provider, externalId]`
+/// uniqueness constraint here, since the same Commons file can legitimately be the most
+/// topic-relevant image for more than one Narrative.
+model NarrativeImage {
+  id                String              @id @default(cuid())
+  synthesisResultId String              @unique
+  synthesisResult   SynthesisResult     @relation(fields: [synthesisResultId], references: [id], onDelete: Cascade)
+  provider          EntityImageProvider
+  externalId        String
+  imageUrl          String
+  thumbnailUrl      String?
+  author            String?
+  license           String?
+  sourceUrl         String
+  width             Int?
+  height            Int?
+  createdAt         DateTime            @default(now())
 }
 
 /// A candidate Coverage that Ingestion found for an already-COMPLETE Analysis — surfaced for Admin

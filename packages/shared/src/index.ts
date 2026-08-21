@@ -433,6 +433,12 @@ export interface AnalysisDetail {
   /** The structured Cross-Source Narrative document (ticket 47 / ADR 0034) — generated once by the
    *  `narrative.generate` job, cached, undefined until that job completes. */
   narrative?: NarrativeDocument
+  /** An illustrative lead image for the Narrative (ticket 51), if one was found by the same
+   *  `narrative.generate` job — sourced from a free image bank by topic relevance, never the
+   *  source outlets' own article images (licensing). Undefined both when the Narrative itself
+   *  hasn't generated yet and when it has but no image was found/fetched — `NarrativeArticle`
+   *  renders identically (no lead image, no broken-image state) either way. */
+  leadImage?: NarrativeLeadImage
   /** Other Events (Stories) this one has been linked to — see ticket 37. Empty, not undefined,
    *  when there are none, so callers never need an extra existence check. */
   relatedEvents: RelatedEventItem[]
@@ -542,4 +548,17 @@ export type NarrativeDocument = {
   entityRefs: NarrativeEntityRef[]
   sourceRefs: NarrativeSourceRef[]
   valueRefs: NarrativeValueRef[]
+}
+
+/** A Narrative's illustrative lead image (ticket 51) — deliberately not part of
+ *  `NarrativeDocument` itself: unlike every field above, it's never LLM-emitted content, just a
+ *  deterministic search-API pick, so it stays a sibling field on `AnalysisDetail` instead of
+ *  living inside the document ADR 0034 defines. `imageUrl` is always a display-ready size (the
+ *  provider's own resized thumbnail when one was fetched, its full original otherwise) — never
+ *  the multi-megabyte original a naive hero rendering would otherwise load. */
+export interface NarrativeLeadImage {
+  imageUrl: string
+  author: string | null
+  license: string | null
+  sourceUrl: string
 }

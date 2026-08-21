@@ -1,8 +1,39 @@
 import { Link } from 'react-router-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { indexNarrativeRefs, resolveSourceRefs, type NarrativeRefIndex } from '@/lib/narrativeRefs'
-import type { NarrativeBlock, NarrativeDocument, NarrativeInline } from '@/services/analyses'
+import type {
+  NarrativeBlock,
+  NarrativeDocument,
+  NarrativeInline,
+  NarrativeLeadImage,
+} from '@/services/analyses'
 import './NarrativeArticle.css'
+
+/** The Narrative's illustrative lead image (ticket 51) — always captioned "Ilustrační foto" plus
+ *  attribution, so it can never be mistaken for documentary evidence of the event (CLAUDE.md's
+ *  premise, restated in the ticket's Notes: this tool never fabricates or misrepresents what
+ *  actually happened). Renders nothing at all when `image` is undefined — no broken-image state,
+ *  no layout reserved for a missing image. */
+function LeadImage({ image }: { image: NarrativeLeadImage }) {
+  return (
+    <figure className="nlead">
+      <img src={image.imageUrl} alt="" className="nlead__img" />
+      <figcaption className="nlead__cap">
+        Ilustrační foto
+        {(image.author || image.license) && (
+          <>
+            {' — '}
+            {[image.author, image.license].filter(Boolean).join(', ')}
+          </>
+        )}
+        {', '}
+        <a href={image.sourceUrl} target="_blank" rel="noopener noreferrer">
+          Wikimedia Commons
+        </a>
+      </figcaption>
+    </figure>
+  )
+}
 
 /** `/entity/:key` (ticket 43) is already shipped in this codebase, so every entity ref links
  *  unconditionally — same posture `EntityMentionsSection` (AnalysisPage.tsx) already takes for its
@@ -112,12 +143,20 @@ function QuoteBlock({
 /** The Cross-Source Narrative (ADR 0012 / ADR 0034), rendered as continuous prose from its
  *  structured `NarrativeDocument.blocks` — replaces ticket 20's segment-based rendering (ticket
  *  48). Entity/source/value inline runs resolve against the document's own top-level ref
- *  declarations and render as distinct in-text annotations rather than raw markup. */
-export function NarrativeArticle({ document }: { document: NarrativeDocument }) {
+ *  declarations and render as distinct in-text annotations rather than raw markup. `leadImage`
+ *  (ticket 51) renders above the prose when present, absent entirely otherwise. */
+export function NarrativeArticle({
+  document,
+  leadImage,
+}: {
+  document: NarrativeDocument
+  leadImage?: NarrativeLeadImage
+}) {
   const refs = indexNarrativeRefs(document)
 
   return (
     <div className="prose">
+      {leadImage && <LeadImage image={leadImage} />}
       {document.blocks.map((block, i) => {
         switch (block.type) {
           case 'heading': {

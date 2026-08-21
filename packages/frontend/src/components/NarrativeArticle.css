@@ -8,6 +8,33 @@
 .prose {
   max-width: var(--measure);
 }
+
+/* Illustrative lead image (ticket 51) — always captioned, never presented as documentary evidence
+   of the event (CLAUDE.md's premise). `object-fit: cover` + a fixed aspect-ratio bounds a
+   provider-sourced image of any shape to one consistent hero size, matching the reference
+   mockup's other bounded media (.nref__img). */
+.nlead {
+  margin: 0 0 var(--sp-5);
+}
+.nlead__img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.nlead__cap {
+  margin-top: var(--sp-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.nlead__cap a {
+  color: inherit;
+  border-bottom: var(--bw-hair) solid var(--line-strong);
+}
+.nlead__cap a:hover {
+  color: var(--ink);
+}
 .prose > p {
   margin-bottom: var(--sp-4);
 }
