@@ -9,7 +9,7 @@ see project memory / this ticket's Notes).
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Pick one provider for illustrative images. Default to **Wikimedia Commons** (same provider
       ticket 41's `EntityImage` already uses — no new API key/credential to provision, consistent
