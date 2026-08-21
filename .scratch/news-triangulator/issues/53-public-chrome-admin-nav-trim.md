@@ -9,7 +9,7 @@ item-by-item. Collapse those into a single "Admin" (or similar) entry point inst
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `PrimaryNav` shows one link/entry for an Admin instead of three — e.g. a single "Admin" link
       into the Admin area (a sensible landing route under `AdminLayout`, such as
