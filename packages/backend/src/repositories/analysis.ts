@@ -9,6 +9,7 @@ import type {
 import { prisma } from '../db.js'
 import type { CoverageWithSource } from './coverage.js'
 import type { Cursor } from '../pagination.js'
+import { keysetSqlWhere } from './sqlPagination.js'
 
 export type { Analysis, AnalysisStatus }
 
@@ -234,11 +235,7 @@ export async function findDraftsPage(
     LEFT JOIN "SynthesisResult" sr ON sr."analysisId" = a.id
     LEFT JOIN "Coverage" c ON c."analysisId" = a.id
     WHERE a.status = 'DRAFT'
-      ${
-        cursor
-          ? Prisma.sql`AND (a."createdAt" < ${cursor.createdAt} OR (a."createdAt" = ${cursor.createdAt} AND a.id < ${cursor.id}))`
-          : Prisma.empty
-      }
+      ${keysetSqlWhere(cursor)}
     GROUP BY a.id, sr.headline
     HAVING count(c.id) FILTER (WHERE c.excluded = false) >= ${minVisibleSourceCount}
     ORDER BY a."createdAt" DESC, a.id DESC

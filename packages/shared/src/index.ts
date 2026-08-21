@@ -317,7 +317,9 @@ export type EntityRelationTypeLabel =
   | 'ANNOUNCES'
 
 export const EntitySearchQuerySchema = z.object({
-  q: z.string().min(1),
+  // Same bound as ListQuerySchema.cursor above — a query this long can't be a genuine entity
+  // name search and shouldn't reach searchEntitiesByName's similarity()/% Postgres computation.
+  q: z.string().min(1).max(200),
 })
 export type EntitySearchQuery = z.infer<typeof EntitySearchQuerySchema>
 

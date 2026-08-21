@@ -1,7 +1,7 @@
 import type { EntityType, EntityRelationType } from '@prisma/client'
-import { Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 import type { Cursor } from '../pagination.js'
+import { keysetSqlWhere } from './sqlPagination.js'
 
 export type { EntityType, EntityRelationType }
 
@@ -289,22 +289,15 @@ export interface EntityEventRow {
   headline: string | null
 }
 
-/** Row-tuple comparison over `Analysis.createdAt`/`id`, not `Story`'s own `createdAt` — an Entity
- *  attaches to a Story (`StoryEntity`), but "recency" here means when the mentioning *Event*
- *  (Analysis) was created, the same field every other reader-facing list already orders/paginates
- *  by (ticket 03's `cursorWhere`/`findAnalysesPage`). */
-function entityEventCursorWhere(cursor: Cursor | undefined) {
-  return cursor
-    ? Prisma.sql`AND (a."createdAt" < ${cursor.createdAt} OR (a."createdAt" = ${cursor.createdAt} AND a.id < ${cursor.id}))`
-    : Prisma.empty
-}
-
 /** Every Event (Story) mentioning `entityKey`, keyset-paginated newest-first (ticket 42, mirrors
  *  ticket 03's pattern) — fetches `limit + 1` rows, same "peel off the extra one" convention as
- *  `findAnalysesPage`/`pagination.ts`'s `splitPage`. Only `COMPLETE` Analyses: this is a public,
- *  unauthenticated read (docs/spec-entity-wiki.md), and a Draft/Pending Analysis isn't a stable
- *  Article yet for a reader to land on (same rule `GET /api/analyses` already applies for a
- *  non-Admin reader). */
+ *  `findAnalysesPage`/`pagination.ts`'s `splitPage`. Ordered/paginated by `Analysis.createdAt`/
+ *  `id`, not `Story`'s own `createdAt` — an Entity attaches to a Story (`StoryEntity`), but
+ *  "recency" here means when the mentioning *Event* (Analysis) was created, the same field every
+ *  other reader-facing list already orders by (`keysetSqlWhere`, shared with `findDraftsPage`).
+ *  Only `COMPLETE` Analyses: this is a public, unauthenticated read (docs/spec-entity-wiki.md),
+ *  and a Draft/Pending Analysis isn't a stable Article yet for a reader to land on (same rule
+ *  `GET /api/analyses` already applies for a non-Admin reader). */
 export async function findEventsForEntity(
   entityKey: string,
   cursor: Cursor | undefined,
@@ -318,7 +311,7 @@ export async function findEventsForEntity(
     JOIN "Analysis" a ON a."storyId" = s.id
     LEFT JOIN "SynthesisResult" sr ON sr."analysisId" = a.id
     WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
-      ${entityEventCursorWhere(cursor)}
+      ${keysetSqlWhere(cursor)}
     ORDER BY a."createdAt" DESC, a.id DESC
     LIMIT ${limit + 1}
   `
@@ -335,6 +328,14 @@ export interface EntityRelationForEntityRow {
   seedHeadline: string
   headline: string | null
 }
+
+// Not cursor-paginated like findEventsForEntity — the ticket only asked for a flat "every
+// relation" read — but a hard cap is still needed: a very-high-storyCount entity (docs/spec-
+// entity-wiki.md's User Story 10 concern, which the spec's own text only names for the Events
+// read but applies equally here) would otherwise return its entire relation history in one
+// unbounded response (code review, ticket 42). Newest-first so truncation drops the oldest,
+// least-relevant assertions first, same bias as every other reader-facing list in this codebase.
+const ENTITY_RELATIONS_FOR_ENTITY_LIMIT = 200
 
 /** Every `StoryEntityRelation` `entityKey` participates in, either side, each carrying its own
  *  asserting Event — deliberately not deduped across Events: two Stories independently asserting
@@ -360,20 +361,25 @@ export async function findRelationsForEntity(entityKey: string): Promise<EntityR
         },
       },
     },
+    orderBy: { id: 'desc' },
+    take: ENTITY_RELATIONS_FOR_ENTITY_LIMIT,
   })
 
-  // The `where` above already guarantees a COMPLETE Analysis exists; the `!== null` filter here
-  // is only to satisfy the nullable-relation type Prisma's `select` produces, not a real runtime
-  // exclusion.
+  // The `where` above already guarantees a COMPLETE Analysis exists — this type-predicate filter
+  // (same pattern as findRecentStoriesForMatching/findRelationCandidateStories) narrows the type
+  // accordingly rather than asserting it with `!` below.
   return rows
-    .filter((r) => r.story.analysis !== null)
+    .filter(
+      (r): r is typeof r & { story: { analysis: NonNullable<(typeof r)['story']['analysis']> } } =>
+        r.story.analysis !== null
+    )
     .map((r) => ({
       id: r.id,
       type: r.type,
       fromEntity: r.fromEntity,
       toEntity: r.toEntity,
-      analysisId: r.story.analysis!.id,
-      seedHeadline: r.story.analysis!.seedHeadline,
-      headline: r.story.analysis!.synthesisResult?.headline ?? null,
+      analysisId: r.story.analysis.id,
+      seedHeadline: r.story.analysis.seedHeadline,
+      headline: r.story.analysis.synthesisResult?.headline ?? null,
     }))
 }
