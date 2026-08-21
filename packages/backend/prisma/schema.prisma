@@ -218,6 +218,7 @@ model Entity {
   /// `entity.image.enrich` once `wikidataId` is linked. No `isPrimary` field yet (ADR 0034): with
   /// one provider there's nothing to prioritize among.
   images        EntityImage[]
+  homepageStats HomepageEntityStatItem[]
 
   /// Fuzzy name search over `canonicalName` (ticket 12) is a trigram GIN index
   /// (`entity_canonicalName_trgm_idx`, requires the `pg_trgm` extension), written by hand in this
@@ -342,6 +343,35 @@ model EntityImage {
   createdAt    DateTime            @default(now())
 
   @@unique([provider, externalId])
+  @@index([entityId])
+}
+
+/// Latest/previous 24h homepage entity rail, precomputed by the async statistics worker so
+/// unauthenticated homepage reads never run a cross-table aggregate.
+model HomepageEntityStatSnapshot {
+  id          String   @id @default(cuid())
+  windowStart DateTime
+  windowEnd   DateTime
+  computedAt  DateTime @default(now())
+  items       HomepageEntityStatItem[]
+
+  @@index([computedAt])
+  @@index([windowStart, windowEnd])
+}
+
+model HomepageEntityStatItem {
+  id                 String                     @id @default(cuid())
+  snapshotId         String
+  snapshot           HomepageEntityStatSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  entityId           String
+  entity             Entity                     @relation(fields: [entityId], references: [id])
+  rank               Int
+  recentEventCount   Int
+  recentSourceCount  Int
+  previousEventCount Int?
+
+  @@unique([snapshotId, entityId])
+  @@index([snapshotId, rank])
   @@index([entityId])
 }
 

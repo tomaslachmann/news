@@ -3,8 +3,17 @@ import { Link } from 'react-router-dom'
 import { Gauge } from '@/components/Gauge'
 import type { AnalysisListSummary } from '@/services/analyses'
 import { useArticlesList } from '@/services/analyses/hooks'
+import { useHomepageEntityStats } from '@/services/homepageStats/hooks'
 import { articlePath } from '@/lib/analysisRoutes'
-import { getStorySignal, splitHomePageStories, type HomePageStory } from './homePageViewModel'
+import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
+import {
+  entityTrendClass,
+  formatEntityTrend,
+  getEntityDotSize,
+  getStorySignal,
+  splitHomePageStories,
+  type HomePageStory,
+} from './homePageViewModel'
 import './HomePage.css'
 
 const SAMPLE_BAD_THRESHOLD = 65
@@ -14,20 +23,6 @@ const TIME = new Intl.DateTimeFormat('cs-CZ', {
   minute: '2-digit',
   timeZone: 'Europe/Prague',
 })
-
-// Entities already sorted by mentions desc, matching data2.js's window.NT.entities.sort().
-const SAMPLE_ENTITIES = [
-  { name: 'Andrej Babiš', kind: 'osoba', mentions: 176, trend: 12, sources: 24 },
-  { name: 'Ukrajina', kind: 'místo', mentions: 158, trend: 8, sources: 27 },
-  { name: 'Petr Fiala', kind: 'osoba', mentions: 148, trend: -4, sources: 21 },
-  { name: 'Donald Trump', kind: 'osoba', mentions: 133, trend: 21, sources: 19 },
-  { name: 'ČNB', kind: 'instituce', mentions: 121, trend: 3, sources: 17 },
-  { name: 'Evropská komise', kind: 'instituce', mentions: 96, trend: -9, sources: 15 },
-  { name: 'NATO', kind: 'instituce', mentions: 88, trend: 5, sources: 14 },
-  { name: 'Praha', kind: 'místo', mentions: 74, trend: 0, sources: 12 },
-  { name: 'ČEZ', kind: 'firma', mentions: 61, trend: 7, sources: 11 },
-  { name: 'Ministerstvo financí', kind: 'instituce', mentions: 54, trend: -2, sources: 9 },
-]
 
 const SAMPLE_TICKER = [
   { k: 'Zpracováno dnes', v: '1 284 článků' },
@@ -270,9 +265,10 @@ function StoryListSection({ stories }: { stories: HomePageStory[] }) {
 }
 
 function EntsPanel() {
-  const mentions = SAMPLE_ENTITIES.map((e) => e.mentions)
-  const max = Math.max(...mentions)
-  const min = Math.min(...mentions)
+  const { data: entities = [], isLoading, isError } = useHomepageEntityStats()
+  const mentions = entities.map((e) => e.recentEventCount)
+  const max = mentions.length > 0 ? Math.max(...mentions) : 0
+  const min = mentions.length > 0 ? Math.min(...mentions) : 0
   return (
     <section className="ents">
       <BHead
@@ -287,27 +283,38 @@ function EntsPanel() {
         }
       />
       <p className="ents__note">Velikost kruhu odpovídá počtu zmínek za 24 hodin.</p>
-      {SAMPLE_ENTITIES.map((e) => {
-        const size = 26 + Math.round(((e.mentions - min) / (max - min)) * 24)
-        const cls = e.trend > 0 ? 'is-up' : e.trend < 0 ? 'is-down' : ''
-        const trend = e.trend > 0 ? `+${e.trend} %` : e.trend < 0 ? `${e.trend} %` : '0 %'
-        return (
-          <a className="erow" href="#" key={e.name} onClick={(ev) => ev.preventDefault()}>
-            <span className="erow__c">
-              <span className="erow__dot" style={{ inlineSize: size, blockSize: size }}>
-                {e.mentions}
+      {isLoading ? (
+        <p className="legend">Načítání entit…</p>
+      ) : isError ? (
+        <p className="legend">Nepodařilo se načíst entity.</p>
+      ) : entities.length === 0 ? (
+        <p className="legend">Zatím žádné entity za 24 hodin.</p>
+      ) : (
+        entities.map((e) => {
+          const size = getEntityDotSize(e.recentEventCount, min, max)
+          const trend = e.trendPercent
+          return (
+            <Link className="erow" to={`/entity/${e.key}`} key={e.key}>
+              <span className="erow__c">
+                <span className="erow__dot" style={{ inlineSize: size, blockSize: size }}>
+                  {e.recentEventCount}
+                </span>
               </span>
-            </span>
-            <span>
-              <span className="erow__n hl">{e.name}</span>
-              <span className="erow__k">
-                {e.kind} · {e.sources} zdrojů
+              <span>
+                <span className="erow__n hl">{e.canonicalName}</span>
+                <span className="erow__k">
+                  {ENTITY_TYPE_LABELS[e.type]} · {e.recentSourceCount} zdrojů
+                </span>
               </span>
-            </span>
-            <span className={`erow__t ${cls}`}>{trend}</span>
-          </a>
-        )
-      })}
+              {trend !== undefined ? (
+                <span className={`erow__t ${entityTrendClass(trend)}`}>{formatEntityTrend(trend)}</span>
+              ) : (
+                <span className="erow__t" />
+              )}
+            </Link>
+          )
+        })
+      )}
     </section>
   )
 }

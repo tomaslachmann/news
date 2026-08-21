@@ -5,7 +5,9 @@ import { runEntityRelationJob } from './jobs/entityRelationJob.js'
 import { runNarrativeJob } from './jobs/narrativeJob.js'
 import { runThreadRecomputeJob } from './jobs/threadRecomputeJob.js'
 import { runEntityImageEnrichJob } from './jobs/entityImageEnrichJob.js'
+import { runHomepageEntityStatsJob } from './jobs/homepageEntityStatsJob.js'
 import { makeConsoleLogger } from './jobs/consoleLogger.js'
+import { ensureScheduledJobs } from './jobs/schedule.js'
 import * as analysisRepo from './repositories/analysis.js'
 import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
@@ -21,7 +23,8 @@ const workerLog = makeConsoleLogger()
 const start = async () => {
   try {
     await getQueueClient()
-    // The three queues are independent — registered concurrently so their pg-boss declaration
+    await ensureScheduledJobs()
+    // The queues are independent — registered concurrently so their pg-boss declaration
     // latencies don't add up on every process start/restart.
     await Promise.all([
       registerJobWorker(JobName.EntityRelation, (payload) =>
@@ -86,10 +89,13 @@ const start = async () => {
           workerLog
         )
       ),
+      registerJobWorker(JobName.HomepageEntityStatsRefresh, (payload) =>
+        runHomepageEntityStatsJob(payload, workerLog)
+      ),
     ])
     console.log(
-      'Worker started; entity.extract, narrative.generate, thread.recompute, and ' +
-        'entity.image.enrich handlers registered.'
+      'Worker started; entity.extract, narrative.generate, thread.recompute, entity.image.enrich, ' +
+        'and homepage.entity-stats.refresh handlers registered.'
     )
   } catch (err) {
     console.error(err)

@@ -35,3 +35,19 @@ export function getStorySignal(summary: AnalysisListSummary): {
   }
   return { bad: false, chipClass: 'chip chip--ok', chipLabel: 'primární zdroj' }
 }
+
+export function getEntityDotSize(count: number, min: number, max: number): number {
+  if (max <= min) return 38
+  return 26 + Math.round(((count - min) / (max - min)) * 24)
+}
+
+export function formatEntityTrend(percent: number): string {
+  if (percent > 0) return `+${percent} %`
+  return `${percent} %`
+}
+
+export function entityTrendClass(percent: number): string {
+  if (percent > 0) return 'is-up'
+  if (percent < 0) return 'is-down'
+  return ''
+}
