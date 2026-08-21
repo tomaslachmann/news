@@ -569,6 +569,8 @@ a.erow:hover {
   font: 500 var(--text-h2) / 1.15 var(--font-serif);
 }
 .live-summary__meta {
+  display: inline-flex;
+  align-items: center;
   margin-top: var(--sp-2);
   font: var(--text-small) / 1.4 var(--font-sans);
   color: var(--ink-3);

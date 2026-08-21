@@ -1,9 +1,43 @@
 import { Prisma } from '@prisma/client'
 import type { SynthesisResult } from '@prisma/client'
-import type { NarrativeDocument } from '@news-triangulator/shared'
+import type { AnalysisDimensions, NarrativeDocument } from '@news-triangulator/shared'
 import { prisma } from '../db.js'
 
 export type { SynthesisResult }
+
+export type StoredDimensions = Pick<
+  AnalysisDimensions,
+  'agreement' | 'contradiction' | 'uniqueReporting' | 'framing'
+>
+
+/** Every `SynthesisResult` row's `analysisId` and raw `dimensions` JSON — used only by the
+ *  one-off `backfillDimensionItemIds.ts` script (see its own header) to find historical rows
+ *  whose dimension items predate ticket 47/ADR 0034's per-item `id` field. Not paginated: this
+ *  project has never run at a scale (ticket 03's own pagination decision found the DB still
+ *  completely empty) where loading every `SynthesisResult` at once for a one-off admin script is
+ *  a real concern — unlike the hot, repeated reads ticket 03 actually bounded. */
+export async function findAllSynthesisResultDimensions(): Promise<
+  { analysisId: string; dimensions: StoredDimensions }[]
+> {
+  const rows = await prisma.synthesisResult.findMany({ select: { analysisId: true, dimensions: true } })
+  return rows.map((r) => ({
+    analysisId: r.analysisId,
+    dimensions: r.dimensions as unknown as StoredDimensions,
+  }))
+}
+
+/** Overwrites a SynthesisResult's `dimensions` JSON wholesale — used only by
+ *  `backfillDimensionItemIds.ts` to patch in missing per-item `id`s. Every other field
+ *  (`narrative`, `headline`, `sourceOverlapPercentage`, `agreementCategory`) is untouched. */
+export async function updateSynthesisResultDimensions(
+  analysisId: string,
+  dimensions: StoredDimensions
+): Promise<void> {
+  await prisma.synthesisResult.update({
+    where: { analysisId },
+    data: { dimensions: dimensions as unknown as Prisma.InputJsonValue },
+  })
+}
 
 export async function findSynthesisResultByAnalysisId(analysisId: string): Promise<SynthesisResult | null> {
   return prisma.synthesisResult.findUnique({ where: { analysisId } })
