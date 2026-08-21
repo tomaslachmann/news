@@ -188,7 +188,8 @@ function AdditionItem({
 }
 
 function PendingAdditionsSection() {
-  const { data: additions, isLoading, isError } = usePendingAdditions()
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = usePendingAdditions()
+  const additions = data?.pages.flatMap((page) => page.items)
   const navigate = useNavigate()
   const approveMutation = useApprovePendingAddition()
   const rejectMutation = useRejectPendingAddition()
@@ -234,6 +235,12 @@ function PendingAdditionsSection() {
             />
           ))}
         </div>
+      )}
+
+      {hasNextPage && (
+        <p style={{ marginTop: 'var(--sp-4)' }}>
+          <LoadMoreButton onClick={() => void fetchNextPage()} isFetching={isFetchingNextPage} />
+        </p>
       )}
     </section>
   )

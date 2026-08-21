@@ -329,9 +329,14 @@ export async function rejectDraft(analysisId: string, actorId: string): Promise<
   })
 }
 
-export async function listPendingAdditions(): Promise<PendingAdditionItem[]> {
-  const rows = await pendingAdditionRepo.findAllPendingAdditions()
-  return rows.map(toPendingAdditionItem)
+export async function listPendingAdditions(
+  cursor: string | undefined,
+  limit: number = DEFAULT_PAGE_SIZE
+): Promise<Page<PendingAdditionItem>> {
+  const { items, nextCursor } = await fetchPage(cursor, limit, (decoded, boundedLimit) =>
+    pendingAdditionRepo.findPendingAdditionsPage(decoded, boundedLimit)
+  )
+  return { items: items.map(toPendingAdditionItem), nextCursor }
 }
 
 /** Real re-triangulation (ticket 45, grilling session 2026-08-21): attaches the flagged Coverage

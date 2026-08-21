@@ -11,22 +11,22 @@ line with the Drafts pattern.
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `findPendingAdditionsPage(cursor, limit)` (or equivalent) in `pendingAddition.ts`, replacing
+- [x] `findPendingAdditionsPage(cursor, limit)` (or equivalent) in `pendingAddition.ts`, replacing
       `findAllPendingAdditions`'s unbounded `findMany` with the same keyset `(createdAt, id)`
       pagination `findDraftsPage` already uses.
-- [ ] `GET /api/admin/ingestion/pending-additions` accepts `cursor`/`limit` via `ListQuerySchema`
+- [x] `GET /api/admin/ingestion/pending-additions` accepts `cursor`/`limit` via `ListQuerySchema`
       (mirroring the `/api/admin/ingestion/drafts` route) and returns `Page<PendingAdditionItem>`
       instead of a bare array.
-- [ ] `fetchPendingAdditions` takes a cursor and returns `Page<PendingAdditionItem>`;
+- [x] `fetchPendingAdditions` takes a cursor and returns `Page<PendingAdditionItem>`;
       `usePendingAdditions` becomes a paginated hook via the existing `usePaginatedQuery` helper
       (`services/pagination.ts`), same shape as `useVisibleDrafts`.
-- [ ] `PendingAdditionsSection` renders a `LoadMoreButton` when `hasNextPage`, matching
+- [x] `PendingAdditionsSection` renders a `LoadMoreButton` when `hasNextPage`, matching
       `DraftsSection`'s existing markup/behavior.
-- [ ] Approve/reject mutations' cache invalidation (`usePendingAdditionDecision`) still works
+- [x] Approve/reject mutations' cache invalidation (`usePendingAdditionDecision`) still works
       against the paginated query key.
-- [ ] Existing tests for `findAllPendingAdditions`/the pending-additions route/hook updated for the
+- [x] Existing tests for `findAllPendingAdditions`/the pending-additions route/hook updated for the
       new paginated shape; a pagination test added if `findDraftsPage`'s own integration test
       (`test/integration/pagination.test.ts`) is the right place to extend rather than duplicate.
 

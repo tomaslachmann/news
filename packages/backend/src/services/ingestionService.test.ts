@@ -678,7 +678,7 @@ describe('listPendingAdditions', () => {
   beforeEach(() => vi.resetAllMocks())
 
   it('maps repository rows to PendingAdditionItems', async () => {
-    vi.mocked(pendingAdditionRepo.findAllPendingAdditions).mockResolvedValue([
+    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue([
       {
         id: 'p1',
         analysisId: 'a1',
@@ -693,9 +693,10 @@ describe('listPendingAdditions', () => {
       },
     ])
 
-    const result = await listPendingAdditions()
+    const result = await listPendingAdditions(undefined)
 
-    expect(result).toEqual([
+    expect(pendingAdditionRepo.findPendingAdditionsPage).toHaveBeenCalledWith(undefined, 20)
+    expect(result.items).toEqual([
       {
         id: 'p1',
         analysisId: 'a1',
@@ -707,6 +708,47 @@ describe('listPendingAdditions', () => {
         createdAt: '2026-01-02T00:00:00.000Z',
       },
     ])
+    expect(result.nextCursor).toBeNull()
+  })
+
+  it('returns a nextCursor when the repository returns one more row than the page limit', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue([
+      {
+        id: 'p1',
+        analysisId: 'a1',
+        sourceId: 'src-idnes',
+        title: 'A',
+        articleUrl: 'https://idnes.cz/a',
+        publishedAt: '2026-01-02T00:00:00Z',
+        status: 'PENDING_REVIEW',
+        createdAt: new Date('2026-01-02T00:00:00Z'),
+        analysis: { seedHeadline: 'Story A' },
+        source: { name: 'iDnes' },
+      },
+      {
+        id: 'p2',
+        analysisId: 'a2',
+        sourceId: 'src-novinky',
+        title: 'B',
+        articleUrl: 'https://novinky.cz/b',
+        publishedAt: '2026-01-01T00:00:00Z',
+        status: 'PENDING_REVIEW',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        analysis: { seedHeadline: 'Story B' },
+        source: { name: 'Novinky' },
+      },
+    ])
+
+    const result = await listPendingAdditions(undefined, 1)
+
+    expect(result.items).toHaveLength(1)
+    expect(result.nextCursor).not.toBeNull()
+  })
+
+  it('returns an empty page when nothing is pending', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue([])
+
+    expect(await listPendingAdditions(undefined)).toEqual({ items: [], nextCursor: null })
   })
 })
 
