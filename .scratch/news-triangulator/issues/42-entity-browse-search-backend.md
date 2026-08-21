@@ -4,7 +4,7 @@
 
 **Blocked by:** none — degrades gracefully without ticket 40/41 (no alias/Wikidata data to show yet, just omits those sections).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `searchEntitiesByName(query, limit)` in `repositories/entity.ts` — uses `entity_canonicalName_trgm_idx` (`similarity()`/`%`).
 - [x] `findEntityByKey(key)` in `repositories/entity.ts`.
