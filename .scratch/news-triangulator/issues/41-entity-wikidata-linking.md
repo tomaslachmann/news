@@ -4,7 +4,7 @@
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `Entity.wikidataId String?` — nullable, no default, no backfill.
 - [x] New server-side Wikidata search client (mirrors `articleFetchClient.ts`'s one-function shape): calls Wikidata's public search API, returns candidate matches (label, description, Q-id) for a given query string.
