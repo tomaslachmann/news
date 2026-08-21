@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useEntitySearch } from '@/services/entities/hooks'
 import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
@@ -10,13 +9,14 @@ import './EntityDetailPage.css'
 export default function SearchPage() {
   const [params, setParams] = useSearchParams()
   const submittedQuery = params.get('q') ?? ''
-  const [query, setQuery] = useState(submittedQuery)
 
   const { data: results, isLoading, isError, isFetched } = useEntitySearch(submittedQuery)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setParams(query.trim() ? { q: query.trim() } : {})
+    const value = new FormData(e.currentTarget).get('q')
+    const trimmed = typeof value === 'string' ? value.trim() : ''
+    setParams(trimmed ? { q: trimmed } : {})
   }
 
   return (
@@ -38,12 +38,17 @@ export default function SearchPage() {
           <input
             className="input"
             id="entity-search-q"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            name="q"
+            // Keyed by the URL's own `q`, not React state: browser back/forward (or following a
+            // different /search?q=... link in without a remount) needs the input's displayed
+            // value to follow `submittedQuery` too — remounting via `key` does that without an
+            // effect-driven setState (this repo's react-hooks/set-state-in-effect lint rule).
+            key={submittedQuery}
+            defaultValue={submittedQuery}
             placeholder="např. Petr Fiala"
           />
         </div>
-        <button className="btn btn--primary" type="submit" disabled={!query.trim()}>
+        <button className="btn btn--primary" type="submit">
           Hledat
         </button>
       </form>
