@@ -1,152 +1,19 @@
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { Gauge } from '@/components/Gauge'
+import type { AnalysisListSummary } from '@/services/analyses'
+import { useArticlesList } from '@/services/analyses/hooks'
+import { articlePath } from '@/lib/analysisRoutes'
+import { getStorySignal, splitHomePageStories, type HomePageStory } from './homePageViewModel'
 import './HomePage.css'
 
-// ============================================================================
-// Sample content — a 1:1 port of e.html's own literal data (shared/data.js +
-// data2.js), not real API data. This is a visual/component port: reusable
-// components (Gauge, SampleByline, LeadArticle, TwoCards, StoryListSection,
-// EntsPanel, MinuteFeedSection, ConflictsSection, MostReadSection) built
-// against this fixed sample content now; wiring them to real Analysis data is
-// separate, later work.
-// ============================================================================
+const SAMPLE_BAD_THRESHOLD = 65
 
-interface SampleStory {
-  title: string
-  lead: string
-  sources: number
-  agreement: number
-  conflict: boolean
-  clock: string
-  topic: string
-  entities: string[]
-  outlets: string[]
-  img: string
-}
-
-// clocks from data2.js overwrite each story's original `time` field before render — only the
-// final clock value actually reaches the page, so that's the only one kept here.
-const SAMPLE_STORIES: SampleStory[] = [
-  {
-    title: 'Vláda schválila úpravu rozpočtu, opozice mluví o skrytém deficitu',
-    lead: 'Sedm redakcí popisuje stejný krok, rozcházejí se ale v čísle výsledného salda — rozdíl činí 18 mld. Kč.',
-    sources: 9,
-    agreement: 62,
-    conflict: true,
-    clock: '15:12',
-    topic: 'Ekonomika',
-    entities: ['Ministerstvo financí', 'Petr Fiala', 'ODS'],
-    outlets: ['ČTK', 'iRozhlas', 'Seznam Zprávy', 'Deník N'],
-    img: 'parlament',
-  },
-  {
-    title: 'ČNB ponechala úrokové sazby bez změny',
-    lead: 'Shodné znění napříč zdroji, tři z nich přebírají identickou formulaci z tiskové zprávy banky.',
-    sources: 12,
-    agreement: 94,
-    conflict: false,
-    clock: '14:41',
-    topic: 'Ekonomika',
-    entities: ['ČNB'],
-    outlets: ['ČTK', 'E15', 'Hospodářské noviny'],
-    img: 'cnb',
-  },
-  {
-    title: 'Jednání o dodávkách munice pro Ukrajinu se posunulo na září',
-    lead: 'Dva zdroje uvádějí odklad kvůli logistice, tři zmiňují politický spor v Radě EU. Původní zdroj nedohledán.',
-    sources: 8,
-    agreement: 55,
-    conflict: true,
-    clock: '14:03',
-    topic: 'Zahraničí',
-    entities: ['Ukrajina', 'Evropská komise', 'NATO'],
-    outlets: ['Reuters', 'ČTK', 'Novinky'],
-    img: 'munice',
-  },
-  {
-    title: 'ČEZ oznámil investici do přenosové sítě na severní Moravě',
-    lead: 'Údaj o objemu investice se mezi zdroji liší dvojnásobně; nejnižší hodnota pochází z výroční zprávy.',
-    sources: 6,
-    agreement: 71,
-    conflict: true,
-    clock: '13:18',
-    topic: 'Energetika',
-    entities: ['ČEZ', 'Ostrava'],
-    outlets: ['ČTK', 'Deník', 'Ekonomický deník'],
-    img: 'energetika',
-  },
-  {
-    title: 'Trump podepsal exekutivní příkaz k dovozním tarifům',
-    lead: 'Agentury se shodují na obsahu, komentáře k dopadu na český export se rozcházejí.',
-    sources: 14,
-    agreement: 88,
-    conflict: false,
-    clock: '12:44',
-    topic: 'Zahraničí',
-    entities: ['Donald Trump', 'Evropská komise'],
-    outlets: ['Reuters', 'AP', 'ČTK', 'BBC'],
-    img: 'eu',
-  },
-  {
-    title: 'Praha upravuje pravidla pro krátkodobé ubytování',
-    lead: 'Shoda na datu účinnosti, rozpor v tom, kolika bytů se změna dotkne.',
-    sources: 7,
-    agreement: 76,
-    conflict: false,
-    clock: '10:29',
-    topic: 'Domácí',
-    entities: ['Praha'],
-    outlets: ['iDNES', 'Seznam Zprávy', 'Pražský deník'],
-    img: 'praha',
-  },
-  {
-    title: 'Babiš vystoupil k výsledkům auditu evropských dotací',
-    lead: 'Citace se v pěti zdrojích liší ve formulaci; jeden zdroj cituje pasáž, která v přepisu není.',
-    sources: 11,
-    agreement: 48,
-    conflict: true,
-    clock: '08:57',
-    topic: 'Domácí',
-    entities: ['Andrej Babiš', 'Evropská komise'],
-    outlets: ['ČTK', 'Deník N', 'Blesk', 'Info.cz'],
-    img: 'tiskovka',
-  },
-  {
-    title: 'NATO potvrdilo termín cvičení ve Střední Evropě',
-    lead: 'Vysoká shoda, primární zdroj dohledán a odkázán ve všech redakcích.',
-    sources: 10,
-    agreement: 91,
-    conflict: false,
-    clock: '06:20',
-    topic: 'Zahraničí',
-    entities: ['NATO', 'Ukrajina'],
-    outlets: ['ČTK', 'Reuters', 'Aktuálně.cz'],
-    img: 'nato',
-  },
-]
-
-const IMG_CAPTIONS: Record<string, string> = {
-  parlament: 'Jednání Poslanecké sněmovny o úpravě rozpočtu',
-  cnb: 'Sídlo centrální banky v centru Prahy',
-  munice: 'Sklad dělostřelecké munice připravené k odeslání',
-  energetika: 'Přenosová soustava na severní Moravě',
-  tiskovka: 'Tisková konference po jednání',
-  praha: 'Historické centrum Prahy s krátkodobým ubytováním',
-  eu: 'Vlajky členských států před institucemi v Bruselu',
-  nato: 'Mnohonárodní vojenské cvičení',
-}
-
-const AUTHORS = [
-  'Jana Křížová',
-  'Martin Bláha',
-  'Tereza Novotná',
-  'Ondřej Sýkora',
-  'Klára Vondráčková',
-  'Pavel Hruška',
-  'Lucie Marešová',
-  'Adam Doležal',
-]
-
-const readingMinutes = (sources: number) => 2 + (sources % 4)
+const TIME = new Intl.DateTimeFormat('cs-CZ', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Europe/Prague',
+})
 
 // Entities already sorted by mentions desc, matching data2.js's window.NT.entities.sort().
 const SAMPLE_ENTITIES = [
@@ -207,57 +74,65 @@ const SAMPLE_CONFLICTS = [
   { title: 'Termín dodávek munice', detail: 'původní zdroj nedohledán', pct: 55 },
 ]
 
-// The reference mockup's own hardcoded threshold for this fabricated sample data — there is no
-// real backend-computed tier behind these numbers to read instead (see components/Gauge.tsx).
-const SAMPLE_BAD_THRESHOLD = 65
+function StoryByline({ story, big }: { story: HomePageStory; big?: boolean }) {
+  const overlap = story.summary.sourceOverlap
+  const signal = getStorySignal(story.summary)
 
-function SampleByline({ story, index, big }: { story: SampleStory; index: number; big?: boolean }) {
   return (
     <div className="byline">
-      <span className="byline__who">{AUTHORS[index % AUTHORS.length]}</span>
-      <span className="byline__sep">|</span>
-      <span className="byline__time">{story.clock}</span>
-      <span className="byline__sep">|</span>
-      <span>{readingMinutes(story.sources)} min čtení</span>
+      <span className="byline__time">{TIME.format(new Date(story.createdAt))}</span>
       <span className="byline__sep">|</span>
       <span>
-        <b>{story.sources}</b> zdrojů
+        <b>{story.coverageCount}</b> zdrojů
       </span>
-      <span className="byline__sep">|</span>
-      <span className="byline__grp">
-        shoda <b>{story.agreement} %</b>
-        <Gauge
-          pct={story.agreement}
-          bad={story.agreement < SAMPLE_BAD_THRESHOLD}
-          big={big}
-          ariaLabel={`Shoda zdrojů ${story.agreement} procent`}
-        />
-      </span>
-      {story.conflict ? (
-        <span className="chip chip--bad">rozpor</span>
-      ) : (
-        <span className="chip chip--ok">primární zdroj</span>
+      {overlap && (
+        <>
+          <span className="byline__sep">|</span>
+          <span className="byline__grp">
+            shoda <b>{overlap.percentage} %</b>
+            <Gauge
+              pct={overlap.percentage}
+              bad={signal.bad}
+              big={big}
+              ariaLabel={`Shoda zdrojů ${overlap.percentage} procent`}
+            />
+          </span>
+        </>
       )}
+      <span className={signal.chipClass}>{signal.chipLabel}</span>
     </div>
   )
 }
 
-// ADR 0031: no image field exists in the data model (ADR 0004 keeps article content unstored),
-// so this renders an aspect-ratio placeholder instead of e.html's actual <img> — that's the one
-// deliberate deviation. The caption text itself is e.html's own literal two-line content
-// (IMG_CAPTIONS + "Ilustrační snímek"), unchanged.
-/** e.js only gives the LEAD image a figcaption (two spans: named caption + "Ilustrační snímek").
- *  Card/list thumbnails have no figcaption at all in the reference — just an `alt` attribute,
- *  which has no visual equivalent once the `<img>` itself is replaced by ADR 0031's placeholder,
- *  so thumbnails render silently (an aria-label carries the same text for accessibility). */
-function FigPlaceholder({ img, thumb, caption }: { img: string; thumb?: boolean; caption?: boolean }) {
+function imageAttribution(summary: AnalysisListSummary): string {
+  const parts = [summary.leadImage?.author, summary.leadImage?.license].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : 'Zdroj fotografie'
+}
+
+function StoryFigure({
+  story,
+  thumb,
+  caption,
+}: {
+  story: HomePageStory
+  thumb?: boolean
+  caption?: boolean
+}) {
+  const image = story.summary.leadImage
+
   return (
     <figure className={`fig${thumb ? ' fig--thumb' : ''}`}>
-      <div className="fig__ph" aria-label={caption ? undefined : IMG_CAPTIONS[img]} />
-      {caption && (
+      {image ? (
+        <img src={image.imageUrl} alt="Ilustrační foto" loading={thumb ? 'lazy' : 'eager'} />
+      ) : (
+        <div className="fig__ph" aria-label="Ilustrační foto není k dispozici" />
+      )}
+      {caption && image && (
         <figcaption>
-          <span>{IMG_CAPTIONS[img]}</span>
-          <span>Ilustrační snímek</span>
+          <a href={image.sourceUrl} target="_blank" rel="noreferrer">
+            {imageAttribution(story.summary)}
+          </a>
+          <span>Ilustrační foto</span>
         </figcaption>
       )}
     </figure>
@@ -301,42 +176,42 @@ function BHead({
   )
 }
 
-function LeadArticle({ story }: { story: SampleStory }) {
+function joinNames(names: string[], totalCount?: number): string {
+  if (names.length === 0) return ''
+  const shown = names.join(' · ')
+  return totalCount && totalCount > names.length ? `${shown} a další` : shown
+}
+
+function LeadArticle({ story }: { story: HomePageStory }) {
   return (
     <article className="lead">
-      <span className="kicker">
-        {story.topic} · analýza {story.sources} zdrojů
-      </span>
+      <span className="kicker">analýza {story.coverageCount} zdrojů</span>
       <h1 className="lead__h">
-        <a href="#" className="hl" onClick={(e) => e.preventDefault()}>
+        <Link to={articlePath(story.id)} className="hl">
           {story.title}
-        </a>
+        </Link>
       </h1>
-      <SampleByline story={story} index={0} big />
+      <StoryByline story={story} big />
       <div className="lead__body">
-        <a href="#" onClick={(e) => e.preventDefault()}>
-          <FigPlaceholder img={story.img} caption />
-        </a>
+        <Link to={articlePath(story.id)}>
+          <StoryFigure story={story} caption />
+        </Link>
         <div>
-          <p className="lead__perex">{story.lead}</p>
-          <p className="story__meta" style={{ marginTop: '0.9rem' }}>
-            Entity:{' '}
-            {story.entities.map((ent, i) => (
-              <span key={ent}>
-                {i > 0 && ' · '}
-                <a href="#" onClick={(e) => e.preventDefault()}>
-                  {ent}
-                </a>
-              </span>
-            ))}
-          </p>
-          <p className="story__meta" style={{ marginTop: '0.3rem' }}>
-            Zdroje: {story.outlets.join(' · ')} a další
-          </p>
+          <p className="lead__perex">{story.summary.teaser}</p>
+          {story.summary.entities.length > 0 && (
+            <p className="story__meta" style={{ marginTop: '0.9rem' }}>
+              Entity: {joinNames(story.summary.entities)}
+            </p>
+          )}
+          {story.summary.outlets.length > 0 && (
+            <p className="story__meta" style={{ marginTop: '0.3rem' }}>
+              Zdroje: {joinNames(story.summary.outlets, story.coverageCount)}
+            </p>
+          )}
           <p style={{ marginTop: '1rem' }}>
-            <a href="#" className="kicker" onClick={(e) => e.preventDefault()}>
+            <Link to={articlePath(story.id)} className="kicker">
               Srovnání zdrojů →
-            </a>
+            </Link>
           </p>
         </div>
       </div>
@@ -344,54 +219,50 @@ function LeadArticle({ story }: { story: SampleStory }) {
   )
 }
 
-function TwoCards({ stories }: { stories: SampleStory[] }) {
+function TwoCards({ stories }: { stories: HomePageStory[] }) {
   return (
     <div className="cards">
-      {stories.map((s, i) => (
-        <article className="card" key={s.title}>
-          <a href="#" onClick={(e) => e.preventDefault()}>
-            <FigPlaceholder img={s.img} />
-          </a>
-          <span className="kicker kicker--ink">{s.topic}</span>
-          <a href="#" onClick={(e) => e.preventDefault()}>
-            <h3 className="card__h hl">{s.title}</h3>
-          </a>
-          <SampleByline story={s} index={i + 1} />
-          <p className="card__p">{s.lead}</p>
+      {stories.map((story) => (
+        <article className="card" key={story.id}>
+          <Link to={articlePath(story.id)}>
+            <StoryFigure story={story} />
+          </Link>
+          <span className="kicker kicker--ink">analýza {story.coverageCount} zdrojů</span>
+          <Link to={articlePath(story.id)}>
+            <h3 className="card__h hl">{story.title}</h3>
+          </Link>
+          <StoryByline story={story} />
+          <p className="card__p">{story.summary.teaser}</p>
         </article>
       ))}
     </div>
   )
 }
 
-function StoryListSection({ stories }: { stories: SampleStory[] }) {
+function StoryListSection({ stories }: { stories: HomePageStory[] }) {
   return (
     <section className="storylist">
-      {stories.map((s, i) => (
-        <article className="story" key={s.title}>
+      {stories.map((story) => (
+        <article className="story" key={story.id}>
           <div>
-            <span className="kicker kicker--ink">{s.topic}</span>
-            <a href="#" onClick={(e) => e.preventDefault()}>
-              <h3 className="hl">{s.title}</h3>
-            </a>
-            <SampleByline story={s} index={i + 3} />
-            <p className="story__p">{s.lead}</p>
-            <p className="story__meta">
-              Entity:{' '}
-              {s.entities.map((ent, j) => (
-                <span key={ent}>
-                  {j > 0 && ' · '}
-                  <a href="#" onClick={(e) => e.preventDefault()}>
-                    {ent}
-                  </a>
-                </span>
-              ))}{' '}
-              · Zdroje: {s.outlets.join(', ')}
-            </p>
+            <span className="kicker kicker--ink">analýza {story.coverageCount} zdrojů</span>
+            <Link to={articlePath(story.id)}>
+              <h3 className="hl">{story.title}</h3>
+            </Link>
+            <StoryByline story={story} />
+            <p className="story__p">{story.summary.teaser}</p>
+            {(story.summary.entities.length > 0 || story.summary.outlets.length > 0) && (
+              <p className="story__meta">
+                {story.summary.entities.length > 0 && `Entity: ${joinNames(story.summary.entities)}`}
+                {story.summary.entities.length > 0 && story.summary.outlets.length > 0 && ' · '}
+                {story.summary.outlets.length > 0 &&
+                  `Zdroje: ${joinNames(story.summary.outlets, story.coverageCount)}`}
+              </p>
+            )}
           </div>
-          <a href="#" onClick={(e) => e.preventDefault()}>
-            <FigPlaceholder img={s.img} thumb />
-          </a>
+          <Link to={articlePath(story.id)}>
+            <StoryFigure story={story} thumb />
+          </Link>
         </article>
       ))}
     </section>
@@ -548,9 +419,12 @@ function DayStatsBar() {
 }
 
 export default function HomePage() {
-  const [lead, ...restStories] = SAMPLE_STORIES
-  const twoCards = restStories.slice(0, 2)
-  const listStories = restStories.slice(2)
+  const { data, isLoading, isError } = useArticlesList()
+  const sections = useMemo(() => {
+    const items = data?.pages.flatMap((page) => page.items) ?? []
+    return splitHomePageStories(items)
+  }, [data])
+  const { lead, twoCards, listStories } = sections
 
   return (
     <>
@@ -559,13 +433,36 @@ export default function HomePage() {
       <main className="u-wrap">
         <div className="layout">
           <div>
-            <LeadArticle story={lead} />
+            {isLoading ? (
+              <p style={{ padding: 'var(--sp-5) 0', color: 'var(--ink-3)' }}>Načítání článků…</p>
+            ) : isError ? (
+              <div className="error" style={{ marginTop: 'var(--sp-5)' }}>
+                <p className="error__p">Nepodařilo se načíst články.</p>
+              </div>
+            ) : lead ? (
+              <>
+                <LeadArticle story={lead} />
 
-            <Sec title="Ve středu pozornosti" linkText="Vše z dneška" />
-            <TwoCards stories={twoCards} />
+                {twoCards.length > 0 && (
+                  <>
+                    <Sec title="Ve středu pozornosti" linkText="Vše z dneška" />
+                    <TwoCards stories={twoCards} />
+                  </>
+                )}
 
-            <Sec title="Další zprávy dne" linkText="Archiv" />
-            <StoryListSection stories={listStories} />
+                {listStories.length > 0 && (
+                  <>
+                    <Sec title="Další zprávy dne" linkText="Archiv" />
+                    <StoryListSection stories={listStories} />
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="empty" style={{ marginTop: 'var(--sp-5)' }}>
+                <p className="empty__t">Zatím žádné články</p>
+                <p className="empty__d">Jakmile se dokončí první triangulace, objeví se tady.</p>
+              </div>
+            )}
           </div>
 
           <aside className="layout__rail">

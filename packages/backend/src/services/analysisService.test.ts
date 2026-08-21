@@ -1365,6 +1365,49 @@ describe('listAnalyses', () => {
     createdAt: new Date('2025-01-02T00:00:00Z'),
     status: 'COMPLETE' as const,
     okCoverageCount: 3,
+    coverages: [
+      {
+        status: 'OK' as const,
+        extractionResult: {
+          factualClaims: [],
+          attributedClaims: [],
+          interpretiveStatements: [],
+          framingSignals: [],
+        },
+        sourceName: 'ČTK',
+      },
+      {
+        status: 'OK' as const,
+        extractionResult: {
+          factualClaims: [],
+          attributedClaims: [],
+          interpretiveStatements: [],
+          framingSignals: [],
+        },
+        sourceName: 'Reuters',
+      },
+      {
+        status: 'OK' as const,
+        extractionResult: null,
+        sourceName: 'ČTK',
+      },
+    ],
+    dimensions: {
+      agreement: [{ id: 'agree-1', prose: 'Shoda na hlavním bodu.', attributions: [] }],
+      contradiction: [{ id: 'conflict-1', prose: 'Jeden zdroj uvádí jiný čas.', attributions: [] }],
+      uniqueReporting: [],
+      framing: [],
+      agreementCategory: 'PARTIAL' as const,
+    },
+    sourceOverlapPercentage: 67,
+    leadImage: {
+      imageUrl: 'https://images.example/full.jpg',
+      thumbnailUrl: 'https://images.example/thumb.jpg',
+      author: 'Foto autor',
+      license: 'CC BY 4.0',
+      sourceUrl: 'https://images.example/source',
+    },
+    entityNames: ['Ukrajina', 'Evropská komise', 'Ukrajina'],
   }
   const ROW_A2 = {
     id: 'a2',
@@ -1373,6 +1416,11 @@ describe('listAnalyses', () => {
     createdAt: new Date('2025-01-01T00:00:00Z'),
     status: 'PENDING' as const,
     okCoverageCount: 0,
+    coverages: [],
+    dimensions: null,
+    sourceOverlapPercentage: null,
+    leadImage: null,
+    entityNames: [],
   }
 
   it('maps each repository row to an AnalysisListItem, preferring the generated headline as title when present and falling back to the working title otherwise', async () => {
@@ -1389,6 +1437,19 @@ describe('listAnalyses', () => {
         createdAt: '2025-01-02T00:00:00.000Z',
         coverageCount: 3,
         status: 'complete',
+        summary: {
+          teaser: 'Shoda na hlavním bodu.',
+          hasConflict: true,
+          sourceOverlap: { percentage: 67, sourceCount: 2, tier: 'mid' },
+          outlets: ['ČTK', 'Reuters'],
+          entities: ['Ukrajina', 'Evropská komise'],
+          leadImage: {
+            imageUrl: 'https://images.example/thumb.jpg',
+            author: 'Foto autor',
+            license: 'CC BY 4.0',
+            sourceUrl: 'https://images.example/source',
+          },
+        },
       },
       {
         id: 'a2',
@@ -1397,6 +1458,7 @@ describe('listAnalyses', () => {
         createdAt: '2025-01-01T00:00:00.000Z',
         coverageCount: 0,
         status: 'pending',
+        summary: undefined,
       },
     ])
     expect(result.nextCursor).toBeNull()

@@ -2,10 +2,13 @@ import type {
   AnalysisDetail,
   AnalysisEntityRelationItem,
   AnalysisListItem,
+  AnalysisListSummary,
+  AnalysisDimensions,
   EntityMentionItem,
   NarrativeDocument,
   NarrativeLeadImage,
   RelatedEventItem,
+  SourceOverlapInfo,
   ThreadSummaryItem,
 } from '@news-triangulator/shared'
 import type {
@@ -94,14 +97,10 @@ export function toAnalysisDetail(
     // `coverages.length` — a Coverage can be attached and even status:'OK' without its
     // extraction having passed schema validation, so `coverages.length` can overstate the
     // sources the percentage was actually computed from.
-    sourceOverlap:
-      analysis.synthesisResult?.sourceOverlapPercentage != null
-        ? {
-            percentage: analysis.synthesisResult.sourceOverlapPercentage,
-            sourceCount: countValidExtractions(analysis.coverages),
-            tier: interpretSourceOverlap(analysis.synthesisResult.sourceOverlapPercentage),
-          }
-        : undefined,
+    sourceOverlap: toSourceOverlapInfo(
+      analysis.synthesisResult?.sourceOverlapPercentage ?? null,
+      countValidExtractions(analysis.coverages)
+    ),
     narrative: analysis.synthesisResult?.narrative
       ? (analysis.synthesisResult.narrative as unknown as NarrativeDocument)
       : undefined,
@@ -115,6 +114,55 @@ export function toAnalysisDetail(
   }
 }
 
+function toSourceOverlapInfo(
+  sourceOverlapPercentage: number | null,
+  sourceCount: number
+): SourceOverlapInfo | undefined {
+  return sourceOverlapPercentage != null
+    ? {
+        percentage: sourceOverlapPercentage,
+        sourceCount,
+        tier: interpretSourceOverlap(sourceOverlapPercentage),
+      }
+    : undefined
+}
+
+function toAnalysisListSummary(row: AnalysisListRow): AnalysisListSummary | undefined {
+  if (!row.dimensions) return undefined
+  const validCoverageCount = countValidExtractions(row.coverages)
+
+  return {
+    teaser: toTeaser(row.dimensions, resolveDisplayTitle(row.headline, row.seedHeadline)),
+    hasConflict: row.dimensions.contradiction.length > 0,
+    sourceOverlap: toSourceOverlapInfo(row.sourceOverlapPercentage, validCoverageCount),
+    outlets: dedupe(row.coverages.map((coverage) => coverage.sourceName)).slice(0, 4),
+    entities: dedupe(row.entityNames).slice(0, 4),
+    leadImage: row.leadImage ? toNarrativeLeadImage(row.leadImage) : undefined,
+  }
+}
+
+function toTeaser(dimensions: AnalysisDimensions, fallback: string): string {
+  const prose =
+    firstNonEmptyProse(dimensions.agreement) ??
+    firstNonEmptyProse(dimensions.uniqueReporting) ??
+    firstNonEmptyProse(dimensions.contradiction) ??
+    firstNonEmptyProse(dimensions.framing)
+
+  if (!prose) return fallback
+
+  const singleLine = prose.replace(/\s+/g, ' ').trim()
+  if (singleLine.length <= 220) return singleLine
+  return `${singleLine.slice(0, 217).trimEnd()}...`
+}
+
+function firstNonEmptyProse(items: { prose: string }[]): string | undefined {
+  return items.map((item) => item.prose.trim()).find((item) => item.length > 0)
+}
+
+function dedupe(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))]
+}
+
 export function toAnalysisListItem(row: AnalysisListRow): AnalysisListItem {
   return {
     id: row.id,
@@ -123,6 +171,7 @@ export function toAnalysisListItem(row: AnalysisListRow): AnalysisListItem {
     createdAt: row.createdAt.toISOString(),
     coverageCount: row.okCoverageCount,
     status: STATUS_MAP[row.status],
+    summary: toAnalysisListSummary(row),
   }
 }
 

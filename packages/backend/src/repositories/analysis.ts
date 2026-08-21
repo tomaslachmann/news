@@ -7,8 +7,9 @@ import type {
   SynthesisAgreementCategory,
   NarrativeImage,
 } from '@prisma/client'
+import type { AnalysisDimensions } from '@news-triangulator/shared'
 import { prisma } from '../db.js'
-import type { CoverageWithSource } from './coverage.js'
+import type { CoverageStatus, CoverageWithSource } from './coverage.js'
 import type { Cursor } from '../pagination.js'
 import { keysetSqlWhere } from './sqlPagination.js'
 
@@ -173,6 +174,17 @@ export interface AnalysisListRow {
   createdAt: Date
   status: AnalysisStatus
   okCoverageCount: number
+  coverages: { status: CoverageStatus; extractionResult: unknown; sourceName: string }[]
+  dimensions: AnalysisDimensions | null
+  sourceOverlapPercentage: number | null
+  leadImage: {
+    imageUrl: string
+    thumbnailUrl: string | null
+    author: string | null
+    license: string | null
+    sourceUrl: string
+  } | null
+  entityNames: string[]
 }
 
 /** Fetches `limit + 1` rows (the caller peels off the extra one to know whether a next page
@@ -192,7 +204,40 @@ export async function findAnalysesPage(
     take: limit + 1,
     include: {
       _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },
-      synthesisResult: { select: { headline: true } },
+      coverages: {
+        where: { status: 'OK', excluded: false },
+        orderBy: { id: 'asc' },
+        select: {
+          status: true,
+          extractionResult: true,
+          source: { select: { name: true } },
+        },
+      },
+      story: {
+        select: {
+          storyEntities: {
+            orderBy: [{ salience: 'desc' }, { entityId: 'asc' }],
+            take: 4,
+            select: { entity: { select: { canonicalName: true } } },
+          },
+        },
+      },
+      synthesisResult: {
+        select: {
+          headline: true,
+          dimensions: true,
+          sourceOverlapPercentage: true,
+          narrativeImage: {
+            select: {
+              imageUrl: true,
+              thumbnailUrl: true,
+              author: true,
+              license: true,
+              sourceUrl: true,
+            },
+          },
+        },
+      },
     },
   })
 
@@ -203,6 +248,15 @@ export async function findAnalysesPage(
     createdAt: r.createdAt,
     status: r.status,
     okCoverageCount: r._count.coverages,
+    coverages: r.coverages.map((coverage) => ({
+      status: coverage.status,
+      extractionResult: coverage.extractionResult,
+      sourceName: coverage.source.name,
+    })),
+    dimensions: (r.synthesisResult?.dimensions as AnalysisDimensions | null) ?? null,
+    sourceOverlapPercentage: r.synthesisResult?.sourceOverlapPercentage ?? null,
+    leadImage: r.synthesisResult?.narrativeImage ?? null,
+    entityNames: r.story.storyEntities.map((storyEntity) => storyEntity.entity.canonicalName),
   }))
 }
 

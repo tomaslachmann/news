@@ -230,6 +230,19 @@ export interface AnalysisListItem {
    *  PENDING until after Review Step confirmation — an OK-only count would always read zero. */
   coverageCount: number
   status: AnalysisStatusLabel
+  /** Ticket 58 — homepage/listing surface for COMPLETE Articles. Absent on thinner list rows
+   *  (e.g. DRAFT/PENDING history/admin queue items) whose consumers don't need reader-facing
+   *  teaser/image/entity/source detail. */
+  summary?: AnalysisListSummary
+}
+
+export interface AnalysisListSummary {
+  teaser: string
+  hasConflict: boolean
+  sourceOverlap?: SourceOverlapInfo
+  outlets: string[]
+  entities: string[]
+  leadImage?: NarrativeLeadImage
 }
 
 export interface PendingAdditionItem {
