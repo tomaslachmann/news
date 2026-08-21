@@ -1,24 +1,19 @@
-import type {
-  NarrativeDocument,
-  NarrativeEntityRef,
-  NarrativeSourceRef,
-  NarrativeValueRef,
-} from '@/services/analyses'
+import type { NarrativeDocument, NarrativeEntityRef, NarrativeSourceRef } from '@/services/analyses'
 
-/** Id-keyed lookup into one NarrativeDocument's own top-level ref declarations — every
- *  NarrativeInline entity/source/value run points at one of these ids (ADR 0034). Built once per
- *  render rather than re-scanning `document.entityRefs`/`sourceRefs`/`valueRefs` per inline run. */
+/** Id-keyed lookup into one NarrativeDocument's own top-level ref declarations that rendering
+ *  actually resolves — a `value` inline run renders its own `text` directly (ADR 0034: distinct
+ *  styling only, no ticket-48 requirement to surface `normalizedValue`/`unit`), so `valueRefs`
+ *  isn't indexed here; add it back if a future ticket needs to resolve a value ref's declaration.
+ *  Built once per render rather than re-scanning `document.entityRefs`/`sourceRefs` per inline run. */
 export interface NarrativeRefIndex {
   entities: Map<string, NarrativeEntityRef>
   sources: Map<string, NarrativeSourceRef>
-  values: Map<string, NarrativeValueRef>
 }
 
 export function indexNarrativeRefs(document: NarrativeDocument): NarrativeRefIndex {
   return {
     entities: new Map(document.entityRefs.map((r) => [r.id, r])),
     sources: new Map(document.sourceRefs.map((r) => [r.id, r])),
-    values: new Map(document.valueRefs.map((r) => [r.id, r])),
   }
 }
 
