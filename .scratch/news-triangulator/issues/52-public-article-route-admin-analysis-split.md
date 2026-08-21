@@ -12,7 +12,7 @@ public reads are bounded to `COMPLETE` status).
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] New route `/article/:id`, public (under `AppLayout`, no `ProtectedRoute`), rendering only the
       completed article (`CompleteAnalysis`) — draft/pending/streaming/failed states return a plain
