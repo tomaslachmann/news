@@ -11,9 +11,16 @@ export async function findSynthesisResultByAnalysisId(analysisId: string): Promi
  *  short-circuit and re-emit it instead of actually re-synthesizing — used by ticket 45's
  *  Pending Addition approval, the one place an already-COMPLETE Analysis is deliberately sent
  *  back through re-triangulation. A no-op, not an error, if no SynthesisResult exists yet (e.g. a
- *  retried approval after a prior attempt's transition failed partway through). */
-export async function deleteSynthesisResult(analysisId: string): Promise<void> {
-  await prisma.synthesisResult.deleteMany({ where: { analysisId } })
+ *  retried approval after a prior attempt's transition failed partway through).
+ *
+ *  Takes an optional `tx` — `approvePendingAddition` runs this inside the same transaction as its
+ *  COMPLETE→PENDING status write (via `updateAnalysisStatusIfCurrently`'s `onTransition` hook), so
+ *  a failure in between can't leave the Analysis COMPLETE with no SynthesisResult. */
+export async function deleteSynthesisResult(
+  analysisId: string,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  await (tx ?? prisma).synthesisResult.deleteMany({ where: { analysisId } })
 }
 
 export async function updateSynthesisResultNarrative(

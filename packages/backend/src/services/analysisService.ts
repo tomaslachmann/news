@@ -11,12 +11,11 @@ import type {
 } from '@news-triangulator/shared'
 import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
 import { fetchPage } from '../pagination.js'
-import { scrapeArticle, ScrapeError, MIN_TEXT_LENGTH, type ScrapedArticle } from './articleScraper.js'
+import { scrapeArticle, ScrapeError, scrapeForCoverage, type ScrapedArticle } from './articleScraper.js'
 import { settleWithConcurrency } from './concurrency.js'
 import { extractKeywords } from './keywordExtractor.js'
 import { discoverCoverage } from './discovery.js'
 import { resolveSourceByUrl } from './sourceResolver.js'
-import { isBlockedContent } from './blockedContent.js'
 import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVerification.js'
 import { generateEmbedding, type EmbeddingResult } from './embeddingClient.js'
 import {
@@ -349,18 +348,8 @@ export async function confirmCoverages(
   const pending = await coverageRepo.findCoveragesForAnalysis(analysisId, { onlyStatus: 'PENDING' })
 
   await settleWithConcurrency(pending, MAX_CONCURRENT_COVERAGE_SCRAPES, async (coverage) => {
-    try {
-      const scraped = await scrapeArticle(coverage.articleUrl)
-      const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
-      if (isBlocked) {
-        await coverageRepo.updateCoverage(coverage.id, { status: 'EXTRACTION_FAILED' })
-      } else {
-        await coverageRepo.updateCoverage(coverage.id, { extractedText: scraped.fullText, status: 'OK' })
-      }
-    } catch (err) {
-      log?.warn({ analysisId, coverageId: coverage.id, err }, 'Scraping Coverage article failed')
-      await coverageRepo.updateCoverage(coverage.id, { status: 'EXTRACTION_FAILED' })
-    }
+    const outcome = await scrapeForCoverage(coverage.articleUrl, log)
+    await coverageRepo.updateCoverage(coverage.id, outcome)
   })
 
   const updated = await coverageRepo.findCoveragesForAnalysis(analysisId)

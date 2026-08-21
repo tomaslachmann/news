@@ -18,8 +18,7 @@ import {
 } from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
-import { scrapeArticle, MIN_TEXT_LENGTH } from './articleScraper.js'
-import { isBlockedContent } from './blockedContent.js'
+import { scrapeForCoverage } from './articleScraper.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import { NotFoundError, ValidationError } from '../errors.js'
@@ -359,6 +358,36 @@ export async function approvePendingAddition(
     throw new ValidationError('Analýza mezitím změnila stav')
   }
 
+  // Each Source contributes at most one Coverage per Analysis (CONTEXT.md) — checked explicitly
+  // here, before ever touching addCoveragesIfWithinLimit, so a second PendingAddition for a
+  // Source already attached (e.g. Ingestion re-flagged the same or a different article from an
+  // outlet a prior approval already covered) gets an accurate outcome instead of the cap-check's
+  // generic {ok:false}, which can't distinguish "at the cap" from "this Source is taken."
+  const existingCoverages = await coverageRepo.findCoveragesForAnalysis(pendingAddition.analysisId)
+  const existingForSource = existingCoverages.find((c) => c.sourceId === pendingAddition.sourceId)
+  if (existingForSource) {
+    if (existingForSource.articleUrl !== pendingAddition.articleUrl) {
+      throw new ValidationError('Tento zdroj je již k analýze připojen jiným článkem')
+    }
+    // Same Source, same URL — a duplicate PendingAddition for a Coverage an earlier approval
+    // (of a different PendingAddition row) already attached. Nothing new to add or re-triangulate;
+    // just resolve this row so it stops showing as actionable.
+    const alreadyResolved = await pendingAdditionRepo.updatePendingAdditionStatusIfCurrently(
+      id,
+      'PENDING_REVIEW',
+      'APPROVED'
+    )
+    if (alreadyResolved) {
+      await recordAdminActionSafe({
+        actorId,
+        action: 'pending_addition.approved',
+        targetType: 'pending_addition',
+        targetId: id,
+      })
+    }
+    return
+  }
+
   const attachResult = await coverageRepo.addCoveragesIfWithinLimit(
     pendingAddition.analysisId,
     [
@@ -378,34 +407,25 @@ export async function approvePendingAddition(
   }
 
   const coverages = await coverageRepo.findCoveragesForAnalysis(pendingAddition.analysisId)
-  const newCoverage = coverages.find((c) => c.sourceId === pendingAddition.sourceId)!
-
-  let scrapedOk = false
-  try {
-    const scraped = await scrapeArticle(newCoverage.articleUrl)
-    const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
-    if (isBlocked) {
-      await coverageRepo.updateCoverage(newCoverage.id, { status: 'EXTRACTION_FAILED' })
-    } else {
-      await coverageRepo.updateCoverage(newCoverage.id, { extractedText: scraped.fullText, status: 'OK' })
-      scrapedOk = true
-    }
-  } catch (err) {
-    log?.warn(
-      { pendingAdditionId: id, coverageId: newCoverage.id, err },
-      'Scraping the approved Pending Addition article failed'
-    )
-    await coverageRepo.updateCoverage(newCoverage.id, { status: 'EXTRACTION_FAILED' })
+  const newCoverage = coverages.find((c) => c.sourceId === pendingAddition.sourceId)
+  if (!newCoverage) {
+    throw new ValidationError('Připojení zdroje se nezdařilo; zkuste to prosím znovu')
   }
 
-  await synthesisResultRepo.deleteSynthesisResult(pendingAddition.analysisId)
+  const scraped = await scrapeForCoverage(newCoverage.articleUrl, log)
+  await coverageRepo.updateCoverage(newCoverage.id, scraped)
 
-  const eligibleCoverageIds = scrapedOk ? [newCoverage.id] : []
+  const eligibleCoverageIds = scraped.status === 'OK' ? [newCoverage.id] : []
   const transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(
     pendingAddition.analysisId,
     'COMPLETE',
     'PENDING',
     async (tx) => {
+      // Same transaction as the status write — deleting it separately would let a failure in
+      // between (e.g. the queue cold-start risk updateAnalysisStatusIfCurrently's own comment
+      // documents) leave the Analysis COMPLETE with no SynthesisResult, the exact inconsistency
+      // completeAnalysisWithSynthesis's own single-transaction design exists to prevent.
+      await synthesisResultRepo.deleteSynthesisResult(pendingAddition.analysisId, tx)
       await enqueueJob(
         JobName.EntityRelation,
         {
