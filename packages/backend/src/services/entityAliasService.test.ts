@@ -22,6 +22,7 @@ const ENTITY_A = {
   canonicalName: 'United States',
   type: 'COUNTRY' as const,
   storyCount: 5,
+  wikidataId: null,
 }
 const ENTITY_B = {
   id: 'e-b',
@@ -29,6 +30,7 @@ const ENTITY_B = {
   canonicalName: 'US',
   type: 'COUNTRY' as const,
   storyCount: 3,
+  wikidataId: null,
 }
 
 describe('getEntityAliasCandidates', () => {

@@ -178,6 +178,13 @@ export const ConfirmEntityAliasMergeBodySchema = z.object({
 })
 export type ConfirmEntityAliasMergeBody = z.infer<typeof ConfirmEntityAliasMergeBodySchema>
 
+// Ticket 41 — the Admin picks a confirmed Q-id from the search results returned by
+// GET .../wikidata-candidates; the entity itself is identified by the route's :key param.
+export const LinkEntityWikidataBodySchema = z.object({
+  wikidataId: z.string().regex(/^Q[1-9]\d*$/, 'Neplatné Wikidata Q-id'),
+})
+export type LinkEntityWikidataBody = z.infer<typeof LinkEntityWikidataBodySchema>
+
 // API response types
 
 export type AnalysisStatusLabel = 'draft' | 'pending' | 'complete' | 'failed'
@@ -281,6 +288,15 @@ export interface EntityAliasCandidateItem {
   entityA: EntityAliasCandidateEntity
   entityB: EntityAliasCandidateEntity
   similarity: number
+}
+
+/** One Wikidata search result (ticket 41) — label/description/Q-id, exactly what an Admin needs
+ *  to visually disambiguate candidates before confirming a link. `description` is omitted when
+ *  Wikidata has none for that item, not sent as an empty string. */
+export interface WikidataCandidateItem {
+  qid: string
+  label: string
+  description?: string
 }
 
 /** A PUBLISHED StoryRelation (ticket 35), from the current Analysis's point of view — the

@@ -98,6 +98,12 @@ enum EntityRelationType {
   ANNOUNCES
 }
 
+/// Ticket 41 / ADR 0034 — v1 declares only WIKIMEDIA; a second provider (Openverse, Unsplash) is
+/// additive later, not foreclosed, and is what would eventually motivate EntityImage.isPrimary.
+enum EntityImageProvider {
+  WIKIMEDIA
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -178,6 +184,11 @@ model Entity {
   key           String                 @unique
   type          EntityType
   canonicalName String
+  /// Ticket 41 — nullable, no default, no backfill (ADR 0021's established no-backfill
+  /// convention). Set only via an Admin-confirmed Wikidata search-and-confirm flow, never an
+  /// automated/unconfirmed match (ADR 0022's entity-resolution-avoidance reasoning applies here
+  /// too — see docs/spec-entity-resolution.md).
+  wikidataId    String?
   /// Materialized count of Stories this Entity is attached to via StoryEntity — maintained by a
   /// transactional increment/decrement alongside each StoryEntity write, not a periodic
   /// correction job (no code path deletes a Story/StoryEntity today, so there is no drift to
@@ -197,6 +208,10 @@ model Entity {
   mergedInto    EntityAlias?           @relation("EntityAliasMergedFrom")
   rejectionsA   EntityAliasRejection[] @relation("EntityAliasRejectionA")
   rejectionsB   EntityAliasRejection[] @relation("EntityAliasRejectionB")
+  /// Ticket 41 — zero or one in v1 (Wikimedia is the only provider), fetched automatically by
+  /// `entity.image.enrich` once `wikidataId` is linked. No `isPrimary` field yet (ADR 0034): with
+  /// one provider there's nothing to prioritize among.
+  images        EntityImage[]
 
   /// Fuzzy name search over `canonicalName` (ticket 12) is a trigram GIN index
   /// (`entity_canonicalName_trgm_idx`, requires the `pg_trgm` extension), written by hand in this
@@ -299,6 +314,29 @@ model EntityAliasRejection {
   createdAt  DateTime @default(now())
 
   @@unique([entityIdA, entityIdB])
+}
+
+/// An Entity's image, fetched automatically from an external provider once an Admin links
+/// `Entity.wikidataId` (ticket 41 / ADR 0034) — enrichment of an identity the Admin already
+/// vouched for, not a second Admin-confirmed action of its own. No `isPrimary`: v1 has exactly one
+/// provider, so an Entity has zero or one image, nothing to prioritize among yet.
+model EntityImage {
+  id           String              @id @default(cuid())
+  entityId     String
+  entity       Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  provider     EntityImageProvider
+  externalId   String
+  imageUrl     String
+  thumbnailUrl String?
+  author       String?
+  license      String?
+  sourceUrl    String
+  width        Int?
+  height       Int?
+  createdAt    DateTime            @default(now())
+
+  @@unique([provider, externalId])
+  @@index([entityId])
 }
 
 /// A typed, directional Story-to-Story edge in the Event Graph (ticket 35) — the newer Story

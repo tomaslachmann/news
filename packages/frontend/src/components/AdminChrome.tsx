@@ -36,6 +36,7 @@ export function AdminChrome({ children }: { children: React.ReactNode }) {
             {isAdmin && (
               <>
                 <NavLink to="/admin/ingestion">Kontrola sběru</NavLink>
+                <NavLink to="/admin/entities">Entity / Wikidata</NavLink>
                 <NavLink to="/admin/users">Uživatelé</NavLink>
               </>
             )}
