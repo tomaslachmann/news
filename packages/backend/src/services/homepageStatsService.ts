@@ -20,6 +20,17 @@ export const HOMEPAGE_MINUTE_LIMIT = 9
 export const HOMEPAGE_CONTRADICTION_LIMIT = 4
 
 const HOUR_MS = 60 * 60 * 1000
+const HOMEPAGE_STATS_TIME_ZONE = 'Europe/Prague'
+const DATE_TIME_PARTS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: HOMEPAGE_STATS_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
 
 export interface HomepageEntityStatsRefreshResult {
   snapshotId: string | null
@@ -39,6 +50,40 @@ export function getHomepageEntityStatsWindow(now = new Date()): {
   const previousStart = new Date(previousEnd.getTime() - HOMEPAGE_ENTITY_STATS_WINDOW_HOURS * HOUR_MS)
 
   return { currentStart, currentEnd, previousStart, previousEnd }
+}
+
+function getDateTimePart(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): number {
+  const value = parts.find((part) => part.type === type)?.value
+  if (value === undefined) throw new Error(`Missing ${type} in formatted date parts`)
+  return Number(value)
+}
+
+function timeZoneOffsetMs(date: Date): number {
+  const parts = DATE_TIME_PARTS.formatToParts(date)
+  const asUtc = Date.UTC(
+    getDateTimePart(parts, 'year'),
+    getDateTimePart(parts, 'month') - 1,
+    getDateTimePart(parts, 'day'),
+    getDateTimePart(parts, 'hour'),
+    getDateTimePart(parts, 'minute'),
+    getDateTimePart(parts, 'second')
+  )
+  return asUtc - date.getTime()
+}
+
+export function getHomepageTodayStatsWindow(now = new Date()): {
+  currentStart: Date
+  currentEnd: Date
+} {
+  const parts = DATE_TIME_PARTS.formatToParts(now)
+  const localMidnightAsUtc = Date.UTC(
+    getDateTimePart(parts, 'year'),
+    getDateTimePart(parts, 'month') - 1,
+    getDateTimePart(parts, 'day')
+  )
+  const currentStart = new Date(localMidnightAsUtc - timeZoneOffsetMs(new Date(localMidnightAsUtc)))
+
+  return { currentStart, currentEnd: now }
 }
 
 export async function refreshHomepageEntityStats(
@@ -65,7 +110,7 @@ export async function getHomepageEntityStats(now = new Date()): Promise<Homepage
 }
 
 export async function getHomepageSummaryStats(now = new Date()): Promise<HomepageSummaryStats> {
-  const { currentStart, currentEnd } = getHomepageEntityStatsWindow(now)
+  const { currentStart, currentEnd } = getHomepageTodayStatsWindow(now)
   const row = await homepageStatsRepo.findHomepageSummaryStats({
     windowStart: currentStart,
     windowEnd: currentEnd,

@@ -6,6 +6,7 @@ import {
   getHomepageEntityStatsWindow,
   getHomepageMinuteFeed,
   getHomepageSummaryStats,
+  getHomepageTodayStatsWindow,
   HOMEPAGE_CONTRADICTION_LIMIT,
   HOMEPAGE_ENTITY_STATS_LIMIT,
   HOMEPAGE_MINUTE_LIMIT,
@@ -23,6 +24,17 @@ describe('getHomepageEntityStatsWindow', () => {
       currentEnd: new Date('2026-08-21T12:00:00Z'),
       previousStart: new Date('2026-08-19T12:00:00Z'),
       previousEnd: new Date('2026-08-20T12:00:00Z'),
+    })
+  })
+})
+
+describe('getHomepageTodayStatsWindow', () => {
+  it('uses the current calendar day in Prague time', () => {
+    const window = getHomepageTodayStatsWindow(new Date('2026-08-21T12:00:00Z'))
+
+    expect(window).toEqual({
+      currentStart: new Date('2026-08-20T22:00:00Z'),
+      currentEnd: new Date('2026-08-21T12:00:00Z'),
     })
   })
 })
@@ -108,7 +120,7 @@ describe('getHomepageEntityStats', () => {
 describe('getHomepageSummaryStats', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('maps the 24h homepage summary aggregate', async () => {
+  it('maps the homepage summary aggregate for the current Prague calendar day', async () => {
     vi.mocked(homepageStatsRepo.findHomepageSummaryStats).mockResolvedValue({
       processedArticleCount: 12,
       activeSourceCount: 8,
@@ -123,7 +135,7 @@ describe('getHomepageSummaryStats', () => {
       averageSourceOverlapPercentage: 73,
     })
     expect(homepageStatsRepo.findHomepageSummaryStats).toHaveBeenCalledWith({
-      windowStart: new Date('2026-08-20T12:00:00Z'),
+      windowStart: new Date('2026-08-20T22:00:00Z'),
       windowEnd: new Date('2026-08-21T12:00:00Z'),
     })
   })
