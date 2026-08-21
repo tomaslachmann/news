@@ -4,7 +4,7 @@
 
 **Blocked by:** none — `entity_canonicalName_trgm_idx` (ticket 12) already shipped.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] New `EntityAlias` model: `id`, `entityId` (FK to surviving Entity), `alias`, `mergedFromEntityId`, `createdAt`, `confirmedBy`. `@@unique([alias])`. Also made `mergedFromEntityId` `@unique` (not in the ticket's own field list) — an entity merged away once is never selected as a merge target again, and the constraint makes that invariant enforced at the DB level, not just by the candidate query's own exclusion filter. See ADR 0033.
 - [x] `EntityAliasRejection` — a dedicated table (`entityIdA`/`entityIdB` in a fixed order, `@@unique`), not a status column: a rejected pair is two entity ids with no natural "survivor" the way a confirmed `EntityAlias` row has, so it doesn't fit `EntityAlias`'s own shape.
