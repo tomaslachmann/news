@@ -7,6 +7,7 @@ export const JobName = {
   Narrative: 'narrative.generate',
   ThreadRecompute: 'thread.recompute',
   EntityImageEnrich: 'entity.image.enrich',
+  HomepageEntityStatsRefresh: 'homepage.entity-stats.refresh',
 } as const
 
 export type JobNameValue = (typeof JobName)[keyof typeof JobName]
@@ -39,6 +40,7 @@ export interface JobPayload {
   // re-read-by-id pattern entity.extract already uses for coverageIds) rather than trusting a
   // wikidataId carried in the payload, which could be stale by the time the job runs.
   [JobName.EntityImageEnrich]: { entityId: string }
+  [JobName.HomepageEntityStatsRefresh]: Record<string, never>
 }
 
 // A repeated LLM failure is either a persistent outage (more retries won't help) or a genuine
@@ -68,9 +70,15 @@ const EXTERNAL_HTTP_JOB_RETRY_POLICY: QueueOptions = {
   retryDelayMax: 30,
 }
 
+const DB_DERIVED_READ_MODEL_RETRY_POLICY: QueueOptions = {
+  retryLimit: 5,
+  retryDelay: 30,
+}
+
 export const JOB_RETRY_POLICY: Record<JobNameValue, QueueOptions> = {
   [JobName.EntityRelation]: LLM_JOB_RETRY_POLICY,
   [JobName.Narrative]: LLM_JOB_RETRY_POLICY,
   [JobName.ThreadRecompute]: THREAD_RECOMPUTE_RETRY_POLICY,
   [JobName.EntityImageEnrich]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
+  [JobName.HomepageEntityStatsRefresh]: DB_DERIVED_READ_MODEL_RETRY_POLICY,
 }

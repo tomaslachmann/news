@@ -351,6 +351,17 @@ export interface EntitySearchResultItem {
   storyCount: number
 }
 
+/** Precomputed homepage "Entity dne" row (ticket 59). Counts are for the latest stored 24h
+ *  window, not corpus-wide Entity.storyCount. */
+export interface HomepageEntityStatItem {
+  key: string
+  canonicalName: string
+  type: EntityTypeLabel
+  recentEventCount: number
+  recentSourceCount: number
+  trendPercent?: number
+}
+
 /** One Event (Story) that mentions this entity — `analysisId` is what an entity page links to
  *  (ticket 43), same id every other reader-facing surface navigates Articles by. */
 export interface EntityEventItem {
