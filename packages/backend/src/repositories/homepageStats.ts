@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import type { AnalysisDimensions } from '@news-triangulator/shared'
 import { prisma } from '../db.js'
 
 type HomepageStatsDbClient = Pick<Prisma.TransactionClient, '$queryRaw' | 'homepageEntityStatSnapshot'>
@@ -34,9 +35,146 @@ interface HomepageEntityStatRawRow {
   previousEventCount: bigint | null
 }
 
+export interface HomepageSummaryStatsRow {
+  processedArticleCount: number
+  activeSourceCount: number
+  contradictionCount: number
+  averageSourceOverlapPercentage: number | null
+}
+
+interface HomepageSummaryStatsRawRow {
+  processedArticleCount: bigint
+  activeSourceCount: bigint
+  contradictionCount: bigint
+  averageSourceOverlapPercentage: number | null
+}
+
+export interface HomepageMinuteRow {
+  id: string
+  seedHeadline: string
+  headline: string | null
+  createdAt: Date
+  sourceCount: number
+  dimensions: AnalysisDimensions | null
+}
+
+export interface HomepageContradictionAnalysisRow {
+  id: string
+  seedHeadline: string
+  headline: string | null
+  createdAt: Date
+  sourceOverlapPercentage: number | null
+  dimensions: AnalysisDimensions | null
+}
+
 function numberFromBigInt(value: bigint | number | null): number {
   if (value === null) return 0
   return typeof value === 'bigint' ? Number(value) : value
+}
+
+export async function findHomepageSummaryStats(input: {
+  windowStart: Date
+  windowEnd: Date
+}): Promise<HomepageSummaryStatsRow> {
+  const rows = await prisma.$queryRaw<HomepageSummaryStatsRawRow[]>`
+    WITH complete_articles AS (
+      SELECT a.id
+      FROM "Analysis" a
+      WHERE a.status = 'COMPLETE'
+        AND a."createdAt" >= ${input.windowStart}
+        AND a."createdAt" < ${input.windowEnd}
+    ),
+    article_stats AS (
+      SELECT
+        COUNT(*) AS "processedArticleCount",
+        COALESCE(
+          SUM(jsonb_array_length(COALESCE(sr.dimensions::jsonb -> 'contradiction', '[]'::jsonb))),
+          0
+        ) AS "contradictionCount",
+        (
+          AVG(sr."sourceOverlapPercentage") FILTER (WHERE sr."sourceOverlapPercentage" IS NOT NULL)
+        )::double precision
+          AS "averageSourceOverlapPercentage"
+      FROM complete_articles ca
+      LEFT JOIN "SynthesisResult" sr ON sr."analysisId" = ca.id
+    ),
+    source_stats AS (
+      SELECT COUNT(DISTINCT c."sourceId") AS "activeSourceCount"
+      FROM complete_articles ca
+      JOIN "Coverage" c
+        ON c."analysisId" = ca.id
+        AND c.status = 'OK'
+        AND c.excluded = false
+    )
+    SELECT
+      article_stats."processedArticleCount",
+      source_stats."activeSourceCount",
+      article_stats."contradictionCount",
+      article_stats."averageSourceOverlapPercentage"
+    FROM article_stats, source_stats
+  `
+  const row = rows[0]
+
+  return {
+    processedArticleCount: numberFromBigInt(row?.processedArticleCount ?? 0),
+    activeSourceCount: numberFromBigInt(row?.activeSourceCount ?? 0),
+    contradictionCount: numberFromBigInt(row?.contradictionCount ?? 0),
+    averageSourceOverlapPercentage:
+      row?.averageSourceOverlapPercentage == null ? null : Math.round(row.averageSourceOverlapPercentage),
+  }
+}
+
+export async function findHomepageMinuteRows(limit: number): Promise<HomepageMinuteRow[]> {
+  const rows = await prisma.analysis.findMany({
+    where: { status: 'COMPLETE' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit,
+    include: {
+      _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },
+      synthesisResult: { select: { headline: true, dimensions: true } },
+    },
+  })
+
+  return rows.map((row) => ({
+    id: row.id,
+    seedHeadline: row.seedHeadline,
+    headline: row.synthesisResult?.headline ?? null,
+    createdAt: row.createdAt,
+    sourceCount: row._count.coverages,
+    dimensions: (row.synthesisResult?.dimensions as AnalysisDimensions | null) ?? null,
+  }))
+}
+
+export async function findHomepageContradictionAnalysisRows(input: {
+  windowStart: Date
+  windowEnd: Date
+}): Promise<HomepageContradictionAnalysisRow[]> {
+  const rows = await prisma.analysis.findMany({
+    where: {
+      status: 'COMPLETE',
+      createdAt: { gte: input.windowStart, lt: input.windowEnd },
+      synthesisResult: { isNot: null },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    include: {
+      synthesisResult: {
+        select: {
+          headline: true,
+          dimensions: true,
+          sourceOverlapPercentage: true,
+        },
+      },
+    },
+  })
+
+  return rows.map((row) => ({
+    id: row.id,
+    seedHeadline: row.seedHeadline,
+    headline: row.synthesisResult?.headline ?? null,
+    createdAt: row.createdAt,
+    sourceOverlapPercentage: row.synthesisResult?.sourceOverlapPercentage ?? null,
+    dimensions: (row.synthesisResult?.dimensions as AnalysisDimensions | null) ?? null,
+  }))
 }
 
 export async function computeHomepageEntityStats({

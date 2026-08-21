@@ -1,10 +1,23 @@
-import type { HomepageEntityStatItem } from '@news-triangulator/shared'
-import { toHomepageEntityStatItem } from '../mappers/homepageStats.js'
+import type {
+  ContradictionItem,
+  HomepageContradictionItem,
+  HomepageEntityStatItem,
+  HomepageMinuteItem,
+  HomepageSummaryStats,
+} from '@news-triangulator/shared'
+import {
+  toHomepageContradictionItem,
+  toHomepageEntityStatItem,
+  toHomepageMinuteItem,
+  toHomepageSummaryStats,
+} from '../mappers/homepageStats.js'
 import * as homepageStatsRepo from '../repositories/homepageStats.js'
 
 export const HOMEPAGE_ENTITY_STATS_WINDOW_HOURS = 24
 export const HOMEPAGE_ENTITY_STATS_LIMIT = 10
 export const HOMEPAGE_ENTITY_STATS_MAX_AGE_HOURS = 6
+export const HOMEPAGE_MINUTE_LIMIT = 9
+export const HOMEPAGE_CONTRADICTION_LIMIT = 4
 
 const HOUR_MS = 60 * 60 * 1000
 
@@ -49,4 +62,50 @@ export async function getHomepageEntityStats(now = new Date()): Promise<Homepage
   const minimumWindowEnd = new Date(now.getTime() - HOMEPAGE_ENTITY_STATS_MAX_AGE_HOURS * HOUR_MS)
   const rows = await homepageStatsRepo.findLatestHomepageEntityStats({ minimumWindowEnd })
   return rows.map(toHomepageEntityStatItem)
+}
+
+export async function getHomepageSummaryStats(now = new Date()): Promise<HomepageSummaryStats> {
+  const { currentStart, currentEnd } = getHomepageEntityStatsWindow(now)
+  const row = await homepageStatsRepo.findHomepageSummaryStats({
+    windowStart: currentStart,
+    windowEnd: currentEnd,
+  })
+  return toHomepageSummaryStats(row)
+}
+
+export async function getHomepageMinuteFeed(): Promise<HomepageMinuteItem[]> {
+  const rows = await homepageStatsRepo.findHomepageMinuteRows(HOMEPAGE_MINUTE_LIMIT)
+  return rows.map(toHomepageMinuteItem)
+}
+
+function contradictionSourceCount(item: ContradictionItem): number {
+  return new Set(item.attributions.map((attribution) => attribution.outlet.trim()).filter(Boolean)).size
+}
+
+export async function getHomepageContradictions(now = new Date()): Promise<HomepageContradictionItem[]> {
+  const { currentStart, currentEnd } = getHomepageEntityStatsWindow(now)
+  const rows = await homepageStatsRepo.findHomepageContradictionAnalysisRows({
+    windowStart: currentStart,
+    windowEnd: currentEnd,
+  })
+
+  return rows
+    .flatMap((row) =>
+      (row.dimensions?.contradiction ?? [])
+        .map((item) => ({
+          row,
+          item: {
+            prose: item.prose.trim(),
+            sourceCount: contradictionSourceCount(item),
+          },
+        }))
+        .filter(({ item }) => item.prose.length > 0)
+    )
+    .sort((a, b) => {
+      const sourceDelta = b.item.sourceCount - a.item.sourceCount
+      if (sourceDelta !== 0) return sourceDelta
+      return b.row.createdAt.getTime() - a.row.createdAt.getTime()
+    })
+    .slice(0, HOMEPAGE_CONTRADICTION_LIMIT)
+    .map(({ row, item }) => toHomepageContradictionItem(row, item))
 }

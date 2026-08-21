@@ -362,6 +362,30 @@ export interface HomepageEntityStatItem {
   trendPercent?: number
 }
 
+export interface HomepageSummaryStats {
+  processedArticleCount: number
+  activeSourceCount: number
+  contradictionCount: number
+  averageSourceOverlapPercentage?: number
+}
+
+export interface HomepageMinuteItem {
+  analysisId: string
+  title: string
+  createdAt: string
+  sourceCount: number
+  hasConflict: boolean
+}
+
+export interface HomepageContradictionItem {
+  analysisId: string
+  title: string
+  createdAt: string
+  prose: string
+  sourceCount: number
+  sourceOverlapPercentage?: number
+}
+
 /** One Event (Story) that mentions this entity — `analysisId` is what an entity page links to
  *  (ticket 43), same id every other reader-facing surface navigates Articles by. */
 export interface EntityEventItem {
