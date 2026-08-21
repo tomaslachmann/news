@@ -1,5 +1,6 @@
+import { fetchWithTimeout } from './httpClient.js'
+
 const TIMEOUT_MS = 12_000
-const USER_AGENT = 'NewsTriangulator/1.0 (+https://github.com/tomaslachmann/news)'
 
 // ADR 0032: small-scope politeness. 3 attempts total on 429/5xx, honoring Retry-After when the
 // outlet sends one, else this fixed backoff — no jitter, traffic here is far below the scale
@@ -20,22 +21,9 @@ function retryDelayMs(res: Response, attempt: number): number {
   return FIXED_BACKOFF_MS[attempt] ?? FIXED_BACKOFF_MS.at(-1)!
 }
 
-async function fetchOnce(url: string): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-  try {
-    return await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': USER_AGENT },
-    })
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
 export async function fetchArticleHtml(url: string): Promise<string> {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const res = await fetchOnce(url)
+    const res = await fetchWithTimeout(url, TIMEOUT_MS)
     if (res.ok) return await res.text()
 
     const isLastAttempt = attempt === MAX_ATTEMPTS - 1

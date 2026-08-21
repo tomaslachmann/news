@@ -4,11 +4,13 @@ import { JobName } from './jobs/jobDefinitions.js'
 import { runEntityRelationJob } from './jobs/entityRelationJob.js'
 import { runNarrativeJob } from './jobs/narrativeJob.js'
 import { runThreadRecomputeJob } from './jobs/threadRecomputeJob.js'
+import { runEntityImageEnrichJob } from './jobs/entityImageEnrichJob.js'
 import { makeConsoleLogger } from './jobs/consoleLogger.js'
 import * as analysisRepo from './repositories/analysis.js'
 import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
 import * as entityAliasRepo from './repositories/entityAlias.js'
+import * as entityImageRepo from './repositories/entityImage.js'
 import * as storyRelationRepo from './repositories/storyRelation.js'
 import * as synthesisResultRepo from './repositories/synthesisResult.js'
 import * as threadRepo from './repositories/thread.js'
@@ -69,9 +71,21 @@ const start = async () => {
           workerLog
         )
       ),
+      registerJobWorker(JobName.EntityImageEnrich, (payload) =>
+        runEntityImageEnrichJob(
+          payload,
+          {
+            findEntityById: entityRepo.findEntityById,
+            findEntityImageForEntity: entityImageRepo.findEntityImageForEntity,
+            createEntityImage: entityImageRepo.createEntityImage,
+          },
+          workerLog
+        )
+      ),
     ])
     console.log(
-      'Worker started; entity.extract, narrative.generate, and thread.recompute handlers registered.'
+      'Worker started; entity.extract, narrative.generate, thread.recompute, and ' +
+        'entity.image.enrich handlers registered.'
     )
   } catch (err) {
     console.error(err)

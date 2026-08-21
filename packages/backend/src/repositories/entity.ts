@@ -29,6 +29,7 @@ export interface EntityRecord {
   canonicalName: string
   type: EntityType
   storyCount: number
+  wikidataId: string | null
 }
 
 export interface EntityRelationForScoring {
@@ -225,11 +226,26 @@ export async function findEntityById(id: string): Promise<EntityRecord | null> {
   return prisma.entity.findUnique({ where: { id } })
 }
 
-/** One Entity by its deterministic key, or null — test/setup-only today (ADR 0010 keeps direct
- *  `db.ts` access inside repositories/, so a caller that only needs "the id I just upserted via
- *  replaceStoryEntities" has to come through here rather than reaching for prisma directly). */
+/** One Entity by its deterministic key — ticket 40's test/setup-only use predates ticket 41's
+ *  Wikidata-linking routes, which key off `:key` (a stable, publicly-referenceable identifier;
+ *  `Entity.id` stays purely internal, ADR 0034) rather than the internal id `findEntityById`
+ *  takes. */
 export async function findEntityByKey(key: string): Promise<EntityRecord | null> {
   return prisma.entity.findUnique({ where: { key } })
+}
+
+/** Sets a confirmed Wikidata link (ticket 41) — the Admin has already picked `wikidataId` from a
+ *  `searchWikidataEntities` result before this is ever called; this function trusts that
+ *  confirmation and just persists it. */
+export async function setEntityWikidataId(id: string, wikidataId: string): Promise<void> {
+  await prisma.entity.update({ where: { id }, data: { wikidataId } })
+}
+
+/** Clears a previously-confirmed Wikidata link (ticket 41) — the Entity's fetched `EntityImage`
+ *  rows, if any, are left in place; a wrong or stale image needs direct DB intervention, same
+ *  "not scoped in this wave" posture as re-fetch (docs/spec-entity-resolution.md's Out of Scope). */
+export async function clearEntityWikidataId(id: string): Promise<void> {
+  await prisma.entity.update({ where: { id }, data: { wikidataId: null } })
 }
 
 /** Total Story count — the corpus size storyRelationScoring.ts's IDF weighting needs to know how

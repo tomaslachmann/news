@@ -6,6 +6,7 @@ export const JobName = {
   EntityRelation: 'entity.extract',
   Narrative: 'narrative.generate',
   ThreadRecompute: 'thread.recompute',
+  EntityImageEnrich: 'entity.image.enrich',
 } as const
 
 export type JobNameValue = (typeof JobName)[keyof typeof JobName]
@@ -31,6 +32,12 @@ export interface JobPayload {
   // component from this one Story and finds-or-creates the Thread itself (see ticket 17's
   // Answer, docs/audit.md §8.6/§9.8).
   [JobName.ThreadRecompute]: { seedStoryId: string }
+  // Ticket 41 / ADR 0034 — enqueued only after the Admin's wikidataId-link transaction commits,
+  // never from inside it, so a slow/failing Wikimedia call can't hold up or roll back the link.
+  // The handler re-reads the Entity's current wikidataId by this id (retry-safe, same
+  // re-read-by-id pattern entity.extract already uses for coverageIds) rather than trusting a
+  // wikidataId carried in the payload, which could be stale by the time the job runs.
+  [JobName.EntityImageEnrich]: { entityId: string }
 }
 
 // A repeated LLM failure is either a persistent outage (more retries won't help) or a genuine
@@ -50,8 +57,19 @@ const THREAD_RECOMPUTE_RETRY_POLICY: QueueOptions = {
   retryDelay: 5,
 }
 
+// An external HTTP dependency (Wikidata/Wikimedia), not an LLM call — LLM_JOB_RETRY_POLICY's
+// "persistent outage vs. content issue" framing doesn't apply the same way here (ADR 0034), but a
+// short bounded backoff is still the right shape for a flaky third-party API.
+const EXTERNAL_HTTP_JOB_RETRY_POLICY: QueueOptions = {
+  retryLimit: 3,
+  retryBackoff: true,
+  retryDelay: 2,
+  retryDelayMax: 30,
+}
+
 export const JOB_RETRY_POLICY: Record<JobNameValue, QueueOptions> = {
   [JobName.EntityRelation]: LLM_JOB_RETRY_POLICY,
   [JobName.Narrative]: LLM_JOB_RETRY_POLICY,
   [JobName.ThreadRecompute]: THREAD_RECOMPUTE_RETRY_POLICY,
+  [JobName.EntityImageEnrich]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
 }

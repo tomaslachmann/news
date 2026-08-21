@@ -24,8 +24,10 @@ export type AdminAction =
   | 'analysis.synthesis_triggered'
   | 'entity.alias_merged'
   | 'entity.alias_rejected'
+  | 'entity.wikidata_linked'
+  | 'entity.wikidata_unlinked'
 
-export type AdminActionTargetType = 'analysis' | 'story_relation' | 'user' | 'entity_alias'
+export type AdminActionTargetType = 'analysis' | 'story_relation' | 'user' | 'entity_alias' | 'entity'
 
 export interface NewAdminActionLog {
   actorId: string
