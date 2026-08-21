@@ -4,7 +4,7 @@
 
 **Blocked by:** none — `salience` already exists and is populated (ticket 12).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `EntityForScoring` gains `salience: number`; `findStoryEntitiesForScoring`'s select clause includes it.
 - [x] `weightedEntityContainment`'s per-entity weight changes from `idfWeight(e.storyCount, totalStories)` alone to a function of both IDF weight and salience — exact blend is an implementation-time tunable constant, evaluated against real Story data if any exists by then (the project's DB was empty as of ticket 12).
