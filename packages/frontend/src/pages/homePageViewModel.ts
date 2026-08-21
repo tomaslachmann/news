@@ -2,6 +2,8 @@ import type { AnalysisListItem, AnalysisListSummary } from '@/services/analyses'
 
 export type HomePageStory = AnalysisListItem & { summary: AnalysisListSummary }
 
+const CZECH_NUMBER = new Intl.NumberFormat('cs-CZ')
+
 export function isHomePageStory(item: AnalysisListItem): item is HomePageStory {
   return item.status === 'complete' && item.summary !== undefined
 }
@@ -50,4 +52,9 @@ export function entityTrendClass(percent: number): string {
   if (percent > 0) return 'is-up'
   if (percent < 0) return 'is-down'
   return ''
+}
+
+export function formatCzechCount(count: number, one: string, few: string, many: string): string {
+  const form = count === 1 ? one : Number.isInteger(count) && count >= 2 && count <= 4 ? few : many
+  return `${CZECH_NUMBER.format(count)} ${form}`
 }

@@ -13,6 +13,7 @@ import { articlePath } from '@/lib/analysisRoutes'
 import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
 import {
   entityTrendClass,
+  formatCzechCount,
   formatEntityTrend,
   getEntityDotSize,
   getStorySignal,
@@ -28,8 +29,6 @@ const TIME = new Intl.DateTimeFormat('cs-CZ', {
   minute: '2-digit',
   timeZone: 'Europe/Prague',
 })
-
-const NUMBER = new Intl.NumberFormat('cs-CZ')
 
 const SAMPLE_MOSTREAD = [
   { title: 'Rozpor: kolik bytů se skutečně dotkne nová pražská vyhláška', src: 7 },
@@ -158,9 +157,7 @@ function LeadArticle({ story }: { story: HomePageStory }) {
       </h1>
       <StoryByline story={story} big />
       <div className="lead__body">
-        <Link to={articlePath(story.id)}>
-          <StoryFigure story={story} caption />
-        </Link>
+        <StoryFigure story={story} caption />
         <div>
           <p className="lead__perex">{story.summary.teaser}</p>
           {story.summary.entities.length > 0 && (
@@ -401,9 +398,16 @@ function DayStatsBar() {
   const { data, isLoading, isError } = useHomepageSummaryStats()
   const stats = data
     ? [
-        { k: 'Zpracováno dnes', v: `${NUMBER.format(data.processedArticleCount)} článků` },
-        { k: 'Aktivní zdroje', v: NUMBER.format(data.activeSourceCount) },
-        { k: 'Nové rozpory', v: NUMBER.format(data.contradictionCount), warn: data.contradictionCount > 0 },
+        {
+          k: 'Zpracováno dnes',
+          v: formatCzechCount(data.processedArticleCount, 'článek', 'články', 'článků'),
+        },
+        { k: 'Aktivní zdroje', v: formatCzechCount(data.activeSourceCount, 'zdroj', 'zdroje', 'zdrojů') },
+        {
+          k: 'Nové rozpory',
+          v: formatCzechCount(data.contradictionCount, 'rozpor', 'rozpory', 'rozporů'),
+          warn: data.contradictionCount > 0,
+        },
         ...(data.averageSourceOverlapPercentage !== undefined
           ? [{ k: 'Průměrná shoda', v: `${data.averageSourceOverlapPercentage} %` }]
           : []),
