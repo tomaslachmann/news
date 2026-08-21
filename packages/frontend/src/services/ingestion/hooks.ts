@@ -17,10 +17,7 @@ const VISIBLE_DRAFTS_QUERY_KEY = ['ingestion-visible-drafts']
 const PENDING_STORY_RELATIONS_QUERY_KEY = ['ingestion-pending-story-relations']
 
 export function usePendingAdditions() {
-  return useQuery({
-    queryKey: PENDING_ADDITIONS_QUERY_KEY,
-    queryFn: fetchPendingAdditions,
-  })
+  return usePaginatedQuery(PENDING_ADDITIONS_QUERY_KEY, fetchPendingAdditions)
 }
 
 export function useVisibleDrafts() {

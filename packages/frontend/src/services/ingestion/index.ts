@@ -13,12 +13,14 @@ async function throwApiError(res: Response, fallback: string): Promise<never> {
   throw new Error(body.error ?? fallback)
 }
 
-export async function fetchPendingAdditions(): Promise<PendingAdditionItem[]> {
-  const res = await fetch('/api/admin/ingestion/pending-additions', { credentials: 'include' })
+export async function fetchPendingAdditions(cursor?: string): Promise<Page<PendingAdditionItem>> {
+  const res = await fetch(`/api/admin/ingestion/pending-additions${cursorQueryParam(cursor)}`, {
+    credentials: 'include',
+  })
 
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst čekající doplnění')
 
-  return res.json() as Promise<PendingAdditionItem[]>
+  return res.json() as Promise<Page<PendingAdditionItem>>
 }
 
 export async function fetchVisibleDrafts(cursor?: string): Promise<Page<AnalysisListItem>> {

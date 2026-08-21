@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import {
+  createAnalysis,
   createDraftAnalysis,
   findAnalysesPage,
   findDraftsPage,
@@ -12,6 +13,11 @@ import {
   findCoveragesForAnalysis,
   excludeCoverageIds,
 } from '../../src/repositories/coverage.js'
+import {
+  createPendingAddition,
+  findPendingAdditionsPage,
+  setPendingAdditionCreatedAtForTesting,
+} from '../../src/repositories/pendingAddition.js'
 
 const SOURCES = ['src-idnes', 'src-novinky', 'src-aktualne', 'src-ct24', 'src-seznamzpravy']
 
@@ -157,6 +163,37 @@ describe('Keyset pagination against a real Postgres instance', () => {
       const cursorRow = firstPage[0]
       const secondPage = (
         await findDraftsPage(2, { createdAt: cursorRow.createdAt, id: cursorRow.id }, 50)
+      ).filter((r) => ownIds.has(r.id))
+      expect(secondPage.map((r) => r.id)).toEqual([x.id])
+    })
+  })
+
+  describe('findPendingAdditionsPage', () => {
+    it('pages newest-first among pending additions, resuming exactly where the previous page left off', async () => {
+      const analysis = await createAnalysis({
+        seedUrl: 'https://example.cz/pending-addition-page',
+        seedHeadline: 'Anchor story',
+      })
+      const makePendingAddition = async (articleUrl: string) => {
+        const addition = await createPendingAddition({
+          analysisId: analysis.id,
+          sourceId: SOURCES[0],
+          articleUrl,
+        })
+        await setPendingAdditionCreatedAtForTesting(addition.id, futureTimestamp())
+        return addition
+      }
+
+      const x = await makePendingAddition('https://idnes.cz/pending-page-x')
+      const y = await makePendingAddition('https://idnes.cz/pending-page-y')
+      const ownIds = new Set([x.id, y.id])
+
+      const firstPage = (await findPendingAdditionsPage(undefined, 50)).filter((r) => ownIds.has(r.id))
+      expect(firstPage.map((r) => r.id)).toEqual([y.id, x.id])
+
+      const cursorRow = firstPage[0]
+      const secondPage = (
+        await findPendingAdditionsPage({ createdAt: cursorRow.createdAt, id: cursorRow.id }, 50)
       ).filter((r) => ownIds.has(r.id))
       expect(secondPage.map((r) => r.id)).toEqual([x.id])
     })

@@ -16,9 +16,14 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
   fastify.get(
     '/api/admin/ingestion/pending-additions',
     { preHandler: requireAdmin },
-    async (_request, reply) => {
-      const items = await ingestionService.listPendingAdditions()
-      return reply.code(200).send(items)
+    async (request, reply) => {
+      const parsed = ListQuerySchema.safeParse(request.query)
+      if (!parsed.success) {
+        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné parametry dotazu')
+      }
+
+      const page = await ingestionService.listPendingAdditions(parsed.data.cursor, parsed.data.limit)
+      return reply.code(200).send(page)
     }
   )
 

@@ -1,5 +1,7 @@
+import { Prisma } from '@prisma/client'
 import type { PendingAddition, PendingAdditionStatus, AnalysisStatus } from '@prisma/client'
 import { prisma } from '../db.js'
+import type { Cursor } from '../pagination.js'
 
 export type { PendingAddition }
 
@@ -11,8 +13,8 @@ export interface NewPendingAddition {
   publishedAt?: string
 }
 
-export async function createPendingAddition(data: NewPendingAddition): Promise<void> {
-  await prisma.pendingAddition.create({ data })
+export async function createPendingAddition(data: NewPendingAddition): Promise<PendingAddition> {
+  return prisma.pendingAddition.create({ data })
 }
 
 export type PendingAdditionWithAnalysis = PendingAddition & {
@@ -20,12 +22,29 @@ export type PendingAdditionWithAnalysis = PendingAddition & {
   source: { name: string }
 }
 
+/** Row-tuple comparison, not a plain `createdAt <` — stable across inserts that land exactly on
+ *  the boundary timestamp (keyset pagination, docs/audit.md P0-7, ticket 03), same as
+ *  analysis.ts's own `cursorWhere`. */
+function cursorWhere(cursor: Cursor | undefined): Prisma.PendingAdditionWhereInput {
+  if (!cursor) return {}
+  return {
+    OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+  }
+}
+
 /** Only `PENDING_REVIEW` rows — a resolved (approved/rejected) one stops appearing here without
- *  being deleted (ticket 45), same convention as StoryRelation's `findPendingReviewRelations`. */
-export async function findAllPendingAdditions(): Promise<PendingAdditionWithAnalysis[]> {
+ *  being deleted (ticket 45), same convention as StoryRelation's `findPendingReviewRelations`.
+ *  Keyset (createdAt, id) pagination, same pattern as `findDraftsPage` (ticket 49) — no HAVING
+ *  clause is needed here, so a plain Prisma `findMany` suffices, unlike `findDraftsPage`'s raw
+ *  SQL. */
+export async function findPendingAdditionsPage(
+  cursor: Cursor | undefined,
+  limit: number
+): Promise<PendingAdditionWithAnalysis[]> {
   return prisma.pendingAddition.findMany({
-    where: { status: 'PENDING_REVIEW' },
-    orderBy: { createdAt: 'desc' },
+    where: { status: 'PENDING_REVIEW', ...cursorWhere(cursor) },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
     include: { analysis: { select: { seedHeadline: true } }, source: { select: { name: true } } },
   })
 }
@@ -54,4 +73,11 @@ export async function updatePendingAdditionStatusIfCurrently(
     data: { status: toStatus },
   })
   return result.count > 0
+}
+
+/** Backdates/postdates a PendingAddition's createdAt — exists for integration tests that need
+ *  deterministic keyset-pagination ordering (ticket 49), same convention as analysis.ts's
+ *  `setAnalysisCreatedAtForTesting`. */
+export async function setPendingAdditionCreatedAtForTesting(id: string, createdAt: Date): Promise<void> {
+  await prisma.pendingAddition.update({ where: { id }, data: { createdAt } })
 }
