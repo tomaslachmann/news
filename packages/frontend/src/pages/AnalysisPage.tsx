@@ -10,6 +10,8 @@ import {
   type Attribution,
   type AnalysisDimensions,
   type DimensionItem,
+  type NarrativeDocument,
+  type NarrativeInline,
   type CoverageInfo,
   type RelatedEventItem,
   type ThreadSummaryItem,
@@ -67,26 +69,6 @@ function OutletBadge({ attribution }: { attribution: Attribution }) {
   )
 }
 
-// A real <button> (not a bare <span>) so Radix's Tooltip opens on tap via the focus event it
-// already listens for, not just hover — the touch fallback a citation marker needs, since hover
-// has no mobile equivalent.
-function CitationMarker({ index, attribution }: { index: number; attribution: Attribution }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" className="citeref">
-          [{index}]
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p className="max-w-xs">
-          <span className="font-semibold">{attribution.outlet}:</span> {attribution.czechQuote}
-        </p>
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 const MAX_REFERENCE_EXCERPT_LENGTH = 100
 
 function truncateExcerpt(text: string): string {
@@ -94,53 +76,44 @@ function truncateExcerpt(text: string): string {
   return text.slice(0, MAX_REFERENCE_EXCERPT_LENGTH).trimEnd() + '…'
 }
 
-/** The Cross-Source Narrative (ADR 0012) — continuous prose with inline numbered citations, not
- *  the card-per-segment layout the dimension lists (.compare/.cmp) below use for those; the
- *  Narrative is meant to read as one piece of writing. Every attribution is numbered once per
- *  source article — a source cited more than once across the Narrative reuses its existing
- *  number rather than getting a new entry. */
-function NarrativeArticle({ segments }: { segments: DimensionItem[] }) {
-  const references: Attribution[] = []
-  const refIndexFor = (a: Attribution) => {
-    const existing = references.findIndex((r) => r.articleUrl === a.articleUrl)
-    if (existing >= 0) return existing + 1
-    references.push(a)
-    return references.length
-  }
-  const rendered = segments.map((seg) => ({
-    prose: seg.prose,
-    refs: seg.attributions.map((a) => ({ index: refIndexFor(a), attribution: a })),
-  }))
+/** Plain-text rendering of the inline runs inside one NarrativeBlock's `children` — entity/
+ *  source/value refs render as their run's own display text, with no citation styling or linking
+ *  yet. A placeholder pending ticket 48 (blocked by this one, ADR 0034's "backend-then-UI split"),
+ *  which replaces this with real inline entity/source/value styling. */
+function inlineText(children: NarrativeInline[]): string {
+  return children.map((run) => run.text).join('')
+}
 
+/** The Cross-Source Narrative (ADR 0012 / ADR 0034) — a structured NarrativeDocument of
+ *  heading/paragraph/quote/list blocks. Rendered here as plain prose only; ticket 48 (blocked by
+ *  this backend ticket) replaces this with the real inline entity/source/value citation styling
+ *  the new document shape carries. */
+function NarrativeArticle({ document }: { document: NarrativeDocument }) {
   return (
     <div className="prose">
-      {rendered.map((seg, i) => (
-        <p key={i}>
-          {seg.prose}
-          {seg.refs.map(({ index, attribution }) => (
-            <CitationMarker key={index} index={index} attribution={attribution} />
-          ))}
-        </p>
-      ))}
-
-      {references.length > 0 && (
-        <>
-          <h2>Zdroje</h2>
-          <ol className="refs">
-            {references.map((r, i) => (
-              <li key={i}>
-                <b>
-                  [{i + 1}] {r.outlet}
-                </b>{' '}
-                — „{truncateExcerpt(r.czechQuote)}“{' '}
-                <a href={r.articleUrl} target="_blank" rel="noopener noreferrer">
-                  → Číst originál
-                </a>
-              </li>
-            ))}
-          </ol>
-        </>
-      )}
+      {document.blocks.map((block, i) => {
+        switch (block.type) {
+          case 'heading': {
+            const Heading = block.level === 2 ? 'h2' : 'h3'
+            return <Heading key={i}>{inlineText(block.children)}</Heading>
+          }
+          case 'quote':
+            return <blockquote key={i}>{inlineText(block.children)}</blockquote>
+          case 'list': {
+            const List = block.style === 'ordered' ? 'ol' : 'ul'
+            return (
+              <List key={i}>
+                {block.items.map((item, itemIndex) => (
+                  <li key={itemIndex}>{inlineText(item.children)}</li>
+                ))}
+              </List>
+            )
+          }
+          case 'paragraph':
+          default:
+            return <p key={i}>{inlineText(block.children)}</p>
+        }
+      })}
     </div>
   )
 }
@@ -692,8 +665,8 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
 
           {totalItems > 0 && <SumBox dimensions={dimensions} />}
 
-          {analysis.narrative && analysis.narrative.length > 0 && (
-            <NarrativeArticle segments={analysis.narrative} />
+          {analysis.narrative && analysis.narrative.blocks.length > 0 && (
+            <NarrativeArticle document={analysis.narrative} />
           )}
 
           {topContradiction && (

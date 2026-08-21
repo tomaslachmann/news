@@ -14,6 +14,7 @@ import {
   findEventsForEntity,
   findRelationsForEntity,
   findEntityMentionsForStory,
+  findEntityRelationsForStory,
 } from '../../src/repositories/entity.js'
 
 // Entity.key is globally unique across the whole shared test-container database (not scoped per
@@ -577,6 +578,78 @@ describe('Entity repository against a real Postgres instance', () => {
       )
 
       expect(await findEntityMentionsForStory(storyId)).toEqual([])
+    })
+  })
+
+  describe('findEntityRelationsForStory (ticket 47 / ADR 0034)', () => {
+    it("returns this Story's own StoryEntityRelations, each with both entities' key/canonicalName/type", async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-relations-story-1',
+        seedHeadline: 'x',
+      })
+      const tusk = {
+        key: 'person:entity-relations-story-tusk',
+        name: 'Donald Tusk',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      const poland = {
+        key: 'country:entity-relations-story-poland',
+        name: 'Poland',
+        type: 'COUNTRY' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      await replaceStoryEntities(
+        storyId,
+        [tusk, poland],
+        [{ from: tusk.key, to: poland.key, type: 'REPRESENTS', confidence: 0.85 }]
+      )
+
+      const relations = await findEntityRelationsForStory(storyId)
+
+      expect(relations).toHaveLength(1)
+      expect(typeof relations[0]?.id).toBe('string')
+      expect(relations).toMatchObject([
+        {
+          type: 'REPRESENTS',
+          fromEntity: { key: tusk.key, canonicalName: 'Donald Tusk', type: 'PERSON' },
+          toEntity: { key: poland.key, canonicalName: 'Poland', type: 'COUNTRY' },
+        },
+      ])
+    })
+
+    it("does not include another Story's relations, and returns an empty array when there are none", async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-relations-story-2',
+        seedHeadline: 'x',
+      })
+      const other = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-relations-story-3',
+        seedHeadline: 'x',
+      })
+      const from = {
+        key: 'person:entity-relations-story-other-from',
+        name: 'Other From',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      const to = {
+        key: 'country:entity-relations-story-other-to',
+        name: 'Other To',
+        type: 'COUNTRY' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      await replaceStoryEntities(
+        other.storyId,
+        [from, to],
+        [{ from: from.key, to: to.key, type: 'REPRESENTS', confidence: 0.85 }]
+      )
+
+      expect(await findEntityRelationsForStory(storyId)).toEqual([])
     })
   })
 })

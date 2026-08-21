@@ -1,4 +1,6 @@
-import type { SynthesisResult, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import type { SynthesisResult } from '@prisma/client'
+import type { NarrativeDocument } from '@news-triangulator/shared'
 import { prisma } from '../db.js'
 
 export type { SynthesisResult }
@@ -25,9 +27,34 @@ export async function deleteSynthesisResult(
 
 export async function updateSynthesisResultNarrative(
   analysisId: string,
-  narrative: Prisma.InputJsonValue
+  narrative: NarrativeDocument
 ): Promise<void> {
   await prisma.synthesisResult.update({ where: { analysisId }, data: { narrative } })
+}
+
+/** Clears a COMPLETE Analysis's already-cached narrative back to SQL NULL, leaving every other
+ *  `SynthesisResult` field (dimensions, headline, sourceOverlapPercentage, agreementCategory)
+ *  untouched — used only by `scripts/backfillNarratives.ts` (ticket 47 / ADR 0034) to force a
+ *  re-enqueued `narrative.generate` job past its own "narrative already present" skip guard
+ *  (narrativeJob.ts), so every historical Analysis picks up the new NarrativeDocument shape.
+ *  `Prisma.JsonNull`, not a bare `null`, is required here — Prisma's generated input type for a
+ *  nullable Json column doesn't accept a plain `null` literal at all.
+ *
+ *  Runs inside its own transaction and calls `onTransition` (if given) before committing — same
+ *  `onTransition`-inside-the-transaction convention `updateAnalysisStatusIfCurrently`/
+ *  `completeAnalysisWithSynthesis` already established (repositories/analysis.ts). The backfill
+ *  script passes its `enqueueJob` call as `onTransition` so a failure enqueueing rolls the nullify
+ *  back too — an Analysis can never end up with its narrative cleared and no regeneration job
+ *  actually in flight. Keeps the db.js/Prisma import inside the repository layer (ADR 0010) rather
+ *  than exposing a raw `tx` for a script/service caller to orchestrate itself. */
+export async function nullifySynthesisResultNarrative(
+  analysisId: string,
+  onTransition?: (tx: Prisma.TransactionClient) => Promise<void>
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.synthesisResult.update({ where: { analysisId }, data: { narrative: Prisma.JsonNull } })
+    await onTransition?.(tx)
+  })
 }
 
 /** Records that the most recent narrative-generation attempt failed — an audit trail only since

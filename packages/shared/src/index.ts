@@ -36,11 +36,17 @@ export interface Attribution {
 }
 
 export interface DimensionItem {
+  /** Stable id, generated once at Synthesis time (ticket 47 / ADR 0034) — never an array index,
+   *  which wouldn't survive `verifyAndRepair` reshuffling arrays on retry. This is what a
+   *  `NarrativeAssertion.dimensionItemId` cites. */
+  id: string
   prose: string
   attributions: Attribution[]
 }
 
 export interface ContradictionItem {
+  /** See DimensionItem.id. */
+  id: string
   prose: string
   attributions: Attribution[]
 }
@@ -424,8 +430,9 @@ export interface AnalysisDetail {
   /** Ticket 38 / ADR 0030 — undefined exactly when `synthesisResult.agreement` was empty (nothing
    *  to measure), never a pending/not-computed-yet state for an Analysis reaching this mapper. */
   sourceOverlap?: SourceOverlapInfo
-  /** Cross-Source Narrative segments — generated lazily on first view, undefined until then. */
-  narrative?: DimensionItem[]
+  /** The structured Cross-Source Narrative document (ticket 47 / ADR 0034) — generated once by the
+   *  `narrative.generate` job, cached, undefined until that job completes. */
+  narrative?: NarrativeDocument
   /** Other Events (Stories) this one has been linked to — see ticket 37. Empty, not undefined,
    *  when there are none, so callers never need an extra existence check. */
   relatedEvents: RelatedEventItem[]
@@ -433,6 +440,100 @@ export interface AnalysisDetail {
   thread?: ThreadSummaryItem
   /** Entities this Analysis's Story mentions (ticket 43), most salient first — empty, not
    *  undefined, when extraction hasn't attached any, same "never a missing section" convention as
-   *  `relatedEvents`. */
+   *  `relatedEvents`. Already the *full* Story-level set (ADR 0034's "AnalysisContext" — not
+   *  filtered down to only what the Narrative inline-tagged), unchanged by ticket 47. */
   entities: EntityMentionItem[]
+  /** Every `StoryEntityRelation` this Analysis's Story asserts (ticket 47 / ADR 0034) — the
+   *  companion to `entities` that lets a reader see the relationships between them, not just the
+   *  entities themselves. Empty, not undefined, when there are none, same convention as
+   *  `relatedEvents`/`entities`. */
+  entityRelations: AnalysisEntityRelationItem[]
+}
+
+/** One `StoryEntityRelation` belonging to this Analysis's own Story (ticket 47 / ADR 0034) —
+ *  unlike `EntityRelationItem` (an Entity page's cross-Story view, which needs `assertedBy` since
+ *  it aggregates relations from many Stories), every relation here is already scoped to this one
+ *  Story, so no separate attribution is needed. */
+export interface AnalysisEntityRelationItem {
+  id: string
+  type: EntityRelationTypeLabel
+  fromEntity: { key: string; canonicalName: string; type: EntityTypeLabel }
+  toEntity: { key: string; canonicalName: string; type: EntityTypeLabel }
+}
+
+// Cross-Source Narrative: structured NarrativeDocument (ticket 47 / ADR 0034)
+
+/** A run of inline content inside a NarrativeBlock's `children`. `text` is always the run's
+ *  literal display text — for `entity`/`source`/`value`, the ref id(s) point back to this
+ *  document's own top-level `entityRefs`/`sourceRefs`/`valueRefs` declarations. */
+export type NarrativeInline =
+  | { type: 'text'; text: string }
+  | { type: 'entity'; entityId: string; text: string }
+  | { type: 'source'; sourceIds: string[]; text: string }
+  | { type: 'value'; valueId: string; text: string }
+
+/** One structural unit of the Narrative. A `quote` block always names exactly one `sourceId` — a
+ *  verbatim quotation has one origin; two Sources independently reporting the same fact in their
+ *  own words is an `agreement` NarrativeAssertion over a `paragraph`, never a shared `quote`. */
+export type NarrativeBlock =
+  | { type: 'heading'; level: 2 | 3; children: NarrativeInline[] }
+  | { type: 'paragraph'; children: NarrativeInline[] }
+  | { type: 'quote'; sourceId: string; children: NarrativeInline[] }
+  | { type: 'list'; style: 'ordered' | 'bullet'; items: { children: NarrativeInline[] }[] }
+
+/** A link from one passage of the Narrative back to a single, specific item of the
+ *  already-computed Analysis Dimensions — `dimensionItemId` is a DimensionItem/ContradictionItem
+ *  `id` (never an array index). Named `NarrativeAssertion`, not `NarrativeClaim` — this codebase's
+ *  `Claim` already means the Factual/Attributed/Interpretive statements Extraction produces per
+ *  Coverage (see CONTEXT.md). */
+// `type`, not `interface`, for these four — same reason as `NarrativeDocument` below: they nest
+// inside it, and TS's implicit index-signature inference (what assigning the whole document to
+// Prisma's `InputJsonValue` needs) only applies to `type` aliases, recursively through nested
+// members, never through a nested `interface`.
+export type NarrativeAssertion = {
+  id: string
+  dimension: 'agreement' | 'contradiction' | 'unique_reporting' | 'framing'
+  dimensionItemId: string
+  entityRefs: string[]
+  sourceRefs: string[]
+  valueRefs: string[]
+}
+
+export type NarrativeEntityRef = {
+  id: string
+  entityKey: string
+  canonicalName: string
+}
+
+export type NarrativeSourceRef = {
+  id: string
+  outlet: string
+  articleUrl: string
+}
+
+/** `normalizedValue`/`unit` are derived server-side by a deterministic Czech-numeral parser from
+ *  `text` — the LLM never computes them itself (ADR 0014's "never trust an LLM with a computation
+ *  a deterministic check can verify instead", extended here). `null`/`null` when `text` can't be
+ *  safely parsed, rather than guessed. */
+export type NarrativeValueRef = {
+  id: string
+  text: string
+  sourceIds: string[]
+  normalizedValue: number | null
+  unit: string | null
+}
+
+/** A `type` alias, not an `interface` — the persisted top-level shape Prisma's `InputJsonValue`
+ *  is assigned from (`repositories/synthesisResult.ts`'s `updateSynthesisResultNarrative`).
+ *  TypeScript only infers an implicit string index signature (what `InputJsonValue`'s own index
+ *  signature needs to structurally match against) for a `type` alias's object shape, never for an
+ *  `interface` — an `interface` here would force every persist call site to `as unknown as`
+ *  around the whole value instead. */
+export type NarrativeDocument = {
+  version: 1
+  blocks: NarrativeBlock[]
+  assertions: NarrativeAssertion[]
+  entityRefs: NarrativeEntityRef[]
+  sourceRefs: NarrativeSourceRef[]
+  valueRefs: NarrativeValueRef[]
 }

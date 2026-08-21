@@ -270,6 +270,37 @@ export interface EntityMentionRow {
   type: EntityType
 }
 
+export interface EntityRelationForStoryRow {
+  id: string
+  type: EntityRelationType
+  fromEntity: { key: string; canonicalName: string; type: EntityType }
+  toEntity: { key: string; canonicalName: string; type: EntityType }
+}
+
+/** Shared by `findEntityRelationsForStory` and `findRelationsForEntity` below — both select each
+ *  side of a `StoryEntityRelation` down to the same {key, canonicalName, type} shape, just scoped
+ *  differently (one Story vs. one Entity across every Story). */
+const RELATION_ENTITY_SELECT = { select: { key: true, canonicalName: true, type: true } } as const
+
+/** Every `StoryEntityRelation` `storyId` itself asserts (ticket 47 / ADR 0034) — the companion
+ *  read to `findEntityMentionsForStory` that fills `AnalysisDetail.entityRelations`, mirroring
+ *  `findRelationsForEntity`'s shape but scoped to one Story instead of one Entity across every
+ *  Story. No attribution needed here (unlike `findRelationsForEntity`'s `analysisId`/`headline`):
+ *  every row is already scoped to this one Analysis's own Story. Unbounded, same as
+ *  `findEntityMentionsForStory` — a single Story's own relation count is small (ADR 0024/P1-9). */
+export async function findEntityRelationsForStory(storyId: string): Promise<EntityRelationForStoryRow[]> {
+  const rows = await prisma.storyEntityRelation.findMany({
+    where: { storyId },
+    select: {
+      id: true,
+      type: true,
+      fromEntity: RELATION_ENTITY_SELECT,
+      toEntity: RELATION_ENTITY_SELECT,
+    },
+  })
+  return rows
+}
+
 /** Every entity `storyId`'s own extraction pass attached (ticket 43) — powers AnalysisPage's
  *  "Entity ve zprávě" rail, each entity linking to its own `/entity/:key` page. Ordered by this
  *  Story's own `StoryEntity.salience` (ticket 12) descending, not name/extraction order — the
@@ -377,8 +408,8 @@ export async function findRelationsForEntity(entityKey: string): Promise<EntityR
     select: {
       id: true,
       type: true,
-      fromEntity: { select: { key: true, canonicalName: true, type: true } },
-      toEntity: { select: { key: true, canonicalName: true, type: true } },
+      fromEntity: RELATION_ENTITY_SELECT,
+      toEntity: RELATION_ENTITY_SELECT,
       story: {
         select: {
           analysis: {

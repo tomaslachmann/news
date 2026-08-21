@@ -43,6 +43,7 @@ import {
   resolveDisplayTitle,
   STATUS_MAP,
   toEntityMentionItem,
+  toAnalysisEntityRelationItem,
 } from '../mappers/analysis.js'
 import { toRelatedEvents } from '../mappers/storyRelation.js'
 import { toThreadSummary } from '../mappers/thread.js'
@@ -398,13 +399,15 @@ export async function getAnalysisDetail(analysisId: string): Promise<AnalysisDet
   let relatedEvents: AnalysisDetail['relatedEvents'] = []
   let thread: AnalysisDetail['thread']
   let entities: AnalysisDetail['entities'] = []
+  let entityRelations: AnalysisDetail['entityRelations'] = []
   if (analysis.status === 'COMPLETE') {
     // Independent reads, run concurrently rather than paying the sum of both latencies on this
     // hot, unauthenticated read path.
-    const [publishedRelations, rawThread, entityMentions] = await Promise.all([
+    const [publishedRelations, rawThread, entityMentions, storyEntityRelations] = await Promise.all([
       storyRelationRepo.findPublishedRelationsForStory(analysis.storyId),
       threadRepo.findThreadForStory(analysis.storyId),
       entityRepo.findEntityMentionsForStory(analysis.storyId),
+      entityRepo.findEntityRelationsForStory(analysis.storyId),
     ])
     relatedEvents = toRelatedEvents(analysis.storyId, publishedRelations)
     // A Thread with fewer than 2 currently-linkable (COMPLETE) members has nothing for a reader
@@ -412,9 +415,10 @@ export async function getAnalysisDetail(analysisId: string): Promise<AnalysisDet
     const summary = rawThread ? toThreadSummary(analysis.id, rawThread) : undefined
     thread = summary && summary.members.length >= 2 ? summary : undefined
     entities = entityMentions.map(toEntityMentionItem)
+    entityRelations = storyEntityRelations.map(toAnalysisEntityRelationItem)
   }
 
-  return toAnalysisDetail(analysis, relatedEvents, thread, entities)
+  return toAnalysisDetail(analysis, relatedEvents, thread, entities, entityRelations)
 }
 
 export async function listAnalyses(

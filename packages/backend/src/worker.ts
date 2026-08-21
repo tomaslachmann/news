@@ -53,6 +53,7 @@ const start = async () => {
           payload,
           {
             findAnalysisWithDetails: analysisRepo.findAnalysisWithDetails,
+            findEntityMentionsForStory: entityRepo.findEntityMentionsForStory,
             updateSynthesisResultNarrative: synthesisResultRepo.updateSynthesisResultNarrative,
             markNarrativeGenerationFailedSafe: synthesisResultRepo.markNarrativeGenerationFailedSafe,
           },

@@ -20,7 +20,20 @@ const OK_COVERAGE = {
   articleUrl: 'https://idnes.cz/x',
 }
 
-function analysis(overrides: Partial<{ coverages: unknown[]; synthesisResult: unknown }> = {}) {
+const DOCUMENT = {
+  version: 1 as const,
+  blocks: [
+    { type: 'paragraph' as const, children: [{ type: 'text' as const, text: 'Kombinovaná zpráva.' }] },
+  ],
+  assertions: [],
+  entityRefs: [],
+  sourceRefs: [],
+  valueRefs: [],
+}
+
+function analysis(
+  overrides: Partial<{ coverages: unknown[]; synthesisResult: unknown; storyId: string }> = {}
+) {
   return {
     id: 'a1',
     storyId: 's1',
@@ -47,6 +60,7 @@ describe('runNarrativeJob', () => {
   beforeEach(() => vi.resetAllMocks())
 
   const baseDeps = {
+    findEntityMentionsForStory: vi.fn().mockResolvedValue([]),
     updateSynthesisResultNarrative: vi.fn(),
     markNarrativeGenerationFailedSafe: vi.fn(),
   }
@@ -84,11 +98,7 @@ describe('runNarrativeJob', () => {
   it('logs and returns without regenerating when a narrative is already present (redelivered job)', async () => {
     const findAnalysisWithDetails = vi.fn().mockResolvedValue(
       analysis({
-        synthesisResult: {
-          analysisId: 'a1',
-          dimensions: DIMENSIONS,
-          narrative: [{ prose: 'already there', attributions: [] }],
-        },
+        synthesisResult: { analysisId: 'a1', dimensions: DIMENSIONS, narrative: { version: 1, blocks: [] } },
       })
     )
     const log = { warn: vi.fn(), error: vi.fn() }
@@ -100,24 +110,26 @@ describe('runNarrativeJob', () => {
     expect(log.warn).toHaveBeenCalled()
   })
 
-  it('generates and persists the narrative from Coverage text and cached Dimensions', async () => {
+  it('generates and persists the narrative from Coverage text, cached Dimensions and the Story entity list', async () => {
     const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
-    const segments = [
-      {
-        prose: 'Kombinovaná zpráva.',
-        attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }],
-      },
-    ]
-    mockRunNarrativePass.mockResolvedValue({ segments })
+    const findEntityMentionsForStory = vi
+      .fn()
+      .mockResolvedValue([{ key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON' }])
+    mockRunNarrativePass.mockResolvedValue(DOCUMENT)
 
-    await runNarrativeJob({ analysisId: 'a1' }, { ...baseDeps, findAnalysisWithDetails })
+    await runNarrativeJob(
+      { analysisId: 'a1' },
+      { ...baseDeps, findAnalysisWithDetails, findEntityMentionsForStory }
+    )
 
+    expect(findEntityMentionsForStory).toHaveBeenCalledWith('s1')
     expect(mockRunNarrativePass).toHaveBeenCalledWith(
       [{ outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku.' }],
       DIMENSIONS,
+      [{ key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON' }],
       undefined
     )
-    expect(baseDeps.updateSynthesisResultNarrative).toHaveBeenCalledWith('a1', segments)
+    expect(baseDeps.updateSynthesisResultNarrative).toHaveBeenCalledWith('a1', DOCUMENT)
     expect(baseDeps.markNarrativeGenerationFailedSafe).not.toHaveBeenCalled()
   })
 
@@ -133,9 +145,9 @@ describe('runNarrativeJob', () => {
     expect(baseDeps.updateSynthesisResultNarrative).not.toHaveBeenCalled()
   })
 
-  it('does not cache an empty narrative result, logging and marking it a retryable failure instead', async () => {
+  it('does not cache a document with no blocks, logging and marking it a retryable failure instead', async () => {
     const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
-    mockRunNarrativePass.mockResolvedValue({ segments: [] })
+    mockRunNarrativePass.mockResolvedValue({ ...DOCUMENT, blocks: [] })
     const log = { warn: vi.fn(), error: vi.fn() }
 
     await expect(
@@ -149,10 +161,7 @@ describe('runNarrativeJob', () => {
 
   it('marks the failure and rethrows as retryable when persisting the generated narrative fails', async () => {
     const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
-    const segments = [
-      { prose: 'x', attributions: [{ outlet: 'iDnes', czechQuote: 'Q', articleUrl: 'https://idnes.cz/x' }] },
-    ]
-    mockRunNarrativePass.mockResolvedValue({ segments })
+    mockRunNarrativePass.mockResolvedValue(DOCUMENT)
     const updateSynthesisResultNarrative = vi.fn().mockRejectedValue(new Error('DB down'))
 
     await expect(
@@ -162,6 +171,21 @@ describe('runNarrativeJob', () => {
       )
     ).rejects.toThrow(ExternalServiceError)
 
+    expect(baseDeps.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
+  })
+
+  it('marks the failure and rethrows as retryable when fetching the Story entity list fails', async () => {
+    const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
+    const findEntityMentionsForStory = vi.fn().mockRejectedValue(new Error('DB down'))
+
+    await expect(
+      runNarrativeJob(
+        { analysisId: 'a1' },
+        { ...baseDeps, findAnalysisWithDetails, findEntityMentionsForStory }
+      )
+    ).rejects.toThrow(ExternalServiceError)
+
+    expect(mockRunNarrativePass).not.toHaveBeenCalled()
     expect(baseDeps.markNarrativeGenerationFailedSafe).toHaveBeenCalledWith('a1')
   })
 })

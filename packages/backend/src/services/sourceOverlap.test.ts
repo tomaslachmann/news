@@ -15,15 +15,23 @@ describe('computeSourceOverlapPercentage', () => {
   })
 
   it('returns 100 for a single source confirming its own single agreement item', () => {
-    const dimensions = { agreement: [{ prose: 'x', attributions: [attribution('iDnes')] }] }
+    const dimensions = { agreement: [{ id: 'i1', prose: 'x', attributions: [attribution('iDnes')] }] }
     expect(computeSourceOverlapPercentage(dimensions, 1)).toBe(100)
   })
 
   it('returns 100 when every agreement item is attributed to every source', () => {
     const dimensions = {
       agreement: [
-        { prose: 'a', attributions: [attribution('iDnes'), attribution('Novinky'), attribution('ČTK')] },
-        { prose: 'b', attributions: [attribution('iDnes'), attribution('Novinky'), attribution('ČTK')] },
+        {
+          id: 'i1',
+          prose: 'a',
+          attributions: [attribution('iDnes'), attribution('Novinky'), attribution('ČTK')],
+        },
+        {
+          id: 'i2',
+          prose: 'b',
+          attributions: [attribution('iDnes'), attribution('Novinky'), attribution('ČTK')],
+        },
       ],
     }
     expect(computeSourceOverlapPercentage(dimensions, 3)).toBe(100)
@@ -31,7 +39,7 @@ describe('computeSourceOverlapPercentage', () => {
 
   it('still computes and returns a real percentage below the gauge-display source threshold — the backend never gates on it, only a display layer does', () => {
     const dimensions = {
-      agreement: [{ prose: 'x', attributions: [attribution('iDnes'), attribution('Novinky')] }],
+      agreement: [{ id: 'i1', prose: 'x', attributions: [attribution('iDnes'), attribution('Novinky')] }],
     }
     const sourceCount = 3
     expect(sourceCount).toBeLessThan(MIN_SOURCES_FOR_GAUGE)
@@ -41,8 +49,8 @@ describe('computeSourceOverlapPercentage', () => {
   it('means distinct-outlet counts across multiple agreement items rather than just the first', () => {
     const dimensions = {
       agreement: [
-        { prose: 'a', attributions: [attribution('iDnes'), attribution('Novinky')] }, // 2 of 4
-        { prose: 'b', attributions: [attribution('iDnes')] }, // 1 of 4
+        { id: 'i1', prose: 'a', attributions: [attribution('iDnes'), attribution('Novinky')] }, // 2 of 4
+        { id: 'i2', prose: 'b', attributions: [attribution('iDnes')] }, // 1 of 4
       ],
     }
     // mean(2, 1) / 4 = 0.375 -> 38%
@@ -51,28 +59,32 @@ describe('computeSourceOverlapPercentage', () => {
 
   it('counts distinct outlets, not attribution entries — a duplicate outlet on one item does not inflate the count', () => {
     const dimensions = {
-      agreement: [{ prose: 'x', attributions: [attribution('iDnes'), attribution('iDnes')] }],
+      agreement: [{ id: 'i1', prose: 'x', attributions: [attribution('iDnes'), attribution('iDnes')] }],
     }
     expect(computeSourceOverlapPercentage(dimensions, 2)).toBe(50)
   })
 
   it('is deterministic — the same inputs always yield the same output', () => {
     const dimensions = {
-      agreement: [{ prose: 'x', attributions: [attribution('iDnes'), attribution('Novinky')] }],
+      agreement: [{ id: 'i1', prose: 'x', attributions: [attribution('iDnes'), attribution('Novinky')] }],
     }
     const results = Array.from({ length: 5 }, () => computeSourceOverlapPercentage(dimensions, 3))
     expect(new Set(results).size).toBe(1)
   })
 
   it('returns null rather than dividing by zero when sourceCount is 0', () => {
-    const dimensions = { agreement: [{ prose: 'x', attributions: [attribution('iDnes')] }] }
+    const dimensions = { agreement: [{ id: 'i1', prose: 'x', attributions: [attribution('iDnes')] }] }
     expect(computeSourceOverlapPercentage(dimensions, 0)).toBeNull()
   })
 
   it('clamps to 100 when inconsistent outlet spellings inflate the distinct count above sourceCount', () => {
     const dimensions = {
       agreement: [
-        { prose: 'x', attributions: [attribution('iDnes'), attribution('iDNES.cz'), attribution('Novinky')] },
+        {
+          id: 'i1',
+          prose: 'x',
+          attributions: [attribution('iDnes'), attribution('iDNES.cz'), attribution('Novinky')],
+        },
       ],
     }
     expect(computeSourceOverlapPercentage(dimensions, 2)).toBe(100)

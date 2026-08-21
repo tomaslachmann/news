@@ -1,9 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify'
+import type { NarrativeDocument } from '@news-triangulator/shared'
 import {
   runNarrativePass,
   type NarrativeSource,
-  type NarrativeResult,
   type NarrativeDimensions,
+  type KnownEntity,
 } from '../services/narrativePass.js'
 import { runStageOrThrow } from '../services/pipelineStage.js'
 import type { AnalysisWithDetails } from '../repositories/analysis.js'
@@ -13,10 +14,10 @@ import { JobName, type JobPayload } from './jobDefinitions.js'
 
 export interface NarrativeJobDeps {
   findAnalysisWithDetails: (analysisId: string) => Promise<AnalysisWithDetails | null>
-  updateSynthesisResultNarrative: (
-    analysisId: string,
-    narrative: NarrativeResult['segments']
-  ) => Promise<void>
+  /** The Story's full known-entity set (ticket 47 / ADR 0034) — given to the Narrative LLM so an
+   *  inline `<nt:e>` tag's `entityKey` is grounded against a real entity rather than invented. */
+  findEntityMentionsForStory: (storyId: string) => Promise<KnownEntity[]>
+  updateSynthesisResultNarrative: (analysisId: string, narrative: NarrativeDocument) => Promise<void>
   markNarrativeGenerationFailedSafe: (analysisId: string) => Promise<void>
 }
 
@@ -91,21 +92,25 @@ export async function runNarrativeJob(
   const logContext = { analysisId: payload.analysisId }
 
   try {
-    const result = await runStageOrThrow(logContext, 'Cross-Source Narrative generation', log, () =>
-      runNarrativePass(sources, dimensions, log)
+    const entities = await runStageOrThrow(logContext, 'Loading the Story entity list', log, () =>
+      deps.findEntityMentionsForStory(analysis.storyId)
     )
 
-    // Every segment can end up dropped by quote verification — an empty result is a failure for
-    // retry-gating purposes, not a successful "nothing to narrate" result. Logged explicitly here
-    // (not inside runStageOrThrow, since this isn't a caught exception) so it's as visible in the
-    // application log as the LLM-throw and persist-failure paths right above/below it.
-    if (result.segments.length === 0) {
-      log?.error(logContext, 'Cross-Source Narrative generation produced no verifiable segments')
-      throw new ExternalServiceError('Cross-Source Narrative generation produced no verifiable segments')
+    const result = await runStageOrThrow(logContext, 'Cross-Source Narrative generation', log, () =>
+      runNarrativePass(sources, dimensions, entities, log)
+    )
+
+    // Every block can end up dropped by verification failing twice — an empty result is a failure
+    // for retry-gating purposes, not a successful "nothing to narrate" result. Logged explicitly
+    // here (not inside runStageOrThrow, since this isn't a caught exception) so it's as visible in
+    // the application log as the LLM-throw and persist-failure paths right above/below it.
+    if (result.blocks.length === 0) {
+      log?.error(logContext, 'Cross-Source Narrative generation produced no verifiable blocks')
+      throw new ExternalServiceError('Cross-Source Narrative generation produced no verifiable blocks')
     }
 
     await runStageOrThrow(logContext, 'Persisting the Cross-Source Narrative', log, () =>
-      deps.updateSynthesisResultNarrative(payload.analysisId, result.segments)
+      deps.updateSynthesisResultNarrative(payload.analysisId, result)
     )
   } catch (err) {
     await deps.markNarrativeGenerationFailedSafe(payload.analysisId)

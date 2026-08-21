@@ -1,55 +1,27 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { z } from 'zod'
 import type { FastifyBaseLogger } from 'fastify'
-import { callJsonModel } from './llmClient.js'
-import { DimensionItemSchema, type SynthesisResult } from './synthesisPass.js'
+import type { NarrativeDocument } from '@news-triangulator/shared'
+import { callStructuredModel } from './llmClient.js'
+import type { SynthesisResult } from './synthesisPass.js'
 import {
-  verifyAndRepair,
-  extractAttributionQuotes,
-  filterValidAttributedItems,
-  type QuoteRef,
-} from './quoteVerification.js'
+  LlmNarrativeDocumentSchema,
+  verifyNarrativeDocumentOrThrow,
+  buildNarrativeDocument,
+  type AssertionDimension,
+  type KnownEntity,
+  type NarrativeVerificationContext,
+} from './narrativeDocument.js'
+
+export type { KnownEntity }
 
 const SYSTEM_PROMPT = readFileSync(join(__dirname, '../prompts/narrative.txt'), 'utf8')
-
-export const NarrativeResultSchema = z.object({
-  segments: z.array(DimensionItemSchema).min(1),
-})
-
-export type NarrativeResult = z.infer<typeof NarrativeResultSchema>
+const SCHEMA_NAME = 'narrative_document'
 
 export interface NarrativeSource {
   outlet: string
   articleUrl: string
   fullText: string
-}
-
-function buildSourceTextMap(sources: NarrativeSource[]): Map<string, string> {
-  return new Map(sources.map((s) => [s.articleUrl, s.fullText]))
-}
-
-function extractQuotes(result: NarrativeResult, sourceTextByUrl: Map<string, string>): QuoteRef[] {
-  return extractAttributionQuotes(result.segments, sourceTextByUrl, 'segments')
-}
-
-function dropFailingSegments(result: NarrativeResult, sourceTextByUrl: Map<string, string>): NarrativeResult {
-  return { segments: filterValidAttributedItems(result.segments, sourceTextByUrl) }
-}
-
-function buildRepairPrompt(originalUserContent: string, previous: unknown, failures: QuoteRef[]): string {
-  return [
-    originalUserContent,
-    '',
-    '---',
-    "You previously produced the JSON below, but some czechQuote attributions were not verbatim substrings of the cited article's fullText:",
-    JSON.stringify(failures.map((f) => ({ context: f.context, quote: f.quote }))),
-    '',
-    "Return corrected JSON in the exact same schema. Fix each flagged czechQuote to a real verbatim quote from that outlet's fullText, or remove the entire segment if no valid quote supports it — every segment requires at least one attribution.",
-    '',
-    'Previous output:',
-    JSON.stringify(previous),
-  ].join('\n')
 }
 
 /** The four dimensions only — never `agreementCategory` (ticket 38). narrative.txt's own "Input
@@ -62,17 +34,35 @@ export type NarrativeDimensions = Pick<
   'agreement' | 'contradiction' | 'uniqueReporting' | 'framing'
 >
 
-export async function runNarrativePass(
+function buildSourceTextByArticleUrl(sources: NarrativeSource[]): Map<string, string> {
+  return new Map(sources.map((s) => [s.articleUrl, s.fullText]))
+}
+
+function buildOutletByArticleUrl(sources: NarrativeSource[]): Map<string, string> {
+  return new Map(sources.map((s) => [s.articleUrl, s.outlet]))
+}
+
+function buildDimensionItemIdsByDimension(
+  dimensions: NarrativeDimensions
+): Record<AssertionDimension, Set<string>> {
+  return {
+    agreement: new Set(dimensions.agreement.map((item) => item.id)),
+    contradiction: new Set(dimensions.contradiction.map((item) => item.id)),
+    unique_reporting: new Set(dimensions.uniqueReporting.map((item) => item.id)),
+    framing: new Set(dimensions.framing.map((item) => item.id)),
+  }
+}
+
+function buildUserContent(
   sources: NarrativeSource[],
   dimensions: NarrativeDimensions,
-  log?: FastifyBaseLogger
-): Promise<NarrativeResult> {
-  const model = process.env.SYNTHESIS_MODEL ?? 'gpt-4o'
-  // Rebuilt as a literal, not `{ sources, dimensions }` — `dimensions` is typed as
+  entities: KnownEntity[]
+): string {
+  // Rebuilt as a literal, not `{ sources, dimensions, entities }` — `dimensions` is typed as
   // NarrativeDimensions, but a caller passing the wider SynthesisResult it's `Pick`ed from
   // (structurally assignable) would otherwise still carry `agreementCategory` through to
   // JSON.stringify unnoticed, since TS's structural typing doesn't strip runtime properties.
-  const userContent = JSON.stringify({
+  return JSON.stringify({
     sources,
     dimensions: {
       agreement: dimensions.agreement,
@@ -80,21 +70,72 @@ export async function runNarrativePass(
       uniqueReporting: dimensions.uniqueReporting,
       framing: dimensions.framing,
     },
+    entities: entities.map(({ key, canonicalName, type }) => ({ key, canonicalName, type })),
   })
-  const parsed = NarrativeResultSchema.parse(
-    await callJsonModel(model, SYSTEM_PROMPT, userContent, 'narrative')
+}
+
+function buildRepairPrompt(originalUserContent: string, previous: unknown, failures: string[]): string {
+  return [
+    originalUserContent,
+    '',
+    '---',
+    'You previously produced the JSON document below, but it failed the following verification checks:',
+    JSON.stringify(failures),
+    '',
+    'Return a corrected JSON document in the exact same schema, fixing every flagged issue: every ' +
+      '<nt:e>/<nt:v>/<nt:s> tag id used inline must be declared in entityRefs/valueRefs/sourceRefs, ' +
+      'every quote block must name a declared sourceId and its text must be a real verbatim quote ' +
+      "from that source's fullText, and every assertion's dimensionItemId must be one of the ids " +
+      'actually present in the cited dimension.',
+    '',
+    'Previous output:',
+    JSON.stringify(previous),
+  ].join('\n')
+}
+
+export async function runNarrativePass(
+  sources: NarrativeSource[],
+  dimensions: NarrativeDimensions,
+  entities: KnownEntity[],
+  log?: FastifyBaseLogger
+): Promise<NarrativeDocument> {
+  const model = process.env.SYNTHESIS_MODEL ?? 'gpt-4o'
+  const userContent = buildUserContent(sources, dimensions, entities)
+
+  const parsed = LlmNarrativeDocumentSchema.parse(
+    await callStructuredModel(
+      model,
+      SYSTEM_PROMPT,
+      userContent,
+      'narrative',
+      LlmNarrativeDocumentSchema,
+      SCHEMA_NAME
+    )
   )
 
-  const sourceTextByUrl = buildSourceTextMap(sources)
+  const verificationContext: NarrativeVerificationContext = {
+    sourceTextByArticleUrl: buildSourceTextByArticleUrl(sources),
+    knownEntityKeys: new Set(entities.map((e) => e.key)),
+    dimensionItemIdsByDimension: buildDimensionItemIdsByDimension(dimensions),
+  }
 
-  return verifyAndRepair({
-    result: parsed,
-    extractQuotes: (r) => extractQuotes(r, sourceTextByUrl),
-    dropFailing: (r) => dropFailingSegments(r, sourceTextByUrl),
-    schema: NarrativeResultSchema,
-    passName: 'narrative',
-    log,
-    repair: (failures) =>
-      callJsonModel(model, SYSTEM_PROMPT, buildRepairPrompt(userContent, parsed, failures), 'narrative'),
+  const verified = await verifyNarrativeDocumentOrThrow(
+    parsed,
+    verificationContext,
+    (failures) =>
+      callStructuredModel(
+        model,
+        SYSTEM_PROMPT,
+        buildRepairPrompt(userContent, parsed, failures),
+        'narrative',
+        LlmNarrativeDocumentSchema,
+        SCHEMA_NAME
+      ),
+    log
+  )
+
+  return buildNarrativeDocument(verified, {
+    entitiesByKey: new Map(entities.map((e) => [e.key, e])),
+    outletByArticleUrl: buildOutletByArticleUrl(sources),
   })
 }
