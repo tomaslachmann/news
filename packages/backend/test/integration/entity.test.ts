@@ -218,4 +218,102 @@ describe('Entity repository against a real Postgres instance', () => {
 
     expect(await countStories()).toBeGreaterThanOrEqual(before + 1)
   })
+
+  describe('resolveEntityKey wiring (ticket 40 / ADR 0033)', () => {
+    it('routes a raw key through resolveEntityKey before it is used to upsert/attach', async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-e10',
+        seedHeadline: 'x',
+      })
+      const resolveEntityKey = (key: string) =>
+        Promise.resolve(key === 'country:entity-test-alias-raw' ? 'country:entity-test-alias-survivor' : key)
+
+      await replaceStoryEntities(
+        storyId,
+        [{ key: 'country:entity-test-alias-raw', name: 'US', type: 'COUNTRY', confidence: 0.9, salience: 1 }],
+        [],
+        resolveEntityKey
+      )
+
+      const result = await findStoryEntitiesForScoring(storyId)
+      expect(result.entities).toEqual([{ key: 'country:entity-test-alias-survivor', storyCount: 1 }])
+    })
+
+    it('collapses two raw keys from the same batch that resolve to the same key into one attachment, not two', async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-e11',
+        seedHeadline: 'x',
+      })
+      const resolveEntityKey = () => Promise.resolve('country:entity-test-alias-collision-survivor')
+
+      await replaceStoryEntities(
+        storyId,
+        [
+          {
+            key: 'country:entity-test-alias-collision-a',
+            name: 'USA',
+            type: 'COUNTRY',
+            confidence: 0.6,
+            salience: 1,
+          },
+          {
+            key: 'country:entity-test-alias-collision-b',
+            name: 'United States',
+            type: 'COUNTRY',
+            confidence: 0.9,
+            salience: 1,
+          },
+        ],
+        [],
+        resolveEntityKey
+      )
+
+      const result = await findStoryEntitiesForScoring(storyId)
+      // One attachment, storyCount 1 — not 2, which a naive per-raw-key upsert would produce.
+      expect(result.entities).toEqual([
+        { key: 'country:entity-test-alias-collision-survivor', storyCount: 1 },
+      ])
+    })
+
+    it('resolves an entityRelation from/to using the raw key it was derived from, even after collision-merging', async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-e12',
+        seedHeadline: 'x',
+      })
+      const resolveEntityKey = (key: string) =>
+        Promise.resolve(
+          key === 'country:entity-test-alias-rel-a' ? 'country:entity-test-alias-rel-survivor' : key
+        )
+      const tusk = {
+        key: 'person:entity-test-alias-rel-tusk',
+        name: 'Donald Tusk',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      const usRaw = {
+        key: 'country:entity-test-alias-rel-a',
+        name: 'US',
+        type: 'COUNTRY' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+
+      await replaceStoryEntities(
+        storyId,
+        [tusk, usRaw],
+        [{ from: tusk.key, to: usRaw.key, type: 'REPRESENTS', confidence: 0.8 }],
+        resolveEntityKey
+      )
+
+      const result = await findStoryEntitiesForScoring(storyId)
+      expect(result.entityRelations).toEqual([
+        {
+          fromKey: 'person:entity-test-alias-rel-tusk',
+          toKey: 'country:entity-test-alias-rel-survivor',
+          type: 'REPRESENTS',
+        },
+      ])
+    })
+  })
 })

@@ -8,6 +8,7 @@ import { makeConsoleLogger } from './jobs/consoleLogger.js'
 import * as analysisRepo from './repositories/analysis.js'
 import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
+import * as entityAliasRepo from './repositories/entityAlias.js'
 import * as storyRelationRepo from './repositories/storyRelation.js'
 import * as synthesisResultRepo from './repositories/synthesisResult.js'
 import * as threadRepo from './repositories/thread.js'
@@ -26,7 +27,17 @@ const start = async () => {
           {
             findAnalysisWithStory: analysisRepo.findAnalysisWithStory,
             findCoveragesForAnalysis: coverageRepo.findCoveragesForAnalysis,
-            replaceStoryEntities: entityRepo.replaceStoryEntities,
+            // ticket 40 / ADR 0033: resolveEntityKey baked in via closure rather than threaded
+            // through entityRelationJob.ts/storyRelationPass.ts's own deps interfaces — it's an
+            // implementation detail of *how* replaceStoryEntities persists, not something either
+            // of those layers needs to know about or inject separately.
+            replaceStoryEntities: (storyId, entities, entityRelations) =>
+              entityRepo.replaceStoryEntities(
+                storyId,
+                entities,
+                entityRelations,
+                entityAliasRepo.resolveEntityKey
+              ),
             findStoryEntitiesForScoring: entityRepo.findStoryEntitiesForScoring,
             countStories: entityRepo.countStories,
             findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,

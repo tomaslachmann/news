@@ -22,8 +22,10 @@ export type AdminAction =
   | 'analysis.discovery_run'
   | 'analysis.coverages_confirmed'
   | 'analysis.synthesis_triggered'
+  | 'entity.alias_merged'
+  | 'entity.alias_rejected'
 
-export type AdminActionTargetType = 'analysis' | 'story_relation' | 'user'
+export type AdminActionTargetType = 'analysis' | 'story_relation' | 'user' | 'entity_alias'
 
 export interface NewAdminActionLog {
   actorId: string
