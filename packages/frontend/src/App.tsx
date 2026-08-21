@@ -13,6 +13,7 @@ import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminEntityWikidataPage from './pages/AdminEntityWikidataPage'
+import EntityAliasesPage from './pages/EntityAliasesPage'
 import IngestionReviewPage from './pages/IngestionReviewPage'
 import StyleguidePage from './pages/StyleguidePage'
 import NotFoundPage from './pages/NotFoundPage'
@@ -86,6 +87,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <AdminEntityWikidataPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/entity-aliases"
+          element={
+            <ProtectedRoute>
+              <EntityAliasesPage />
             </ProtectedRoute>
           }
         />

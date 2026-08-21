@@ -1,0 +1,103 @@
+/* ticket 46 — no reference mockup exists for this screen (split out of ticket 40, added after the
+   design system delivery). Reuses the same .qsec/.qitem/.pair visual language IngestionReviewPage
+   ported from ds/components.css §15, duplicated here page-scoped per that ticket's own convention
+   ("kept page-scoped like every page here" — see IngestionReviewPage.css). */
+
+.qsec {
+  padding-block: var(--sp-6);
+  border-bottom: var(--bw-hair) solid var(--line);
+}
+.qsec:last-of-type {
+  border-bottom: 0;
+}
+.qsec__h {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.qsec__t {
+  font-family: var(--font-serif);
+  font-size: var(--text-h3);
+  font-weight: 500;
+  font-variation-settings: 'opsz' var(--opsz-h3);
+  letter-spacing: var(--ls-h2);
+}
+.qsec__n {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.qsec__l {
+  margin-top: var(--sp-5);
+  border-top: var(--bw-hair) solid var(--line-2);
+}
+
+.qitem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2) var(--sp-5);
+  align-items: start;
+  padding: var(--sp-4) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.qitem:hover {
+  background: color-mix(in oklab, var(--surface-2) 60%, transparent);
+}
+.qitem__k {
+  grid-column: 1;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.qitem__m {
+  grid-column: 1;
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.qitem__act {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+/* dvojice porovnávaných entit */
+.pair {
+  grid-column: 1;
+  display: grid;
+  gap: var(--sp-1);
+  font-family: var(--font-serif);
+  font-size: var(--text-h4);
+  line-height: 1.32;
+}
+.pair__r {
+  display: grid;
+  grid-template-columns: 1.35rem minmax(0, 1fr);
+  gap: var(--sp-2);
+  align-items: baseline;
+}
+.pair__a {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
