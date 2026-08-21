@@ -4,6 +4,7 @@ import { registerAuthRoutes } from './routes/auth.js'
 import { registerAnalysesRoutes } from './routes/analyses.js'
 import { registerAdminUsersRoutes } from './routes/adminUsers.js'
 import { registerIngestionRoutes } from './routes/ingestion.js'
+import { registerEntityAliasRoutes } from './routes/entityAlias.js'
 import { seedAdminUser } from './seed.js'
 import { getQueueClient } from './jobs/queueClient.js'
 import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
@@ -43,6 +44,7 @@ const start = async () => {
     registerAnalysesRoutes(server)
     registerAdminUsersRoutes(server)
     registerIngestionRoutes(server)
+    registerEntityAliasRoutes(server)
 
     await seedAdminUser()
 

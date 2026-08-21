@@ -170,6 +170,14 @@ export const PatchAdminUserBodySchema = z
   })
 export type PatchAdminUserBody = z.infer<typeof PatchAdminUserBodySchema>
 
+// Ticket 40 — the pair's two entities disambiguate by id, but the confirming Admin decides which
+// canonical name survives; the body carries that choice rather than the endpoint picking one side
+// arbitrarily.
+export const ConfirmEntityAliasMergeBodySchema = z.object({
+  survivingEntityId: z.string().min(1),
+})
+export type ConfirmEntityAliasMergeBody = z.infer<typeof ConfirmEntityAliasMergeBodySchema>
+
 // API response types
 
 export type AnalysisStatusLabel = 'draft' | 'pending' | 'complete' | 'failed'
@@ -253,6 +261,26 @@ export interface AdminUserListItem {
   email: string
   role: UserRole
   createdAt: string
+}
+
+/// Matches the backend's EntityType Prisma enum exactly — see CONTEXT.md's Entity entry.
+export type EntityTypeLabel = 'PERSON' | 'ORGANIZATION' | 'PLACE' | 'COUNTRY'
+
+export interface EntityAliasCandidateEntity {
+  id: string
+  canonicalName: string
+  type: EntityTypeLabel
+  storyCount: number
+}
+
+/** A same-entity candidate pair ranked by name similarity (ticket 40 / ADR 0033) — `pairId`
+ *  encodes the two entity ids (no persisted row exists for a not-yet-decided candidate), passed
+ *  back verbatim to the confirm/reject endpoints. */
+export interface EntityAliasCandidateItem {
+  pairId: string
+  entityA: EntityAliasCandidateEntity
+  entityB: EntityAliasCandidateEntity
+  similarity: number
 }
 
 /** A PUBLISHED StoryRelation (ticket 35), from the current Analysis's point of view — the

@@ -174,8 +174,8 @@ model Story {
 /// name can collide — an accepted, documented v1 limitation, unchanged by moving this out of
 /// per-Story JSON into a shared table.
 model Entity {
-  id            String                @id @default(cuid())
-  key           String                @unique
+  id            String                 @id @default(cuid())
+  key           String                 @unique
   type          EntityType
   canonicalName String
   /// Materialized count of Stories this Entity is attached to via StoryEntity — maintained by a
@@ -184,16 +184,26 @@ model Entity {
   /// correct — see ADR 0024). Powers IDF weighting in storyRelationScoring.ts (fixes P1-9: plain
   /// Jaccard is the wrong metric for this project's asymmetric entity-set sizes between the
   /// Ingestion and human-seeded extraction paths).
-  storyCount    Int                   @default(0)
+  storyCount    Int                    @default(0)
   storyEntities StoryEntity[]
-  relationsFrom StoryEntityRelation[] @relation("EntityRelationFrom")
-  relationsTo   StoryEntityRelation[] @relation("EntityRelationTo")
+  relationsFrom StoryEntityRelation[]  @relation("EntityRelationFrom")
+  relationsTo   StoryEntityRelation[]  @relation("EntityRelationTo")
+  /// Ticket 40 — every EntityAlias confirmed INTO this entity (this entity is the survivor).
+  aliases       EntityAlias[]          @relation("EntityAliasSurvivor")
+  /// Ticket 40 — set only if this entity was itself merged away into another. At most one, not
+  /// zero-or-many: `EntityAlias.mergedFromEntityId` is `@unique` because a merged-away entity is
+  /// never re-selected as a merge target again (mergeEntities flattens any alias that already
+  /// pointed at it onto the new survivor directly — see that function's own comment).
+  mergedInto    EntityAlias?           @relation("EntityAliasMergedFrom")
+  rejectionsA   EntityAliasRejection[] @relation("EntityAliasRejectionA")
+  rejectionsB   EntityAliasRejection[] @relation("EntityAliasRejectionB")
 
   /// Fuzzy name search over `canonicalName` (ticket 12) is a trigram GIN index
   /// (`entity_canonicalName_trgm_idx`, requires the `pg_trgm` extension), written by hand in this
   /// migration — Prisma's schema DSL can't express an operator-class index without extra preview
   /// features this project doesn't otherwise need, same convention as Coverage's partial unique
-  /// index and StoryEntityRelation's CHECK constraint.
+  /// index and StoryEntityRelation's CHECK constraint. Ticket 40's candidate query
+  /// (repositories/entityAlias.ts) is its first real consumer.
   @@index([type])
 }
 
@@ -240,6 +250,55 @@ model StoryEntityRelation {
   @@unique([storyId, fromEntityId, toEntityId, type])
   @@index([fromEntityId])
   @@index([toEntityId])
+}
+
+/// A name variant Admin-confirmed to refer to the same real-world entity as `entityId`'s Entity
+/// row (ticket 40, ADR 0033) — the redirect this project's aliasing mechanism relies on instead of
+/// hard-rewriting every foreign key and deleting the merged-away row. `alias` is the merged-away
+/// entity's own `key` at merge time (never its `canonicalName` — resolveEntityKey below matches on
+/// `key`, the same deterministic identifier every entity-resolution call site already uses).
+/// `mergedFromEntityId` keeps that row's id for audit even though the row itself survives,
+/// unaltered, purely as a redirect target. Never auto-applied — every row here traces back to an
+/// Admin's explicit confirm action (`entity.alias_merged` in AdminActionLog), same posture as
+/// StoryRelation's LOW-confidence review queue (ADR 0012).
+model EntityAlias {
+  id                 String   @id @default(cuid())
+  entityId           String
+  entity             Entity   @relation("EntityAliasSurvivor", fields: [entityId], references: [id])
+  alias              String   @unique
+  /// `@unique`: a merged-away entity is never re-selected as a merge target again — the candidate
+  /// query excludes any entity already appearing here from both sides of a future pair. If that
+  /// entity's own survivor is later merged away too, mergeEntities flattens this row's `entityId`
+  /// onto the new final survivor directly, so resolveEntityKey stays a single lookup and never has
+  /// to walk a chain.
+  mergedFromEntityId String   @unique
+  mergedFromEntity   Entity   @relation("EntityAliasMergedFrom", fields: [mergedFromEntityId], references: [id])
+  /// Actor id of the confirming Admin — mirrors AdminActionLog's actorId. This is the durable
+  /// resolution record itself, not a duplicate of that log (AdminActionLog is the audit trail of
+  /// the action that produced it, inspected via Prisma Studio like every other admin log here).
+  confirmedBy        String
+  createdAt          DateTime @default(now())
+
+  @@index([entityId])
+}
+
+/// A candidate same-entity pair an Admin has looked at and decided is NOT the same real-world
+/// entity — permanent, mirrors StoryRelation.status's REJECTED semantics (ticket 36): excluded
+/// from every future candidate query rather than re-surfaced. `entityIdA`/`entityIdB` are stored
+/// in a fixed order (`entityIdA < entityIdB` by plain string comparison, enforced by the code that
+/// writes this row, not a DB constraint — same convention as this schema's other app-level
+/// dedup checks) so a pair is excluded regardless of which order a later candidate query produces
+/// it in.
+model EntityAliasRejection {
+  id         String   @id @default(cuid())
+  entityIdA  String
+  entityA    Entity   @relation("EntityAliasRejectionA", fields: [entityIdA], references: [id])
+  entityIdB  String
+  entityB    Entity   @relation("EntityAliasRejectionB", fields: [entityIdB], references: [id])
+  rejectedBy String
+  createdAt  DateTime @default(now())
+
+  @@unique([entityIdA, entityIdB])
 }
 
 /// A typed, directional Story-to-Story edge in the Event Graph (ticket 35) — the newer Story
@@ -366,9 +425,9 @@ model Coverage {
 }
 
 model SynthesisResult {
-  id                          String    @id @default(cuid())
-  analysisId                  String    @unique
-  analysis                    Analysis  @relation(fields: [analysisId], references: [id])
+  id                          String                     @id @default(cuid())
+  analysisId                  String                     @unique
+  analysis                    Analysis                   @relation(fields: [analysisId], references: [id])
   dimensions                  Json
   /// Source Overlap (ticket 38, ADR 0030): counted, never model-generated -- for each item in
   /// `dimensions.agreement`, the number of distinct outlets among its attributions, meaned and
