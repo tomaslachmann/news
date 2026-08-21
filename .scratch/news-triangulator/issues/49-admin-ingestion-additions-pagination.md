@@ -11,7 +11,7 @@ line with the Drafts pattern.
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `findPendingAdditionsPage(cursor, limit)` (or equivalent) in `pendingAddition.ts`, replacing
       `findAllPendingAdditions`'s unbounded `findMany` with the same keyset `(createdAt, id)`
