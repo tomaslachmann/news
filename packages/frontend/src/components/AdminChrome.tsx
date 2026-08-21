@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useLogout } from '@/services/auth/hooks'
 import { useTheme } from '@/ds/useTheme'
 import { THEME_LABEL } from '@/ds/theme'
+import { ADMIN_HOME_PATH } from './chromeNav'
 import '@/components/Chrome.css'
 import './AdminChrome.css'
 
@@ -14,10 +15,9 @@ const ROLE_LABEL: Record<'ADMIN' | 'READONLY', string> = {
 /** Internal/admin screens' own chrome (ticket 39) — ds/components.css §15 "INTERNÍ OBRAZOVKY
  *  (PŘIHLÁŠENÍ A ADMIN)": a slim .abar bar, not the public masthead/rubnav/utilbar the reader-
  *  facing Chrome renders. Reference confirms this split — admin-sources.html, admin-users.html
- *  and admin-review.html all use `.abar` directly with no masthead at all; "Výběr zdrojů" (source
- *  selection) has no fixed nav destination here since it's always reached from a specific
- *  Analysis, not a standalone route, so it's left out of the nav unlike the reference's own
- *  `admin-sources.html` entry (which links to the mockup's one static demo page). */
+ *  and admin-review.html all use `.abar` directly with no masthead at all. Ticket 53 keeps the
+ *  public nav to one "Admin" entry, so the full admin surface — including the admin-only "Nová
+ *  analýza" route that still renders under the public chrome — stays reachable from here instead. */
 export function AdminChrome({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
@@ -35,7 +35,8 @@ export function AdminChrome({ children }: { children: React.ReactNode }) {
           <nav className="abar__nav" aria-label="Interní sekce">
             {isAdmin && (
               <>
-                <NavLink to="/admin/ingestion">Kontrola sběru</NavLink>
+                <NavLink to="/new-analysis">Nová analýza</NavLink>
+                <NavLink to={ADMIN_HOME_PATH}>Kontrola sběru</NavLink>
                 <NavLink to="/admin/entities">Entity / Wikidata</NavLink>
                 <NavLink to="/admin/entity-aliases">Sloučení entit</NavLink>
                 <NavLink to="/admin/users">Uživatelé</NavLink>

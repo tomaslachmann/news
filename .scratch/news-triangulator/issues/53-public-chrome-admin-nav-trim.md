@@ -9,20 +9,26 @@ item-by-item. Collapse those into a single "Admin" (or similar) entry point inst
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `PrimaryNav` shows one link/entry for an Admin instead of three — e.g. a single "Admin" link
+- [x] `PrimaryNav` shows one link/entry for an Admin instead of three — e.g. a single "Admin" link
       into the Admin area (a sensible landing route under `AdminLayout`, such as
       `/admin/ingestion`), not "Nová analýza"/"Uživatelé"/"Sběr článků" individually.
-- [ ] Decide (and note the decision) what that one entry actually is: a plain link to one Admin
+- [x] Decide (and note the decision) what that one entry actually is: a plain link to one Admin
       route, or a small dropdown/menu listing the Admin routes — either is fine, but don't just
       re-list all of `AdminChrome`'s links inline under a new label, which would defeat the point.
-- [ ] `/new-analysis` stays reachable for an Admin somehow (it's not one of `AdminChrome`'s own nav
+- [x] `/new-analysis` stays reachable for an Admin somehow (it's not one of `AdminChrome`'s own nav
       links today either — check whether it needs its own entry point or is reachable from within
       the Admin area once there).
-- [ ] Compact/sticky nav (`PrimaryNav compact`) gets the same trim — no separate divergent behavior
+- [x] Compact/sticky nav (`PrimaryNav compact`) gets the same trim — no separate divergent behavior
       there.
-- [ ] Non-Admin users see no change at all.
+- [x] Non-Admin users see no change at all.
+
+## Implementation decision
+
+Use a plain `Admin` link in the public nav, pointing to `/admin/ingestion`. Keep `Nová analýza`
+reachable from the dedicated `AdminChrome` nav instead of duplicating admin destinations in the
+public reader-facing chrome.
 
 ## Notes
 
