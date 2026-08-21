@@ -18,6 +18,8 @@ import {
 } from './storyMatching.js'
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
+import { scrapeArticle, MIN_TEXT_LENGTH } from './articleScraper.js'
+import { isBlockedContent } from './blockedContent.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import { NotFoundError, ValidationError } from '../errors.js'
@@ -27,6 +29,7 @@ import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
+import * as synthesisResultRepo from '../repositories/synthesisResult.js'
 import { recordAdminActionSafe } from '../repositories/adminActionLog.js'
 import { toPendingAdditionItem } from '../mappers/pendingAddition.js'
 import { toVisibleDraftListItem } from '../mappers/analysis.js'
@@ -330,6 +333,138 @@ export async function rejectDraft(analysisId: string, actorId: string): Promise<
 export async function listPendingAdditions(): Promise<PendingAdditionItem[]> {
   const rows = await pendingAdditionRepo.findAllPendingAdditions()
   return rows.map(toPendingAdditionItem)
+}
+
+/** Real re-triangulation (ticket 45, grilling session 2026-08-21): attaches the flagged Coverage
+ *  to the already-COMPLETE Analysis, scrapes its text, clears the stale SynthesisResult so
+ *  `runAnalysisStream`'s cache check can't skip re-synthesis, and flips the Analysis back to
+ *  PENDING — the same conditional transition `approveDraft` uses for DRAFT→PENDING, reusing the
+ *  existing SSE-stream pipeline rather than a bespoke "re-triangulate a complete one" path.
+ *
+ *  Order matters: the cap/scrape/synthesis-clear/status-transition all happen before the
+ *  PendingAddition itself is marked APPROVED, so a failure partway through (cap reached, a lost
+ *  status-transition race) never leaves this row falsely marked resolved without the Coverage
+ *  actually landing. */
+export async function approvePendingAddition(
+  id: string,
+  actorId: string,
+  log?: FastifyBaseLogger
+): Promise<void> {
+  const pendingAddition = await pendingAdditionRepo.findPendingAdditionById(id)
+  if (!pendingAddition) throw new NotFoundError('Doplnění nenalezeno')
+  if (pendingAddition.status !== 'PENDING_REVIEW') {
+    throw new ValidationError('Schválit lze pouze čekající doplnění')
+  }
+  if (pendingAddition.analysis.status !== 'COMPLETE') {
+    throw new ValidationError('Analýza mezitím změnila stav')
+  }
+
+  const attachResult = await coverageRepo.addCoveragesIfWithinLimit(
+    pendingAddition.analysisId,
+    [
+      {
+        analysisId: pendingAddition.analysisId,
+        sourceId: pendingAddition.sourceId,
+        title: pendingAddition.title ?? undefined,
+        articleUrl: pendingAddition.articleUrl,
+        publishedAt: pendingAddition.publishedAt ?? undefined,
+        status: 'PENDING',
+      },
+    ],
+    MAX_COVERAGES_PER_ANALYSIS
+  )
+  if (!attachResult.ok) {
+    throw new ValidationError('Analýza již dosáhla maximálního počtu zdrojů')
+  }
+
+  const coverages = await coverageRepo.findCoveragesForAnalysis(pendingAddition.analysisId)
+  const newCoverage = coverages.find((c) => c.sourceId === pendingAddition.sourceId)!
+
+  let scrapedOk = false
+  try {
+    const scraped = await scrapeArticle(newCoverage.articleUrl)
+    const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
+    if (isBlocked) {
+      await coverageRepo.updateCoverage(newCoverage.id, { status: 'EXTRACTION_FAILED' })
+    } else {
+      await coverageRepo.updateCoverage(newCoverage.id, { extractedText: scraped.fullText, status: 'OK' })
+      scrapedOk = true
+    }
+  } catch (err) {
+    log?.warn(
+      { pendingAdditionId: id, coverageId: newCoverage.id, err },
+      'Scraping the approved Pending Addition article failed'
+    )
+    await coverageRepo.updateCoverage(newCoverage.id, { status: 'EXTRACTION_FAILED' })
+  }
+
+  await synthesisResultRepo.deleteSynthesisResult(pendingAddition.analysisId)
+
+  const eligibleCoverageIds = scrapedOk ? [newCoverage.id] : []
+  const transitioned = await analysisRepo.updateAnalysisStatusIfCurrently(
+    pendingAddition.analysisId,
+    'COMPLETE',
+    'PENDING',
+    async (tx) => {
+      await enqueueJob(
+        JobName.EntityRelation,
+        {
+          analysisId: pendingAddition.analysisId,
+          origin: 'pending-addition-approval',
+          coverageIds: eligibleCoverageIds,
+        },
+        { tx }
+      )
+    }
+  )
+  if (!transitioned) {
+    throw new ValidationError('Analýza mezitím změnila stav; zkuste to prosím znovu')
+  }
+
+  const resolved = await pendingAdditionRepo.updatePendingAdditionStatusIfCurrently(
+    id,
+    'PENDING_REVIEW',
+    'APPROVED'
+  )
+  if (!resolved) {
+    log?.warn(
+      { pendingAdditionId: id },
+      'Pending Addition was resolved concurrently after its Coverage was already attached and re-triangulation started'
+    )
+  }
+
+  await recordAdminActionSafe({
+    actorId,
+    action: 'pending_addition.approved',
+    targetType: 'pending_addition',
+    targetId: id,
+  })
+}
+
+/** Permanent — a rejected Pending Addition is never re-surfaced; it just stops appearing in
+ *  `listPendingAdditions`, mirroring `rejectStoryRelation`'s shape. */
+export async function rejectPendingAddition(id: string, actorId: string): Promise<void> {
+  const pendingAddition = await pendingAdditionRepo.findPendingAdditionById(id)
+  if (!pendingAddition) throw new NotFoundError('Doplnění nenalezeno')
+  if (pendingAddition.status !== 'PENDING_REVIEW') {
+    throw new ValidationError('Zamítnout lze pouze čekající doplnění')
+  }
+
+  const transitioned = await pendingAdditionRepo.updatePendingAdditionStatusIfCurrently(
+    id,
+    'PENDING_REVIEW',
+    'REJECTED'
+  )
+  if (!transitioned) {
+    throw new ValidationError('Doplnění mezitím změnilo stav; zkuste to prosím znovu')
+  }
+
+  await recordAdminActionSafe({
+    actorId,
+    action: 'pending_addition.rejected',
+    targetType: 'pending_addition',
+    targetId: id,
+  })
 }
 
 /** Drafts visible in the Ingestion review queue — a live filter on attached-source count, not a

@@ -5,6 +5,8 @@ import {
   useVisibleDrafts,
   useApproveDraft,
   useRejectDraft,
+  useApprovePendingAddition,
+  useRejectPendingAddition,
   usePendingStoryRelations,
   useApproveStoryRelation,
   useRejectStoryRelation,
@@ -138,7 +140,19 @@ function DraftsSection() {
   )
 }
 
-function AdditionItem({ addition }: { addition: PendingAdditionItem }) {
+function AdditionItem({
+  addition,
+  onApprove,
+  onReject,
+  isApproving,
+  isRejecting,
+}: {
+  addition: PendingAdditionItem
+  onApprove: () => void
+  onReject: () => void
+  isApproving: boolean
+  isRejecting: boolean
+}) {
   return (
     <article className="qitem">
       <div className="qitem__k">
@@ -163,12 +177,21 @@ function AdditionItem({ addition }: { addition: PendingAdditionItem }) {
       <a className="qitem__u" href={addition.articleUrl} target="_blank" rel="noopener noreferrer">
         {addition.articleUrl}
       </a>
+      <QitemActions
+        onApprove={onApprove}
+        onReject={onReject}
+        isApproving={isApproving}
+        isRejecting={isRejecting}
+      />
     </article>
   )
 }
 
 function PendingAdditionsSection() {
   const { data: additions, isLoading, isError } = usePendingAdditions()
+  const navigate = useNavigate()
+  const approveMutation = useApprovePendingAddition()
+  const rejectMutation = useRejectPendingAddition()
 
   return (
     <section className="qsec">
@@ -177,8 +200,8 @@ function PendingAdditionsSection() {
         {additions && <span className="qsec__n">{additions.length}</span>}
       </div>
       <p className="qsec__d">
-        Sběr článků nalezl nové pokrytí události, která je již dokončená. Nic se automaticky nemění — projděte
-        si původní článek a rozhodněte sami.
+        Sběr článků nalezl nové pokrytí události, která je již dokončená. Schválení připojí zdroj a znovu
+        spustí triangulaci od začátku — po dobu zpracování článek dočasně zmizí z výpisu. Zamítnutí je trvalé.
       </p>
 
       {isLoading && <p className="note">Načítání…</p>}
@@ -197,7 +220,18 @@ function PendingAdditionsSection() {
       {additions && additions.length > 0 && (
         <div className="qsec__l">
           {additions.map((addition) => (
-            <AdditionItem key={addition.id} addition={addition} />
+            <AdditionItem
+              key={addition.id}
+              addition={addition}
+              isApproving={approveMutation.isPending}
+              isRejecting={rejectMutation.isPending}
+              onApprove={() =>
+                approveMutation.mutate(addition.id, {
+                  onSuccess: () => void navigate(`/analysis/${addition.analysisId}`),
+                })
+              }
+              onReject={() => rejectMutation.mutate(addition.id)}
+            />
           ))}
         </div>
       )}

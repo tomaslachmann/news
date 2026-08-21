@@ -53,6 +53,31 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     }
   )
 
+  // PATCH /api/admin/ingestion/pending-additions/:id/approve — attaches the Coverage and
+  // re-triangulates the Analysis (COMPLETE → PENDING, driven through the existing SSE stream)
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/admin/ingestion/pending-additions/:id/approve',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      await ingestionService.approvePendingAddition(
+        request.params.id,
+        verifyAuthCookie(request)!.userId,
+        request.log
+      )
+      return reply.code(200).send({ ok: true })
+    }
+  )
+
+  // PATCH /api/admin/ingestion/pending-additions/:id/reject — PENDING_REVIEW → REJECTED, permanent
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/admin/ingestion/pending-additions/:id/reject',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      await ingestionService.rejectPendingAddition(request.params.id, verifyAuthCookie(request)!.userId)
+      return reply.code(200).send({ ok: true })
+    }
+  )
+
   // GET /api/admin/ingestion/story-relations — LOW-confidence StoryRelations awaiting review
   fastify.get(
     '/api/admin/ingestion/story-relations',

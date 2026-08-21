@@ -47,15 +47,15 @@ has.
 
 ## Mechanics
 
-- [ ] `PendingAddition` gains a `status PendingAdditionStatus @default(PENDING_REVIEW)` field
+- [x] `PendingAddition` gains a `status PendingAdditionStatus @default(PENDING_REVIEW)` field
   (`PENDING_REVIEW | APPROVED | REJECTED`) so a resolved row stops appearing in
   `listPendingAdditions` without being deleted — parallels `StoryRelation`'s `PENDING_REVIEW` →
   `PUBLISHED`/`REJECTED` pattern from ticket 36
-- [ ] A "reject" endpoint (`PATCH /api/admin/ingestion/pending-additions/:id/reject`) marks a
+- [x] A "reject" endpoint (`PATCH /api/admin/ingestion/pending-additions/:id/reject`) marks a
   `PendingAddition` `REJECTED` via conditional CAS — permanent, never re-surfaced, mirrors
   `rejectStoryRelation`'s shape exactly (read-check + `updatePendingAdditionStatusIfCurrently` +
   `ValidationError` on race loss)
-- [ ] An "approve" endpoint (`PATCH /api/admin/ingestion/pending-additions/:id/approve`): guards
+- [x] An "approve" endpoint (`PATCH /api/admin/ingestion/pending-additions/:id/approve`): guards
   `status === PENDING_REVIEW` and `analysis.status === COMPLETE`; attaches the Coverage
   (`coverageRepo.addCoveragesIfWithinLimit`, respecting `MAX_COVERAGES_PER_ANALYSIS`); scrapes it
   (mirrors `confirmCoverages`' scrape step); deletes the Analysis's `SynthesisResult`; transitions
@@ -63,14 +63,14 @@ has.
   `origin: 'pending-addition-approval'`) for the new Coverage in the same transaction; marks the
   `PendingAddition` `APPROVED` last (log-only if that final CAS loses a race, since the real work
   already succeeded by then)
-- [ ] `IngestionReviewPage.tsx`'s `PendingAdditionsSection`/`AdditionItem` (ticket 39) gains
+- [x] `IngestionReviewPage.tsx`'s `PendingAdditionsSection`/`AdditionItem` (ticket 39) gains
   `.qitem__act` approve/reject buttons via the existing shared `QitemActions`, mirroring
   `DraftsSection`'s list-plus-action-buttons pattern; Approve success navigates to
   `/analysis/:analysisId`
-- [ ] New confirm/reject service functions are tested at the service layer via repository mocks,
+- [x] New confirm/reject service functions are tested at the service layer via repository mocks,
   mirroring `ingestionService.test.ts`'s existing `approveDraft`/`approveStoryRelation`/
   `rejectStoryRelation` tests
-- [ ] Existing Ingestion review queue tests/behavior (Drafts section, story-relations section)
+- [x] Existing Ingestion review queue tests/behavior (Drafts section, story-relations section)
   continue passing unchanged
 
 ## Notes

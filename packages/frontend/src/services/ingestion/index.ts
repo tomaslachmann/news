@@ -49,6 +49,24 @@ export async function rejectDraft(analysisId: string): Promise<void> {
   if (!res.ok) return throwApiError(res, 'Nepodařilo se zamítnout koncept')
 }
 
+export async function approvePendingAddition(id: string): Promise<void> {
+  const res = await fetch(`/api/admin/ingestion/pending-additions/${id}/approve`, {
+    method: 'PATCH',
+    credentials: 'include',
+  })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se schválit doplnění')
+}
+
+export async function rejectPendingAddition(id: string): Promise<void> {
+  const res = await fetch(`/api/admin/ingestion/pending-additions/${id}/reject`, {
+    method: 'PATCH',
+    credentials: 'include',
+  })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se zamítnout doplnění')
+}
+
 export async function fetchPendingStoryRelations(): Promise<PendingStoryRelationItem[]> {
   const res = await fetch('/api/admin/ingestion/story-relations', { credentials: 'include' })
 

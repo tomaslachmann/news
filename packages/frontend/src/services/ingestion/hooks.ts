@@ -4,6 +4,8 @@ import {
   fetchVisibleDrafts,
   approveDraft,
   rejectDraft,
+  approvePendingAddition,
+  rejectPendingAddition,
   fetchPendingStoryRelations,
   approveStoryRelation,
   rejectStoryRelation,
@@ -43,6 +45,25 @@ export function useApproveDraft() {
 
 export function useRejectDraft() {
   return useDraftDecision(rejectDraft)
+}
+
+function usePendingAdditionDecision(mutationFn: (id: string) => Promise<void>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['analyses'] })
+      void queryClient.invalidateQueries({ queryKey: PENDING_ADDITIONS_QUERY_KEY })
+    },
+  })
+}
+
+export function useApprovePendingAddition() {
+  return usePendingAdditionDecision(approvePendingAddition)
+}
+
+export function useRejectPendingAddition() {
+  return usePendingAdditionDecision(rejectPendingAddition)
 }
 
 export function usePendingStoryRelations() {

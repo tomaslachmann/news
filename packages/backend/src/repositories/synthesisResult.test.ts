@@ -1,12 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 
-const { mockUpdate } = vi.hoisted(() => ({ mockUpdate: vi.fn() }))
+const { mockUpdate, mockDeleteMany } = vi.hoisted(() => ({ mockUpdate: vi.fn(), mockDeleteMany: vi.fn() }))
 
 vi.mock('../db.js', () => ({
-  prisma: { synthesisResult: { update: mockUpdate } },
+  prisma: { synthesisResult: { update: mockUpdate, deleteMany: mockDeleteMany } },
 }))
 
-import { markNarrativeGenerationFailed, markNarrativeGenerationFailedSafe } from './synthesisResult.js'
+import {
+  markNarrativeGenerationFailed,
+  markNarrativeGenerationFailedSafe,
+  deleteSynthesisResult,
+} from './synthesisResult.js'
 
 describe('markNarrativeGenerationFailed', () => {
   it('propagates a thrown error rather than swallowing it', async () => {
@@ -27,5 +31,21 @@ describe('markNarrativeGenerationFailedSafe', () => {
     mockUpdate.mockRejectedValue(new Error('DB down'))
 
     await expect(markNarrativeGenerationFailedSafe('a1')).resolves.toBeUndefined()
+  })
+})
+
+describe('deleteSynthesisResult', () => {
+  it('deletes by analysisId', async () => {
+    mockDeleteMany.mockResolvedValue({ count: 1 })
+
+    await deleteSynthesisResult('a1')
+
+    expect(mockDeleteMany).toHaveBeenCalledWith({ where: { analysisId: 'a1' } })
+  })
+
+  it('is a no-op, not an error, when no SynthesisResult exists yet', async () => {
+    mockDeleteMany.mockResolvedValue({ count: 0 })
+
+    await expect(deleteSynthesisResult('a1')).resolves.toBeUndefined()
   })
 })
