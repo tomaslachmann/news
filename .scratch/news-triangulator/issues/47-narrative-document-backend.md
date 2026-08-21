@@ -68,3 +68,78 @@ backend-then-UI precedent this project already established.
 typically tagged only at its first significant mention) is a prompt instruction only in this wave —
 no deterministic dedup/cap enforcement. Revisit only if over-tagging turns out to be a real problem
 in practice.
+
+## Preparation Notes (read before implementing — researched 2026-08-21, code not yet touched)
+
+Codebase already researched end to end against ADR 0034 and CONTEXT.md's existing Cross-Source
+Narrative / Narrative Assertion entries (both already written, reflecting the target design). Two
+real design decisions still need to be made before writing code — see "Open decisions" below —
+everything else is a confirmed, concrete implementation path.
+
+**1. Stable ids on DimensionItem/ContradictionItem.** Neither has an `id` today —
+`packages/shared/src/index.ts:38-46`, Zod mirrors in `synthesisPass.ts:23-31`
+(`DimensionItemSchema`/`ContradictionItemSchema`). Add `id: z.string()` to both, generate via
+`crypto.randomUUID()` once, right after `SynthesisResultSchema.parse(...)` at `synthesisPass.ts:133`
+— never asked of the model.
+
+**2. Current narrative pipeline (being replaced).** `narrativePass.ts`: `NarrativeResultSchema =
+{ segments: DimensionItem[] }` (line 16-18); loose `json_object` LLM call; `verifyAndRepair`;
+persisted via `synthesisResult.ts`'s narrative-column update. Job handler `narrativeJob.ts`
+(`runNarrativeJob`) **short-circuits and skips if `analysis.synthesisResult.narrative` is already
+truthy** (line 69-75) — ⚠️ **this will silently no-op the backfill's re-enqueue for every already-
+narrated historical Analysis** unless the backfill first nulls `narrative` (or the guard is changed
+to check the new document's `version` field instead of mere presence).
+
+**3. `verifyAndRepair` (`quoteVerification.ts:83-117`) has the wrong failure semantics for the new
+checks.** Its contract is drop-and-continue (repair once, then `dropFailing()` whatever's still
+bad) — both Synthesis and today's Narrative use it this way, and Synthesis keeps using it this way
+unchanged. Ticket 47's new document-level checks need retry-once-then-**fail the job**, no
+drop-and-continue. `isVerbatimQuote`/`normalizeForComparison` (lines 8-15) are directly reusable
+for the new quote-block check (single `sourceId`, not an attribution list) — just the retry
+wrapper around it needs to be different. See Open decisions below.
+
+**4. No Structured Outputs call site exists anywhere yet.** `llmClient.ts`'s `callJsonModel`
+always uses loose `response_format: { type: 'json_object' }` — every one of the 9 `LlmCallSite`
+values uses this. Good news: `openai` SDK is v7.4.0 and exports `zodResponseFormat(zodObject,
+name)` from `openai/helpers/zod` — the new `NarrativeDocumentSchema` (Zod) can drive strict
+Structured Outputs directly, no hand-written JSON Schema needed. Plan: a new function alongside
+`callJsonModel` (e.g. `callStructuredModel`) taking a Zod schema and using `zodResponseFormat`.
+`SYNTHESIS_MODEL` env var is read per-call-site (`synthesisPass.ts:124`, `narrativePass.ts:70`),
+not centrally — same pattern for the new call.
+
+**5. Quote verification precedent is directly reusable** — see item 3.
+
+**6. AnalysisDetail/AnalysisContext — shape not yet pinned down.** `AnalysisDetail`
+(`packages/shared/src/index.ts:413-438`) already has `entities: EntityMentionItem[]` (ticket 43),
+but `EntityMentionItem` is just `{key, canonicalName, type}` — not the full StoryEntity/
+StoryEntityRelation graph ADR 0034 wants. **No `AnalysisContext` type exists anywhere in shared
+yet.** Backend: `findEntityMentionsForStory` (`repositories/entity.ts:279-286`) only returns the
+trimmed mention shape; no story-scoped "every StoryEntityRelation for this Story" read exists (the
+two relation-fetchers that do exist — `findRelationsForEntity` at line 371 and an internal
+scoring-only one around line 190 — are both entity-scoped or internal, not story-scoped-for-
+display). A new `findEntityRelationsForStory(storyId)` repo function is needed, mirroring
+`findRelationsForEntity`'s Prisma shape but `where: { storyId }`. `findAnalysisWithDetails`
+(`repositories/analysis.ts:145-157`, used by `narrativeJob.ts`) currently includes only
+`coverages`+`synthesisResult` — no entities.
+
+**7. Czech-numeral/unit parser does not exist** — confirmed via repo-wide grep, zero hits. From
+scratch, pure function, easy to unit test per the ticket's own requirement.
+
+**8. No backfill/bulk-re-enqueue script precedent exists.** `scripts/` has only `testPrompts.ts`
+(plain `async function main()`, run ad hoc via `npx tsx`, not wired into `package.json`). New
+script: paginate COMPLETE Analyses (`analysisRepo.findAnalysesPage`), null each one's
+`SynthesisResult.narrative` (not the whole row — `agreementCategory`/`sourceOverlapPercentage`
+etc. must survive), then `enqueueJob(JobName.Narrative, { analysisId })`. Must account for item 2's
+skip-guard.
+
+**9. `entity.image.enrich` (ADR 0034's other new piece) is already fully shipped** (ticket 41) —
+`jobDefinitions.ts`, `jobs/entityImageEnrichJob.ts`, wired into `worker.ts`. Not this ticket's
+concern.
+
+**Open decisions to make before writing code:**
+- Extend `verifyAndRepair` with a `mode: 'drop' | 'throw'` option, or write a separate
+  whole-document verify/retry function for the new checks, leaving Synthesis's existing
+  per-item-drop behavior untouched? (item 3)
+- Exact shape of `AnalysisContext` — a new nested field on `AnalysisDetail`, or does it replace/
+  reshape the existing `entities` field directly? Re-read ADR 0034's "Entity API reconciled, not
+  reinvented" paragraph once more before committing. (item 6)
