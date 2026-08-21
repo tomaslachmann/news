@@ -11,7 +11,7 @@ own output. See [ADR 0034](../../../docs/adr/0034-structured-narrative-document.
 **Blocked by:** none — `StoryEntity`/`StoryEntityRelation` (ADR 0024), Analysis Dimensions
 (ADR 0001/0030), and the existing `narrative.generate` job (ADR 0028) already exist.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `DimensionItem`/`ContradictionItem` gain a stable `id`, generated once at Synthesis time and
       persisted — never an array index (which wouldn't survive `verifyAndRepair` reshuffling
