@@ -57,6 +57,12 @@ enum StoryRelationStatus {
   REJECTED
 }
 
+enum PendingAdditionStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
 enum ThreadStatus {
   ACTIVE
   DORMANT
@@ -502,15 +508,19 @@ model SynthesisResult {
 /// A candidate Coverage that Ingestion found for an already-COMPLETE Analysis — surfaced for Admin
 /// review rather than silently reopening a completed Analysis (see ADR 0013).
 model PendingAddition {
-  id          String   @id @default(cuid())
+  id          String                @id @default(cuid())
   analysisId  String
-  analysis    Analysis @relation(fields: [analysisId], references: [id])
+  analysis    Analysis              @relation(fields: [analysisId], references: [id])
   sourceId    String
-  source      Source   @relation(fields: [sourceId], references: [id])
+  source      Source                @relation(fields: [sourceId], references: [id])
   title       String?
   articleUrl  String
   publishedAt String?
-  createdAt   DateTime @default(now())
+  status      PendingAdditionStatus @default(PENDING_REVIEW)
+  createdAt   DateTime              @default(now())
+
+  /// listPendingAdditions filters by status and sorts by createdAt desc (ticket 45).
+  @@index([status, createdAt])
 }
 
 /// A distinct news outlet (CONTEXT.md) — the single identity every Coverage/PendingAddition

@@ -8,6 +8,8 @@ import * as storyVerificationModule from './storyVerification.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as ingestionRunLockRepo from '../repositories/ingestionRunLock.js'
+import * as synthesisResultRepo from '../repositories/synthesisResult.js'
+import * as articleScraperModule from './articleScraper.js'
 import * as jobsEnqueue from '../jobs/enqueue.js'
 import * as adminActionLogRepo from '../repositories/adminActionLog.js'
 import { JobName } from '../jobs/jobDefinitions.js'
@@ -16,6 +18,8 @@ import {
   approveDraft,
   rejectDraft,
   listPendingAdditions,
+  approvePendingAddition,
+  rejectPendingAddition,
   listVisibleDrafts,
   listPendingStoryRelations,
   approveStoryRelation,
@@ -32,6 +36,8 @@ vi.mock('./storyVerification.js')
 vi.mock('../repositories/storyRelation.js')
 vi.mock('../repositories/matchDecision.js')
 vi.mock('../repositories/ingestionRunLock.js')
+vi.mock('../repositories/synthesisResult.js')
+vi.mock('./articleScraper.js')
 vi.mock('../jobs/enqueue.js')
 vi.mock('../repositories/adminActionLog.js')
 
@@ -680,6 +686,7 @@ describe('listPendingAdditions', () => {
         title: 'T',
         articleUrl: 'https://idnes.cz/x',
         publishedAt: '2026-01-01T00:00:00Z',
+        status: 'PENDING_REVIEW',
         createdAt: new Date('2026-01-02T00:00:00Z'),
         analysis: { seedHeadline: 'Original story' },
         source: { name: 'iDnes' },
@@ -700,6 +707,263 @@ describe('listPendingAdditions', () => {
         createdAt: '2026-01-02T00:00:00.000Z',
       },
     ])
+  })
+})
+
+describe('approvePendingAddition', () => {
+  const PENDING_ADDITION = {
+    id: 'p1',
+    analysisId: 'a1',
+    sourceId: 'src-idnes',
+    title: 'New coverage',
+    articleUrl: 'https://idnes.cz/new-article',
+    publishedAt: '2026-01-01T00:00:00Z',
+    status: 'PENDING_REVIEW' as const,
+    createdAt: new Date('2026-01-02T00:00:00Z'),
+    analysis: { status: 'COMPLETE' as const },
+  }
+
+  const ATTACHED_COVERAGE = makeCoverage('new-cov', 'New coverage')
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue(PENDING_ADDITION)
+    vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: true })
+    // First call is the pre-attach duplicate-source check (no existing Coverage for this Source
+    // yet); second is the post-attach lookup that finds the newly-created row.
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([ATTACHED_COVERAGE])
+    vi.mocked(articleScraperModule.scrapeForCoverage).mockResolvedValue({
+      status: 'OK',
+      extractedText: 'A'.repeat(200),
+    })
+    vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockImplementation(
+      async (_id, _from, _to, onTransition) => {
+        await onTransition?.({} as never)
+        return true
+      }
+    )
+    vi.mocked(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).mockResolvedValue(true)
+    vi.mocked(jobsEnqueue.enqueueJob).mockResolvedValue('job-1')
+  })
+
+  it('attaches the Coverage, scrapes it, clears the stale synthesis, and re-triangulates', async () => {
+    await approvePendingAddition('p1', ACTOR_ID)
+
+    expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalledWith(
+      'a1',
+      [
+        {
+          analysisId: 'a1',
+          sourceId: 'src-idnes',
+          title: 'New coverage',
+          articleUrl: 'https://idnes.cz/new-article',
+          publishedAt: '2026-01-01T00:00:00Z',
+          status: 'PENDING',
+        },
+      ],
+      expect.any(Number)
+    )
+    expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('new-cov', {
+      extractedText: 'A'.repeat(200),
+      status: 'OK',
+    })
+    expect(synthesisResultRepo.deleteSynthesisResult).toHaveBeenCalledWith('a1', expect.any(Object))
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
+      'a1',
+      'COMPLETE',
+      'PENDING',
+      expect.any(Function)
+    )
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(
+      JobName.EntityRelation,
+      { analysisId: 'a1', origin: 'pending-addition-approval', coverageIds: ['new-cov'] },
+      expect.any(Object)
+    )
+    expect(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).toHaveBeenCalledWith(
+      'p1',
+      'PENDING_REVIEW',
+      'APPROVED'
+    )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'pending_addition.approved',
+      targetType: 'pending_addition',
+      targetId: 'p1',
+    })
+  })
+
+  it('marks the Coverage EXTRACTION_FAILED and enqueues no coverageIds when scraping is unsuccessful', async () => {
+    vi.mocked(articleScraperModule.scrapeForCoverage).mockResolvedValue({ status: 'EXTRACTION_FAILED' })
+
+    await approvePendingAddition('p1', ACTOR_ID)
+
+    expect(coverageRepo.updateCoverage).toHaveBeenCalledWith('new-cov', { status: 'EXTRACTION_FAILED' })
+    expect(jobsEnqueue.enqueueJob).toHaveBeenCalledWith(
+      JobName.EntityRelation,
+      { analysisId: 'a1', origin: 'pending-addition-approval', coverageIds: [] },
+      expect.any(Object)
+    )
+  })
+
+  it('throws NotFoundError when the Pending Addition does not exist', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue(null)
+
+    await expect(approvePendingAddition('missing', ACTOR_ID)).rejects.toThrow(NotFoundError)
+  })
+
+  it('throws ValidationError when the Pending Addition is not PENDING_REVIEW', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue({
+      ...PENDING_ADDITION,
+      status: 'APPROVED',
+    })
+
+    await expect(approvePendingAddition('p1', ACTOR_ID)).rejects.toThrow(ValidationError)
+    expect(coverageRepo.addCoveragesIfWithinLimit).not.toHaveBeenCalled()
+  })
+
+  it('throws ValidationError when the Analysis is no longer COMPLETE', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue({
+      ...PENDING_ADDITION,
+      analysis: { status: 'PENDING' },
+    })
+
+    await expect(approvePendingAddition('p1', ACTOR_ID)).rejects.toThrow(ValidationError)
+    expect(coverageRepo.addCoveragesIfWithinLimit).not.toHaveBeenCalled()
+  })
+
+  it('throws ValidationError when the Analysis is already at the Coverage cap', async () => {
+    vi.mocked(coverageRepo.addCoveragesIfWithinLimit).mockResolvedValue({ ok: false, activeCount: 25 })
+
+    await expect(approvePendingAddition('p1', ACTOR_ID)).rejects.toThrow(ValidationError)
+    expect(articleScraperModule.scrapeForCoverage).not.toHaveBeenCalled()
+    expect(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).not.toHaveBeenCalled()
+  })
+
+  it('resolves a duplicate Pending Addition for an already-attached Source (same URL) without re-scraping or re-triangulating', async () => {
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockReset()
+      .mockResolvedValue([{ ...ATTACHED_COVERAGE, articleUrl: PENDING_ADDITION.articleUrl }])
+    vi.mocked(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).mockResolvedValue(true)
+
+    await approvePendingAddition('p1', ACTOR_ID)
+
+    expect(coverageRepo.addCoveragesIfWithinLimit).not.toHaveBeenCalled()
+    expect(articleScraperModule.scrapeForCoverage).not.toHaveBeenCalled()
+    expect(synthesisResultRepo.deleteSynthesisResult).not.toHaveBeenCalled()
+    expect(analysisRepo.updateAnalysisStatusIfCurrently).not.toHaveBeenCalled()
+    expect(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).toHaveBeenCalledWith(
+      'p1',
+      'PENDING_REVIEW',
+      'APPROVED'
+    )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'pending_addition.approved',
+      targetType: 'pending_addition',
+      targetId: 'p1',
+    })
+  })
+
+  it('throws a distinct ValidationError (not the cap message) when the Source is already attached via a different article', async () => {
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockReset()
+      .mockResolvedValue([{ ...ATTACHED_COVERAGE, articleUrl: 'https://idnes.cz/a-different-article' }])
+
+    await expect(approvePendingAddition('p1', ACTOR_ID)).rejects.toThrow(
+      'Tento zdroj je již k analýze připojen jiným článkem'
+    )
+    expect(coverageRepo.addCoveragesIfWithinLimit).not.toHaveBeenCalled()
+    expect(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).not.toHaveBeenCalled()
+  })
+
+  it('throws ValidationError instead of crashing when the newly attached Coverage cannot be found afterward', async () => {
+    vi.mocked(coverageRepo.findCoveragesForAnalysis)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([])
+
+    await expect(approvePendingAddition('p1', ACTOR_ID)).rejects.toThrow(ValidationError)
+    expect(articleScraperModule.scrapeForCoverage).not.toHaveBeenCalled()
+  })
+
+  it('throws ValidationError when the Analysis status changed concurrently during re-triangulation setup', async () => {
+    vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(false)
+
+    await expect(approvePendingAddition('p1', ACTOR_ID)).rejects.toThrow(ValidationError)
+    expect(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).not.toHaveBeenCalled()
+  })
+
+  it('does not throw when the final Pending Addition status write loses a race — the re-triangulation already succeeded', async () => {
+    vi.mocked(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).mockResolvedValue(false)
+
+    await expect(approvePendingAddition('p1', ACTOR_ID)).resolves.toBeUndefined()
+
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'pending_addition.approved',
+      targetType: 'pending_addition',
+      targetId: 'p1',
+    })
+  })
+})
+
+describe('rejectPendingAddition', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  const PENDING_ADDITION = {
+    id: 'p1',
+    analysisId: 'a1',
+    sourceId: 'src-idnes',
+    title: 'New coverage',
+    articleUrl: 'https://idnes.cz/new-article',
+    publishedAt: '2026-01-01T00:00:00Z',
+    status: 'PENDING_REVIEW' as const,
+    createdAt: new Date('2026-01-02T00:00:00Z'),
+    analysis: { status: 'COMPLETE' as const },
+  }
+
+  it('transitions a Pending Addition to REJECTED, permanently', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue(PENDING_ADDITION)
+    vi.mocked(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).mockResolvedValue(true)
+
+    await rejectPendingAddition('p1', ACTOR_ID)
+
+    expect(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).toHaveBeenCalledWith(
+      'p1',
+      'PENDING_REVIEW',
+      'REJECTED'
+    )
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'pending_addition.rejected',
+      targetType: 'pending_addition',
+      targetId: 'p1',
+    })
+  })
+
+  it('throws NotFoundError when the Pending Addition does not exist', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue(null)
+
+    await expect(rejectPendingAddition('missing', ACTOR_ID)).rejects.toThrow(NotFoundError)
+  })
+
+  it('throws ValidationError when the Pending Addition is not PENDING_REVIEW', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue({
+      ...PENDING_ADDITION,
+      status: 'REJECTED',
+    })
+
+    await expect(rejectPendingAddition('p1', ACTOR_ID)).rejects.toThrow(ValidationError)
+    expect(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).not.toHaveBeenCalled()
+  })
+
+  it('throws ValidationError when the status changed concurrently between the check and the write', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue(PENDING_ADDITION)
+    vi.mocked(pendingAdditionRepo.updatePendingAdditionStatusIfCurrently).mockResolvedValue(false)
+
+    await expect(rejectPendingAddition('p1', ACTOR_ID)).rejects.toThrow(ValidationError)
   })
 })
 

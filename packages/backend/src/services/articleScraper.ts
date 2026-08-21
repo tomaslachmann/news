@@ -1,6 +1,8 @@
+import type { FastifyBaseLogger } from 'fastify'
 import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
 import { fetchArticleHtml } from './articleFetchClient.js'
+import { isBlockedContent } from './blockedContent.js'
 
 export const MIN_TEXT_LENGTH = 150
 
@@ -45,4 +47,29 @@ export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
   const fullText = (article.textContent ?? '').trim()
 
   return { title, excerpt, fullText }
+}
+
+export interface ScrapeForCoverageOutcome {
+  status: 'OK' | 'EXTRACTION_FAILED'
+  extractedText?: string
+}
+
+/** The scrape → too-short/blocked-content check → Coverage status decision, shared by
+ *  confirmCoverages (analysisService.ts) and approvePendingAddition (ingestionService.ts) — kept
+ *  in one place so the blocked/too-short heuristics can't silently diverge between the two call
+ *  sites (the exact P0-6-style drift this codebase's own audit history warns about). Never
+ *  throws: a scrape failure degrades to `EXTRACTION_FAILED`, same as an accepted-but-blocked one —
+ *  callers still see it and write it via `coverageRepo.updateCoverage`. */
+export async function scrapeForCoverage(
+  url: string,
+  log?: FastifyBaseLogger
+): Promise<ScrapeForCoverageOutcome> {
+  try {
+    const scraped = await scrapeArticle(url)
+    const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
+    return isBlocked ? { status: 'EXTRACTION_FAILED' } : { status: 'OK', extractedText: scraped.fullText }
+  } catch (err) {
+    log?.warn({ url, err }, 'Scraping Coverage article failed')
+    return { status: 'EXTRACTION_FAILED' }
+  }
 }

@@ -13,6 +13,8 @@ export type AdminAction =
   | 'draft.rejected'
   | 'story_relation.approved'
   | 'story_relation.rejected'
+  | 'pending_addition.approved'
+  | 'pending_addition.rejected'
   | 'user.created'
   | 'user.updated'
   | 'user.deleted'
@@ -27,7 +29,8 @@ export type AdminAction =
   | 'entity.wikidata_linked'
   | 'entity.wikidata_unlinked'
 
-export type AdminActionTargetType = 'analysis' | 'story_relation' | 'user' | 'entity_alias' | 'entity'
+export type AdminActionTargetType =
+  'analysis' | 'story_relation' | 'pending_addition' | 'user' | 'entity_alias' | 'entity'
 
 export interface NewAdminActionLog {
   actorId: string

@@ -15,15 +15,16 @@ export interface JobPayload {
   // `origin` lets the job handler reproduce each trigger point's exact source-text selection
   // (see .scratch/backend-audit/issues/14-entity-relation-job.md) without guessing it from
   // Coverage DB state alone — approveDraft includes the Story's anchor headline, confirmCoverages
-  // doesn't. `coverageIds` pins exactly which Coverage rows were eligible (anchor-verified for
-  // draft-approval, scraped OK for coverage-confirmation) at enqueue time — the job handler still
-  // re-reads each row's current extractedText/title/status by id for retry-safety, but never
-  // considers a Coverage attached to this Analysis *after* enqueue, which would otherwise leak
-  // never-verified content into extraction (a concurrent Ingestion poll can attach new Coverage
-  // to a PENDING/DRAFT Analysis at any time, independent of this job).
+  // and approvePendingAddition (ticket 45) don't. `coverageIds` pins exactly which Coverage rows
+  // were eligible (anchor-verified for draft-approval, scraped OK for coverage-confirmation/
+  // pending-addition-approval) at enqueue time — the job handler still re-reads each row's current
+  // extractedText/title/status by id for retry-safety, but never considers a Coverage attached to
+  // this Analysis *after* enqueue, which would otherwise leak never-verified content into
+  // extraction (a concurrent Ingestion poll can attach new Coverage to a PENDING/DRAFT Analysis at
+  // any time, independent of this job).
   [JobName.EntityRelation]: {
     analysisId: string
-    origin: 'draft-approval' | 'coverage-confirmation'
+    origin: 'draft-approval' | 'coverage-confirmation' | 'pending-addition-approval'
     coverageIds: string[]
   }
   [JobName.Narrative]: { analysisId: string }

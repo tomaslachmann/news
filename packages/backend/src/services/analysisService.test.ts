@@ -687,27 +687,23 @@ describe('confirmCoverages', () => {
 
     let active = 0
     let maxActive = 0
-    vi.mocked(articleScraperModule.scrapeArticle).mockImplementation(async () => {
+    vi.mocked(articleScraperModule.scrapeForCoverage).mockImplementation(async () => {
       active++
       maxActive = Math.max(maxActive, active)
       await new Promise((resolve) => setTimeout(resolve, 1))
       active--
-      return SCRAPED
+      return { status: 'OK', extractedText: SCRAPED.fullText }
     })
 
     await confirmCoverages('a1', { confirmedIds: manyPending.map((c) => c.id) }, ACTOR_ID)
 
     expect(maxActive).toBeLessThanOrEqual(4)
-    expect(articleScraperModule.scrapeArticle).toHaveBeenCalledTimes(10)
+    expect(articleScraperModule.scrapeForCoverage).toHaveBeenCalledTimes(10)
   })
 
   it('marks a Coverage extraction-failed when the scraped text matches a blocked-content phrase, even though it is long', async () => {
     stubHappyPath()
-    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
-      title: 'Article',
-      excerpt: 'excerpt',
-      fullText: 'Neblokujete reklamy a vidíte tuto stránku? '.repeat(50),
-    })
+    vi.mocked(articleScraperModule.scrapeForCoverage).mockResolvedValue({ status: 'EXTRACTION_FAILED' })
 
     await confirmCoverages('a1', { confirmedIds: ['c1'] }, ACTOR_ID)
 
@@ -717,10 +713,9 @@ describe('confirmCoverages', () => {
   it('marks a Coverage ok when the scraped text is ordinary article content', async () => {
     stubHappyPath()
     const fullText = 'A perfectly ordinary article body with plenty of real content in it. '.repeat(10)
-    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
-      title: 'Article',
-      excerpt: 'excerpt',
-      fullText,
+    vi.mocked(articleScraperModule.scrapeForCoverage).mockResolvedValue({
+      status: 'OK',
+      extractedText: fullText,
     })
 
     await confirmCoverages('a1', { confirmedIds: ['c1'] }, ACTOR_ID)
@@ -731,10 +726,9 @@ describe('confirmCoverages', () => {
   it('enqueues the entity.extract job with this Analysis id and the coverage-confirmation origin', async () => {
     stubHappyPath()
     const fullText = 'A perfectly ordinary article body with plenty of real content in it. '.repeat(10)
-    vi.mocked(articleScraperModule.scrapeArticle).mockResolvedValue({
-      title: 'Article',
-      excerpt: 'excerpt',
-      fullText,
+    vi.mocked(articleScraperModule.scrapeForCoverage).mockResolvedValue({
+      status: 'OK',
+      extractedText: fullText,
     })
     vi.mocked(coverageRepo.findCoveragesForAnalysis)
       .mockReset()
@@ -758,7 +752,7 @@ describe('confirmCoverages', () => {
 
   it('excludes an EXTRACTION_FAILED Coverage id from coverageIds even though it is still non-excluded', async () => {
     stubHappyPath()
-    vi.mocked(articleScraperModule.scrapeArticle).mockRejectedValue(new Error('blocked'))
+    vi.mocked(articleScraperModule.scrapeForCoverage).mockResolvedValue({ status: 'EXTRACTION_FAILED' })
     vi.mocked(coverageRepo.findCoveragesForAnalysis)
       .mockReset()
       .mockResolvedValueOnce([PENDING_COVERAGE])
