@@ -8,7 +8,7 @@ candidates list (ranked same-entity pairs) with confirm/reject actions, mirrorin
 `POST /api/admin/entity-aliases/:pairId/confirm`, and `POST /api/admin/entity-aliases/:pairId/reject`
 to exist first.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Mechanics
 
