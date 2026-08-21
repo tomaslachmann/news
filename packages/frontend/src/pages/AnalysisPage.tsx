@@ -13,12 +13,14 @@ import {
   type CoverageInfo,
   type RelatedEventItem,
   type ThreadSummaryItem,
+  type EntityMentionItem,
 } from '@/services/analyses'
 import { useAnalysisDetail } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
-import { EntitiesDemoSection, WordingDemoSection, ValueVariantsDemoSection } from './AnalysisPage.devDemos'
+import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
+import { WordingDemoSection, ValueVariantsDemoSection } from './AnalysisPage.devDemos'
 import './AnalysisPage.css'
 
 type ExtractionState =
@@ -338,6 +340,32 @@ function RelatedEventsSection({ events }: { events: RelatedEventItem[] }) {
             </Link>
             <p className="card__p">zdrojů: {event.coverageCount}</p>
           </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** "Entity ve zprávě" rail (ticket 43) — every entity this Article's Story mentions, most
+ *  salient first (backend-ordered), each linking to its own `/entity/:key` page so a reader can
+ *  navigate into the entity graph without a separate search. */
+function EntityMentionsSection({ entities }: { entities: EntityMentionItem[] }) {
+  if (entities.length === 0) return null
+  return (
+    <section>
+      <div className="railhead">
+        <h2 className="railhead__t">Entity ve zprávě</h2>
+        <span className="railhead__x">{entities.length}</span>
+      </div>
+      <div className="ents">
+        {entities.map((e) => (
+          <Link className="erow" to={`/entity/${e.key}`} key={e.key}>
+            <span className="erow__dot">{ENTITY_TYPE_LABELS[e.type][0]}</span>
+            <span>
+              <span className="erow__n hl">{e.canonicalName}</span>
+              <span className="erow__k">{ENTITY_TYPE_LABELS[e.type]}</span>
+            </span>
+          </Link>
         ))}
       </div>
     </section>
@@ -743,7 +771,7 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
             <SourceList coverages={analysis.coverages} />
           </section>
 
-          {import.meta.env.DEV && <EntitiesDemoSection />}
+          <EntityMentionsSection entities={analysis.entities} />
 
           <section>
             <div className="box">

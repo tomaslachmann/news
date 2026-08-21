@@ -1,0 +1,105 @@
+/* Entity detail (/entity/:key) and search (/search) — ticket 43. `.sechead`/`.pager` are the same
+   vocabulary AnalysisPage.css/HistoryPage.css already carry (re-declared here rather than shared,
+   matching this codebase's existing per-page-CSS-file convention — see HomePage.css's own header
+   comment); `.evlist`/`.evrow`/`.erels`/`.erel`/`.entsearch` are new to this pair of pages. */
+
+.sechead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  margin: var(--sp-6) 0 var(--sp-4);
+}
+.sechead__t {
+  font-family: var(--font-sans);
+  font-optical-sizing: none;
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+.sechead__rule {
+  flex: 1;
+  height: var(--bw-hair);
+  background: var(--line);
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-block: var(--sp-4);
+  font: var(--text-small) / 1 var(--font-sans);
+}
+
+.entsearch {
+  display: flex;
+  align-items: end;
+  gap: var(--sp-3);
+  padding-block: var(--sp-4);
+  border-bottom: var(--bw-hair) solid var(--line);
+}
+.entsearch .field {
+  flex: 1;
+  max-width: 28rem;
+}
+
+/* One row per mentioning Event (entity detail) or search result (search page) — title + a
+   secondary line, no status badge (unlike HistoryPage's .archive-row, which this deliberately
+   doesn't reuse: EntityEventItem/EntitySearchResultItem carry no status field). */
+.evlist {
+  border-top: var(--bw-hair) solid var(--line-strong);
+}
+.evrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-4);
+  padding-block: var(--sp-3);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.evrow:hover {
+  background: var(--surface-2);
+}
+.evrow__t {
+  font: 500 var(--text-h4) / 1.3 var(--font-serif);
+}
+.evrow__d {
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Entity-to-entity relations — each attributed to its asserting Event (ADR 0022's "Story-scoped
+   assertion, not a global fact"), never a bare fact list. */
+.erels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--bw-hair) solid var(--line-strong);
+}
+.erel {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: baseline;
+  padding-block: var(--sp-3);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.erel__dir {
+  flex-shrink: 0;
+  color: var(--ink-3);
+}
+.erel__body {
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+.erel__type {
+  font-weight: 600;
+}
+.erel__by {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}

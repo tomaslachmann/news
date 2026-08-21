@@ -47,13 +47,15 @@ export function toEntityRelationItem(row: EntityRelationForEntityRow, entityKey:
 export function toEntityDetail(
   entity: EntityRecord,
   events: Page<EntityEventItem>,
-  relationRows: EntityRelationForEntityRow[]
+  relationRows: EntityRelationForEntityRow[],
+  aliases: string[]
 ): EntityDetail {
   return {
     key: entity.key,
     canonicalName: entity.canonicalName,
     type: entity.type,
     wikidataId: entity.wikidataId,
+    aliases,
     events,
     relations: relationRows.map((r) => toEntityRelationItem(r, entity.key)),
   }

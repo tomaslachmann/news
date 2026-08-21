@@ -4,33 +4,6 @@
 // .trend/.qa elsewhere). Kept in their own file so AnalysisPage.tsx itself stays limited to real
 // data paths.
 
-const SAMPLE_ENTITIES_DEMO = [
-  { name: 'Ministerstvo financí', mentions: 9 },
-  { name: 'Andrej Babiš', mentions: 6 },
-  { name: 'Poslanecká sněmovna', mentions: 4 },
-]
-
-// TODO(grill): needs a real entity-extraction feature — unscoped, AnalysisDetail has no entities
-// field at all today.
-export function EntitiesDemoSection() {
-  return (
-    <section>
-      <div className="railhead">
-        <h2 className="railhead__t">Entity ve zprávě</h2>
-        <span className="railhead__x">ukázka</span>
-      </div>
-      <div className="ents">
-        {SAMPLE_ENTITIES_DEMO.map((e) => (
-          <div className="erow" key={e.name}>
-            <span className="erow__dot">{e.mentions}×</span>
-            <span className="erow__n">{e.name}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 const SAMPLE_QCMP_DEMO = [
   { who: 'ČTK', time: '14:02', q: 'Rozpočet počítá se saldem 241 miliard korun.', kind: 'tisková zpráva' },
   {

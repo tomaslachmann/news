@@ -2,6 +2,7 @@ import type {
   AnalysisDetail,
   AnalysisListItem,
   DimensionItem,
+  EntityMentionItem,
   RelatedEventItem,
   ThreadSummaryItem,
 } from '@news-triangulator/shared'
@@ -11,6 +12,7 @@ import type {
   AnalysisStatus,
   DraftListRow,
 } from '../repositories/analysis.js'
+import type { EntityMentionRow } from '../repositories/entity.js'
 import { toCoverageInfo } from './coverage.js'
 import { interpretSourceOverlap } from '../services/sourceOverlap.js'
 import { countValidExtractions } from '../services/extractionPass.js'
@@ -33,10 +35,15 @@ export function resolveDisplayTitle(headline: string | null | undefined, seedHea
   return headline ?? seedHeadline
 }
 
+export function toEntityMentionItem(row: EntityMentionRow): EntityMentionItem {
+  return { key: row.key, canonicalName: row.canonicalName, type: row.type }
+}
+
 export function toAnalysisDetail(
   analysis: AnalysisWithDetails,
   relatedEvents: RelatedEventItem[],
-  thread?: ThreadSummaryItem
+  thread: ThreadSummaryItem | undefined,
+  entities: EntityMentionItem[]
 ): AnalysisDetail {
   return {
     id: analysis.id,
@@ -72,6 +79,7 @@ export function toAnalysisDetail(
       : undefined,
     relatedEvents,
     thread,
+    entities,
   }
 }
 

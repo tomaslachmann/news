@@ -340,6 +340,15 @@ export interface EntityEventItem {
   createdAt: string
 }
 
+/** One entity this Analysis's own Story mentions (ticket 43) — AnalysisPage links each to its own
+ *  `/entity/:key` page, `key` being the same stable identifier searchEntitiesByName/
+ *  findEntityByKey use. */
+export interface EntityMentionItem {
+  key: string
+  canonicalName: string
+  type: EntityTypeLabel
+}
+
 /** One `StoryEntityRelation` this entity participates in, attributed to the Event whose coverage
  *  asserted it — never a bare fact list (ADR 0022's "Story-scoped assertion, not a global fact",
  *  CLAUDE.md's attribution principle). `direction` says which side of `type` this entity was on
@@ -360,6 +369,11 @@ export interface EntityDetail {
    *  hasn't shipped or this particular entity just hasn't been linked yet. Never a broken/missing
    *  section either way (docs/spec-entity-wiki.md). */
   wikidataId: string | null
+  /** Canonical names of every entity confirmed (ticket 40) to be the same real-world entity as
+   *  this one, merged away into it — empty, not undefined, when none, whether because ticket 40
+   *  hasn't shipped or no merge has touched this entity yet. Never a missing section either way
+   *  (docs/spec-entity-wiki.md). */
+  aliases: string[]
   events: Page<EntityEventItem>
   relations: EntityRelationItem[]
 }
@@ -417,4 +431,8 @@ export interface AnalysisDetail {
   relatedEvents: RelatedEventItem[]
   /** The longer-running storyline this one is part of, if any — see ticket 17. */
   thread?: ThreadSummaryItem
+  /** Entities this Analysis's Story mentions (ticket 43), most salient first — empty, not
+   *  undefined, when extraction hasn't attached any, same "never a missing section" convention as
+   *  `relatedEvents`. */
+  entities: EntityMentionItem[]
 }

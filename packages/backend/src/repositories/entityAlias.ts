@@ -60,6 +60,26 @@ export function orderEntityPair(entityId1: string, entityId2: string): [string, 
   return entityId1 < entityId2 ? [entityId1, entityId2] : [entityId2, entityId1]
 }
 
+export interface EntityAliasRow {
+  canonicalName: string
+}
+
+/** Every other name variant confirmed (ticket 40) to refer to this survivor entity, for the
+ *  reader-facing entity page's "known aliases" section (ticket 43). Reads the merged-away Entity's
+ *  own `canonicalName` — still a live row after a merge, never deleted (see `mergeEntities` above)
+ *  — rather than `EntityAlias.alias` (that column stores the merged-away entity's raw `key`, an
+ *  internal identifier, not something to show a reader). Empty, not undefined, when this entity
+ *  has never absorbed another — the entity page renders "no known aliases" for that case rather
+ *  than a missing section. */
+export async function findAliasesForEntity(entityId: string): Promise<EntityAliasRow[]> {
+  const rows = await prisma.entityAlias.findMany({
+    where: { entityId },
+    select: { mergedFromEntity: { select: { canonicalName: true } } },
+    orderBy: { id: 'desc' },
+  })
+  return rows.map((r) => r.mergedFromEntity)
+}
+
 /** Same-type Entity pairs ranked by `canonicalName` trigram similarity (ticket 12's
  *  `entity_canonicalName_trgm_idx` — this is its first real consumer). Excludes any entity already
  *  merged away (appearing as `EntityAlias.mergedFromEntityId` on either side — it isn't a live

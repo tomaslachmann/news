@@ -3,6 +3,7 @@ import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
 import { NotFoundError, ValidationError } from '../errors.js'
 import { fetchPage } from '../pagination.js'
 import * as entityRepo from '../repositories/entity.js'
+import * as entityAliasRepo from '../repositories/entityAlias.js'
 import { toEntitySearchResultItem, toEntityEventItem, toEntityDetail } from '../mappers/entity.js'
 
 // Implementation-time tunable, same convention as ENTITY_ALIAS_CANDIDATE_LIMIT
@@ -18,10 +19,11 @@ export async function searchEntities(query: string): Promise<EntitySearchResultI
   return rows.map(toEntitySearchResultItem)
 }
 
-/** Reader-facing entity detail (ticket 42) — public, no auth: canonical name/type/Wikidata link,
- *  every mentioning Event (paginated), and every entity-relation it participates in, each
- *  attributed to its asserting Event. Degrades gracefully when tickets 40/41 haven't shipped or
- *  haven't linked this entity — `wikidataId` is simply `null`, never a broken section. */
+/** Reader-facing entity detail (ticket 42/43) — public, no auth: canonical name/type/Wikidata
+ *  link/known aliases, every mentioning Event (paginated), and every entity-relation it
+ *  participates in, each attributed to its asserting Event. Degrades gracefully when tickets
+ *  40/41 haven't shipped or haven't touched this entity — `wikidataId` is simply `null` and
+ *  `aliases` simply `[]`, never a broken section. */
 export async function getEntityDetail(
   entityKey: string,
   cursor: string | undefined,
@@ -32,12 +34,18 @@ export async function getEntityDetail(
 
   // Independent reads, run concurrently — same convention as getAnalysisDetail's
   // publishedRelations/thread fetch (analysisService.ts).
-  const [{ items, nextCursor }, relationRows] = await Promise.all([
+  const [{ items, nextCursor }, relationRows, aliasRows] = await Promise.all([
     fetchPage(cursor, limit, (decoded, boundedLimit) =>
       entityRepo.findEventsForEntity(entityKey, decoded, boundedLimit)
     ),
     entityRepo.findRelationsForEntity(entityKey),
+    entityAliasRepo.findAliasesForEntity(entity.id),
   ])
 
-  return toEntityDetail(entity, { items: items.map(toEntityEventItem), nextCursor }, relationRows)
+  return toEntityDetail(
+    entity,
+    { items: items.map(toEntityEventItem), nextCursor },
+    relationRows,
+    aliasRows.map((a) => a.canonicalName)
+  )
 }
