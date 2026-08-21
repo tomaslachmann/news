@@ -4,6 +4,7 @@ import * as homepageStatsRepo from '../repositories/homepageStats.js'
 
 export const HOMEPAGE_ENTITY_STATS_WINDOW_HOURS = 24
 export const HOMEPAGE_ENTITY_STATS_LIMIT = 10
+export const HOMEPAGE_ENTITY_STATS_MAX_AGE_HOURS = 6
 
 const HOUR_MS = 60 * 60 * 1000
 
@@ -30,28 +31,22 @@ export function getHomepageEntityStatsWindow(now = new Date()): {
 export async function refreshHomepageEntityStats(
   now = new Date()
 ): Promise<HomepageEntityStatsRefreshResult> {
-  const result = await homepageStatsRepo.withHomepageStatsAdvisoryLock(async () => {
-    const { currentStart, currentEnd, previousStart, previousEnd } = getHomepageEntityStatsWindow(now)
-    const items = await homepageStatsRepo.computeHomepageEntityStats({
-      currentStart,
-      currentEnd,
-      previousStart,
-      previousEnd,
-      limit: HOMEPAGE_ENTITY_STATS_LIMIT,
-    })
-    const snapshotId = await homepageStatsRepo.replaceHomepageEntityStatSnapshot({
-      windowStart: currentStart,
-      windowEnd: currentEnd,
-      items,
-    })
-
-    return { snapshotId, itemCount: items.length, skipped: false }
+  const { currentStart, currentEnd, previousStart, previousEnd } = getHomepageEntityStatsWindow(now)
+  const result = await homepageStatsRepo.refreshHomepageEntityStatsSnapshot({
+    currentStart,
+    currentEnd,
+    previousStart,
+    previousEnd,
+    limit: HOMEPAGE_ENTITY_STATS_LIMIT,
   })
 
-  return result ?? { snapshotId: null, itemCount: 0, skipped: true }
+  return result
+    ? { snapshotId: result.snapshotId, itemCount: result.itemCount, skipped: false }
+    : { snapshotId: null, itemCount: 0, skipped: true }
 }
 
-export async function getHomepageEntityStats(): Promise<HomepageEntityStatItem[]> {
-  const rows = await homepageStatsRepo.findLatestHomepageEntityStats()
+export async function getHomepageEntityStats(now = new Date()): Promise<HomepageEntityStatItem[]> {
+  const minimumWindowEnd = new Date(now.getTime() - HOMEPAGE_ENTITY_STATS_MAX_AGE_HOURS * HOUR_MS)
+  const rows = await homepageStatsRepo.findLatestHomepageEntityStats({ minimumWindowEnd })
   return rows.map(toHomepageEntityStatItem)
 }

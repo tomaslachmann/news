@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 
+type HomepageStatsDbClient = Pick<Prisma.TransactionClient, '$queryRaw' | 'homepageEntityStatSnapshot'>
+
 export interface ComputeHomepageEntityStatsInput {
   currentStart: Date
   currentEnd: Date
@@ -43,8 +45,11 @@ export async function computeHomepageEntityStats({
   previousStart,
   previousEnd,
   limit,
-}: ComputeHomepageEntityStatsInput): Promise<HomepageEntityStatComputedRow[]> {
-  const rows = await prisma.$queryRaw<HomepageEntityStatRawRow[]>`
+  db = prisma,
+}: ComputeHomepageEntityStatsInput & {
+  db?: HomepageStatsDbClient
+}): Promise<HomepageEntityStatComputedRow[]> {
+  const rows = await db.$queryRaw<HomepageEntityStatRawRow[]>`
     WITH current_stats AS (
       SELECT
         se."entityId" AS "entityId",
@@ -96,42 +101,47 @@ export async function replaceHomepageEntityStatSnapshot(input: {
   windowStart: Date
   windowEnd: Date
   items: HomepageEntityStatComputedRow[]
+  db?: HomepageStatsDbClient
 }): Promise<string> {
-  const snapshot = await prisma.$transaction(async (tx) => {
-    const created = await tx.homepageEntityStatSnapshot.create({
-      data: {
-        windowStart: input.windowStart,
-        windowEnd: input.windowEnd,
-        items: {
-          create: input.items.map((item, index) => ({
-            entityId: item.entityId,
-            rank: index + 1,
-            recentEventCount: item.recentEventCount,
-            recentSourceCount: item.recentSourceCount,
-            previousEventCount: item.previousEventCount,
-          })),
-        },
+  if (!input.db) {
+    return prisma.$transaction((tx) => replaceHomepageEntityStatSnapshot({ ...input, db: tx }))
+  }
+
+  const db = input.db ?? prisma
+  const created = await db.homepageEntityStatSnapshot.create({
+    data: {
+      windowStart: input.windowStart,
+      windowEnd: input.windowEnd,
+      items: {
+        create: input.items.map((item, index) => ({
+          entityId: item.entityId,
+          rank: index + 1,
+          recentEventCount: item.recentEventCount,
+          recentSourceCount: item.recentSourceCount,
+          previousEventCount: item.previousEventCount,
+        })),
       },
-      select: { id: true },
-    })
-
-    const keepLatestIds = await tx.homepageEntityStatSnapshot.findMany({
-      orderBy: { computedAt: 'desc' },
-      take: 5,
-      select: { id: true },
-    })
-    await tx.homepageEntityStatSnapshot.deleteMany({
-      where: { id: { notIn: keepLatestIds.map((row) => row.id) } },
-    })
-
-    return created
+    },
+    select: { id: true },
   })
 
-  return snapshot.id
+  const keepLatestIds = await db.homepageEntityStatSnapshot.findMany({
+    orderBy: { computedAt: 'desc' },
+    take: 5,
+    select: { id: true },
+  })
+  await db.homepageEntityStatSnapshot.deleteMany({
+    where: { id: { notIn: keepLatestIds.map((row) => row.id) } },
+  })
+
+  return created.id
 }
 
-export async function findLatestHomepageEntityStats(): Promise<HomepageEntityStatStoredRow[]> {
+export async function findLatestHomepageEntityStats(input: {
+  minimumWindowEnd: Date
+}): Promise<HomepageEntityStatStoredRow[]> {
   const snapshot = await prisma.homepageEntityStatSnapshot.findFirst({
+    where: { windowEnd: { gte: input.minimumWindowEnd } },
     orderBy: { computedAt: 'desc' },
     select: {
       items: {
@@ -158,14 +168,36 @@ export async function findLatestHomepageEntityStats(): Promise<HomepageEntitySta
   )
 }
 
-export async function withHomepageStatsAdvisoryLock<T>(fn: () => Promise<T>): Promise<T | null> {
+export async function refreshHomepageEntityStatsSnapshot(input: {
+  currentStart: Date
+  currentEnd: Date
+  previousStart: Date
+  previousEnd: Date
+  limit: number
+}): Promise<{ snapshotId: string; itemCount: number } | null> {
   return prisma.$transaction(
     async (tx) => {
       const rows = await tx.$queryRaw<{ locked: boolean }[]>`
         SELECT pg_try_advisory_xact_lock(hashtext('homepage.entity-stats.refresh')) AS locked
       `
       if (!rows[0]?.locked) return null
-      return fn()
+
+      const items = await computeHomepageEntityStats({
+        currentStart: input.currentStart,
+        currentEnd: input.currentEnd,
+        previousStart: input.previousStart,
+        previousEnd: input.previousEnd,
+        limit: input.limit,
+        db: tx,
+      })
+      const snapshotId = await replaceHomepageEntityStatSnapshot({
+        windowStart: input.currentStart,
+        windowEnd: input.currentEnd,
+        items,
+        db: tx,
+      })
+
+      return { snapshotId, itemCount: items.length }
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 60_000 }
   )

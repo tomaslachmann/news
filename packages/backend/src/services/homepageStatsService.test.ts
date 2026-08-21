@@ -25,39 +25,32 @@ describe('getHomepageEntityStatsWindow', () => {
 describe('refreshHomepageEntityStats', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('computes the bounded aggregate and stores a ranked snapshot', async () => {
-    vi.mocked(homepageStatsRepo.withHomepageStatsAdvisoryLock).mockImplementation(async (fn) => fn())
-    vi.mocked(homepageStatsRepo.computeHomepageEntityStats).mockResolvedValue([
-      { entityId: 'e-1', recentEventCount: 3, recentSourceCount: 5, previousEventCount: 2 },
-    ])
-    vi.mocked(homepageStatsRepo.replaceHomepageEntityStatSnapshot).mockResolvedValue('snap-1')
+  it('refreshes a locked snapshot over the bounded aggregate window', async () => {
+    vi.mocked(homepageStatsRepo.refreshHomepageEntityStatsSnapshot).mockResolvedValue({
+      snapshotId: 'snap-1',
+      itemCount: 1,
+    })
 
     const result = await refreshHomepageEntityStats(new Date('2026-08-21T12:00:00Z'))
 
-    expect(homepageStatsRepo.computeHomepageEntityStats).toHaveBeenCalledWith({
+    expect(homepageStatsRepo.refreshHomepageEntityStatsSnapshot).toHaveBeenCalledWith({
       currentStart: new Date('2026-08-20T12:00:00Z'),
       currentEnd: new Date('2026-08-21T12:00:00Z'),
       previousStart: new Date('2026-08-19T12:00:00Z'),
       previousEnd: new Date('2026-08-20T12:00:00Z'),
       limit: HOMEPAGE_ENTITY_STATS_LIMIT,
     })
-    expect(homepageStatsRepo.replaceHomepageEntityStatSnapshot).toHaveBeenCalledWith({
-      windowStart: new Date('2026-08-20T12:00:00Z'),
-      windowEnd: new Date('2026-08-21T12:00:00Z'),
-      items: [{ entityId: 'e-1', recentEventCount: 3, recentSourceCount: 5, previousEventCount: 2 }],
-    })
     expect(result).toEqual({ snapshotId: 'snap-1', itemCount: 1, skipped: false })
   })
 
   it('reports skipped when another worker holds the refresh lock', async () => {
-    vi.mocked(homepageStatsRepo.withHomepageStatsAdvisoryLock).mockResolvedValue(null)
+    vi.mocked(homepageStatsRepo.refreshHomepageEntityStatsSnapshot).mockResolvedValue(null)
 
     await expect(refreshHomepageEntityStats()).resolves.toEqual({
       snapshotId: null,
       itemCount: 0,
       skipped: true,
     })
-    expect(homepageStatsRepo.computeHomepageEntityStats).not.toHaveBeenCalled()
   })
 })
 
@@ -84,7 +77,7 @@ describe('getHomepageEntityStats', () => {
       },
     ])
 
-    await expect(getHomepageEntityStats()).resolves.toEqual([
+    await expect(getHomepageEntityStats(new Date('2026-08-21T12:00:00Z'))).resolves.toEqual([
       {
         key: 'person:petr-fiala',
         canonicalName: 'Petr Fiala',
@@ -101,5 +94,8 @@ describe('getHomepageEntityStats', () => {
         recentSourceCount: 7,
       },
     ])
+    expect(homepageStatsRepo.findLatestHomepageEntityStats).toHaveBeenCalledWith({
+      minimumWindowEnd: new Date('2026-08-21T06:00:00Z'),
+    })
   })
 })
