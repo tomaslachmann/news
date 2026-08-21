@@ -330,7 +330,12 @@ describe('buildNarrativeDocument', () => {
     entitiesByKey: new Map([
       [
         'person:petr-fiala',
-        { key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON' as const },
+        {
+          key: 'person:petr-fiala',
+          canonicalName: 'Petr Fiala',
+          type: 'PERSON' as const,
+          imageUrl: 'https://commons.wikimedia.org/fiala.jpg',
+        },
       ],
     ]),
     outletByArticleUrl: new Map([['https://idnes.cz/x', 'iDnes']]),
@@ -366,18 +371,40 @@ describe('buildNarrativeDocument', () => {
     })
   })
 
-  it("resolves an entity ref's canonicalName from the known-entities map", () => {
+  it("resolves an entity ref's canonicalName and imageUrl from the known-entities map", () => {
     const result = buildNarrativeDocument(validDoc(), BUILD_CONTEXT)
     expect(result.entityRefs).toEqual([
-      { id: 'e1', entityKey: 'person:petr-fiala', canonicalName: 'Petr Fiala' },
+      {
+        id: 'e1',
+        entityKey: 'person:petr-fiala',
+        canonicalName: 'Petr Fiala',
+        imageUrl: 'https://commons.wikimedia.org/fiala.jpg',
+      },
     ])
   })
 
-  it('falls back to the raw entityKey as canonicalName when the key is unknown', () => {
+  it('falls back to the raw entityKey as canonicalName, and null imageUrl, when the key is unknown', () => {
     const doc = validDoc({ entityRefs: [{ id: 'e1', entityKey: 'person:unknown' }] })
     const result = buildNarrativeDocument(doc, BUILD_CONTEXT)
     expect(result.entityRefs).toEqual([
-      { id: 'e1', entityKey: 'person:unknown', canonicalName: 'person:unknown' },
+      { id: 'e1', entityKey: 'person:unknown', canonicalName: 'person:unknown', imageUrl: null },
+    ])
+  })
+
+  it('leaves imageUrl null for a known entity that has no fetched EntityImage', () => {
+    const doc = validDoc({ entityRefs: [{ id: 'e1', entityKey: 'person:no-image' }] })
+    const context = {
+      entitiesByKey: new Map([
+        [
+          'person:no-image',
+          { key: 'person:no-image', canonicalName: 'No Image', type: 'PERSON' as const, imageUrl: null },
+        ],
+      ]),
+      outletByArticleUrl: BUILD_CONTEXT.outletByArticleUrl,
+    }
+    const result = buildNarrativeDocument(doc, context)
+    expect(result.entityRefs).toEqual([
+      { id: 'e1', entityKey: 'person:no-image', canonicalName: 'No Image', imageUrl: null },
     ])
   })
 

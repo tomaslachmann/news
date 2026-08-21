@@ -1124,12 +1124,14 @@ describe('getAnalysisDetail', () => {
       synthesisResult: null,
     })
     vi.mocked(entityRepo.findEntityMentionsForStory).mockResolvedValue([
-      { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON' },
+      { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON', imageUrl: null },
     ])
 
     const result = await getAnalysisDetail('a1')
 
     expect(entityRepo.findEntityMentionsForStory).toHaveBeenCalledWith('s1')
+    // toEntityMentionItem (mappers/analysis.ts) drops imageUrl — the "Entity ve zprávě" rail never
+    // showed images; only the Narrative pass's own KnownEntity reads this row's imageUrl.
     expect(result.entities).toEqual([
       { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON' },
     ])

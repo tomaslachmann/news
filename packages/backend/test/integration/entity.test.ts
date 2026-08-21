@@ -15,7 +15,9 @@ import {
   findRelationsForEntity,
   findEntityMentionsForStory,
   findEntityRelationsForStory,
+  findEntityByKey,
 } from '../../src/repositories/entity.js'
+import { createEntityImage } from '../../src/repositories/entityImage.js'
 
 // Entity.key is globally unique across the whole shared test-container database (not scoped per
 // Story, unlike the JSON column this replaces) — every test below uses its own key so storyCount
@@ -549,8 +551,8 @@ describe('Entity repository against a real Postgres instance', () => {
       const mentions = await findEntityMentionsForStory(storyId)
 
       expect(mentions).toEqual([
-        { key: central.key, canonicalName: central.name, type: 'PERSON' },
-        { key: peripheral.key, canonicalName: peripheral.name, type: 'PLACE' },
+        { key: central.key, canonicalName: central.name, type: 'PERSON', imageUrl: null },
+        { key: peripheral.key, canonicalName: peripheral.name, type: 'PLACE', imageUrl: null },
       ])
     })
 
@@ -578,6 +580,40 @@ describe('Entity repository against a real Postgres instance', () => {
       )
 
       expect(await findEntityMentionsForStory(storyId)).toEqual([])
+    })
+
+    it("carries an entity's fetched EntityImage.imageUrl through (ticket 41 / ADR 0034)", async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-mentions-4',
+        seedHeadline: 'x',
+      })
+      const imaged = {
+        key: 'person:entity-mentions-imaged',
+        name: 'Imaged Figure',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 0.9,
+      }
+      await replaceStoryEntities(storyId, [imaged], [])
+      const entity = await findEntityByKey(imaged.key)
+      await createEntityImage({
+        entityId: entity!.id,
+        provider: 'WIKIMEDIA',
+        externalId: 'entity-mentions-imaged-file',
+        imageUrl: 'https://commons.wikimedia.org/imaged.jpg',
+        sourceUrl: 'https://commons.wikimedia.org/wiki/File:imaged.jpg',
+      })
+
+      const mentions = await findEntityMentionsForStory(storyId)
+
+      expect(mentions).toEqual([
+        {
+          key: imaged.key,
+          canonicalName: imaged.name,
+          type: 'PERSON',
+          imageUrl: 'https://commons.wikimedia.org/imaged.jpg',
+        },
+      ])
     })
   })
 

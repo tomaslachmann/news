@@ -503,6 +503,12 @@ export type NarrativeEntityRef = {
   id: string
   entityKey: string
   canonicalName: string
+  /** This Entity's `EntityImage` (ticket 41 / ADR 0034), if one has been fetched — resolved
+   *  server-side from the Story's known-entity list at Narrative generation time, same "never
+   *  asked of the LLM" treatment as `canonicalName`. Null both when the Entity has no linked
+   *  Wikidata id and when it does but no image was ever fetched/enriched — ticket 48's frontend
+   *  degrades identically either way, never a broken-image state. */
+  imageUrl: string | null
 }
 
 export type NarrativeSourceRef = {

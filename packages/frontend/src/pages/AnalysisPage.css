@@ -6,9 +6,9 @@
    Structural deviation from the reference, confirmed with the user: no Radix Tabs — one flowing
    page (sumbox, prose narrative, contradiction detail, related, thread), matching both article.html
    itself (which has no tabs at all) and CLAUDE.md's framing of the Narrative as a *presentation* of
-   the four dimensions, not a peer of them. Citations stay the real numbered-footnote + tooltip +
-   references-list system (reskinned only) rather than the reference's plain aggregate ".sref"
-   badge, which carries no per-source traceability — see CitationMarker in AnalysisPage.tsx. */
+   the four dimensions, not a peer of them. The Cross-Source Narrative itself (.prose and its inline
+   entity/source/value citation styling) is its own component, NarrativeArticle.tsx/.css (ticket
+   48) — not styled in this file. */
 
 .crumbs {
   display: flex;
@@ -44,32 +44,6 @@
 
 .artbody > * + * {
   margin-top: var(--sp-5);
-}
-
-.prose {
-  max-width: var(--measure);
-}
-.prose > p {
-  margin-bottom: var(--sp-4);
-}
-.prose > h2 {
-  margin: var(--sp-6) 0 var(--sp-3);
-  font-size: var(--text-h3);
-  font-variation-settings: 'opsz' var(--opsz-h4);
-}
-.prose b,
-.prose strong {
-  font-weight: 600;
-}
-.prose a:not(.btn) {
-  border-bottom: var(--bw-hair) solid var(--line);
-  transition:
-    color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
-}
-.prose a:not(.btn):hover {
-  color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* Marginalia on one especially contentious claim — the contradiction with the most attributions,

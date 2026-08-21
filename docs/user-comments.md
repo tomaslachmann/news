@@ -8,3 +8,6 @@ to not be forgotten.
 5 - public navbar when logged in as admin should not have everything from admin navbar but only admin or something like that
 6 - do grill session about missing everything on homepage and rest of pages mock data dev pages etc
 7 - Redesign entity a pridat entity list page, at matchen design, plus renderovat i detaily z wiki ID ? uvidime
+9 - rss kanál
+10 - sdílecí kanály
+11 - search for not finished/abandoned features

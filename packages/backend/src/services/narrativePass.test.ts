@@ -22,7 +22,9 @@ const SOURCES = [
   { outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku. Událost se stala.' },
 ]
 
-const ENTITIES: KnownEntity[] = [{ key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON' }]
+const ENTITIES: KnownEntity[] = [
+  { key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON', imageUrl: null },
+]
 
 function validDoc(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -98,9 +100,9 @@ describe('runNarrativePass', () => {
       sourceId: 's1',
       children: [{ type: 'text', text: 'Událost se stala' }],
     })
-    // canonicalName resolved server-side from the known-entities list, not asked of the model.
+    // canonicalName/imageUrl resolved server-side from the known-entities list, not asked of the model.
     expect(result.entityRefs).toEqual([
-      { id: 'e1', entityKey: 'person:petr-fiala', canonicalName: 'Petr Fiala' },
+      { id: 'e1', entityKey: 'person:petr-fiala', canonicalName: 'Petr Fiala', imageUrl: null },
     ])
     expect(result.sourceRefs).toEqual([{ id: 's1', articleUrl: 'https://idnes.cz/x', outlet: 'iDnes' }])
     // normalizedValue/unit are derived by the deterministic Czech-numeral parser, not the model.
