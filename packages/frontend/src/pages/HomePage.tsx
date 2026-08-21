@@ -3,11 +3,17 @@ import { Link } from 'react-router-dom'
 import { Gauge } from '@/components/Gauge'
 import type { AnalysisListSummary } from '@/services/analyses'
 import { useArticlesList } from '@/services/analyses/hooks'
-import { useHomepageEntityStats } from '@/services/homepageStats/hooks'
+import {
+  useHomepageContradictions,
+  useHomepageEntityStats,
+  useHomepageMinuteFeed,
+  useHomepageSummaryStats,
+} from '@/services/homepageStats/hooks'
 import { articlePath } from '@/lib/analysisRoutes'
 import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
 import {
   entityTrendClass,
+  formatCzechCount,
   formatEntityTrend,
   getEntityDotSize,
   getStorySignal,
@@ -16,7 +22,7 @@ import {
 } from './homePageViewModel'
 import './HomePage.css'
 
-const SAMPLE_BAD_THRESHOLD = 65
+const SOURCE_OVERLAP_BAD_THRESHOLD = 65
 
 const TIME = new Intl.DateTimeFormat('cs-CZ', {
   hour: '2-digit',
@@ -24,49 +30,12 @@ const TIME = new Intl.DateTimeFormat('cs-CZ', {
   timeZone: 'Europe/Prague',
 })
 
-const SAMPLE_TICKER = [
-  { k: 'Zpracováno dnes', v: '1 284 článků' },
-  { k: 'Aktivní zdroje', v: '41' },
-  { k: 'Nové rozpory', v: '12', warn: true },
-  { k: 'Průměrná shoda', v: '73 %' },
-  { k: 'Nejrychlejší zdroj', v: 'ČTK · 3 min' },
-]
-
-const SAMPLE_FEED = [
-  { t: '15:24', title: 'Ministerstvo financí zpřesnilo odhad salda na 241 mld. Kč', src: 4 },
-  { t: '15:11', title: 'Sněmovní výbor odložil hlasování o novele o veřejných zakázkách', src: 3 },
-  { t: '14:58', title: 'Kurz koruny se po jednání ČNB pohybuje u 24,60 za euro', src: 6 },
-  {
-    t: '14:36',
-    title: 'Do stávky se podle odborů zapojilo 38 škol v Moravskoslezském kraji',
-    src: 5,
-    conflict: true,
-  },
-  { t: '14:12', title: 'Rada EU odsunula rozhodnutí o dovozních kvótách na příští týden', src: 7 },
-  { t: '13:49', title: 'ČEZ potvrdil odstávku bloku v Dukovanech na plánované datum', src: 3 },
-  {
-    t: '13:20',
-    title: 'Policie zahájila úkony v trestním řízení kvůli dotacím pro obce',
-    src: 8,
-    conflict: true,
-  },
-  { t: '12:55', title: 'Praha vypsala tendr na obnovu tramvajové trati na Smíchově', src: 2 },
-  { t: '12:31', title: 'Ukrajinská delegace přijede do Prahy koncem měsíce', src: 5 },
-]
-
 const SAMPLE_MOSTREAD = [
   { title: 'Rozpor: kolik bytů se skutečně dotkne nová pražská vyhláška', src: 7 },
   { title: 'Tři redakce citují pasáž, která v oficiálním přepisu chybí', src: 11 },
   { title: 'Jak se za 24 hodin změnilo číslo o objemu investice ČEZ', src: 6 },
   { title: 'Kdo první uvedl termín září u dodávek munice', src: 8 },
   { title: 'Přehled: kde se agentury nejčastěji rozcházejí', src: 14 },
-]
-
-const SAMPLE_CONFLICTS = [
-  { title: 'Saldo rozpočtu', detail: 'rozdíl 18 mld. Kč mezi 7 zdroji', pct: 62 },
-  { title: 'Objem investice ČEZ', detail: 'dvojnásobný rozdíl v údaji', pct: 71 },
-  { title: 'Citace z auditu', detail: 'pasáž chybí v primárním přepisu', pct: 48 },
-  { title: 'Termín dodávek munice', detail: 'původní zdroj nedohledán', pct: 55 },
 ]
 
 function StoryByline({ story, big }: { story: HomePageStory; big?: boolean }) {
@@ -188,9 +157,7 @@ function LeadArticle({ story }: { story: HomePageStory }) {
       </h1>
       <StoryByline story={story} big />
       <div className="lead__body">
-        <Link to={articlePath(story.id)}>
-          <StoryFigure story={story} caption />
-        </Link>
+        <StoryFigure story={story} caption />
         <div>
           <p className="lead__perex">{story.summary.teaser}</p>
           {story.summary.entities.length > 0 && (
@@ -319,16 +286,9 @@ function EntsPanel() {
   )
 }
 
-function PullQuoteSection() {
-  return (
-    <section className="pull">
-      <q>Tři redakce citují pasáž, která se v oficiálním přepisu nenachází.</q>
-      <cite>Z dnešní analýzy rozporů</cite>
-    </section>
-  )
-}
-
 function MinuteFeedSection() {
+  const { data: items = [], isLoading, isError } = useHomepageMinuteFeed()
+
   return (
     <section>
       <BHead
@@ -339,40 +299,64 @@ function MinuteFeedSection() {
           </span>
         }
       />
-      {SAMPLE_FEED.map((f) => (
-        <a className="minute" href="#" key={f.t} onClick={(e) => e.preventDefault()}>
-          <span className="minute__t">{f.t}</span>
-          <span>
-            <span className="minute__x hl">{f.title}</span>
-            <span className="minute__s">
-              {f.src} zdrojů{f.conflict && <span className="is-bad"> · rozpor</span>}
+      {isLoading ? (
+        <p className="legend">Načítání minuty…</p>
+      ) : isError ? (
+        <p className="legend">Nepodařilo se načíst minutu.</p>
+      ) : items.length === 0 ? (
+        <p className="legend">Zatím žádné dokončené články.</p>
+      ) : (
+        items.map((item) => (
+          <Link className="minute" to={articlePath(item.analysisId)} key={item.analysisId}>
+            <span className="minute__t">{TIME.format(new Date(item.createdAt))}</span>
+            <span>
+              <span className="minute__x hl">{item.title}</span>
+              <span className="minute__s">
+                {item.sourceCount} zdrojů{item.hasConflict && <span className="is-bad"> · rozpor</span>}
+              </span>
             </span>
-          </span>
-        </a>
-      ))}
+          </Link>
+        ))
+      )}
     </section>
   )
 }
 
 function ConflictsSection() {
+  const { data: items = [], isLoading, isError } = useHomepageContradictions()
+
   return (
     <section>
       <div className="qbox">
         <h2>Rozpory ve zdrojích</h2>
-        {SAMPLE_CONFLICTS.map((c) => (
-          <a className="q" href="#" key={c.title} onClick={(e) => e.preventDefault()}>
-            <span className="q__t hl">{c.title}</span>
-            <span className="q__d">{c.detail}</span>
-            <span className="byline" style={{ margin: 0 }}>
-              shoda <b>{c.pct} %</b>
-              <Gauge
-                pct={c.pct}
-                bad={c.pct < SAMPLE_BAD_THRESHOLD}
-                ariaLabel={`Shoda zdrojů ${c.pct} procent`}
-              />
-            </span>
-          </a>
-        ))}
+        {isLoading ? (
+          <p className="legend">Načítání rozporů…</p>
+        ) : isError ? (
+          <p className="legend">Nepodařilo se načíst rozpory.</p>
+        ) : items.length === 0 ? (
+          <p className="legend">Za posledních 24 hodin nejsou uložené žádné rozpory.</p>
+        ) : (
+          items.map((item) => (
+            <Link className="q" to={articlePath(item.analysisId)} key={`${item.analysisId}:${item.prose}`}>
+              <span className="q__t hl">{item.title}</span>
+              <span className="q__d">{item.prose}</span>
+              {item.sourceOverlapPercentage !== undefined ? (
+                <span className="byline" style={{ margin: 0 }}>
+                  shoda <b>{item.sourceOverlapPercentage} %</b>
+                  <Gauge
+                    pct={item.sourceOverlapPercentage}
+                    bad={item.sourceOverlapPercentage < SOURCE_OVERLAP_BAD_THRESHOLD}
+                    ariaLabel={`Shoda zdrojů ${item.sourceOverlapPercentage} procent`}
+                  />
+                </span>
+              ) : (
+                <span className="byline" style={{ margin: 0 }}>
+                  <b>{item.sourceCount}</b> zdrojů v rozporu
+                </span>
+              )}
+            </Link>
+          ))
+        )}
       </div>
     </section>
   )
@@ -411,15 +395,46 @@ function LegendSection() {
 }
 
 function DayStatsBar() {
+  const { data, isLoading, isError } = useHomepageSummaryStats()
+  const stats = data
+    ? [
+        {
+          k: 'Zpracováno dnes',
+          v: formatCzechCount(data.processedArticleCount, 'článek', 'články', 'článků'),
+        },
+        { k: 'Aktivní zdroje', v: formatCzechCount(data.activeSourceCount, 'zdroj', 'zdroje', 'zdrojů') },
+        {
+          k: 'Nové rozpory',
+          v: formatCzechCount(data.contradictionCount, 'rozpor', 'rozpory', 'rozporů'),
+          warn: data.contradictionCount > 0,
+        },
+        ...(data.averageSourceOverlapPercentage !== undefined
+          ? [{ k: 'Průměrná shoda', v: `${data.averageSourceOverlapPercentage} %` }]
+          : []),
+      ]
+    : []
+
   return (
     <div className="daystats">
       <div className="u-wrap daystats__in">
-        {SAMPLE_TICKER.map((t) => (
-          <div className={`stat${t.warn ? ' stat--warn' : ''}`} key={t.k}>
-            <b>{t.v}</b>
-            {t.k}
+        {isLoading ? (
+          <div className="stat">
+            <b>…</b>
+            Načítání statistik
           </div>
-        ))}
+        ) : isError ? (
+          <div className="stat stat--warn">
+            <b>—</b>
+            Statistiky nejsou dostupné
+          </div>
+        ) : (
+          stats.map((t) => (
+            <div className={`stat${t.warn ? ' stat--warn' : ''}`} key={t.k}>
+              <b>{t.v}</b>
+              {t.k}
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
@@ -474,7 +489,6 @@ export default function HomePage() {
 
           <aside className="layout__rail">
             <EntsPanel />
-            <PullQuoteSection />
             <MinuteFeedSection />
             <ConflictsSection />
             <MostReadSection />

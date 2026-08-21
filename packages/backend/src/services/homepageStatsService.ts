@@ -1,12 +1,36 @@
-import type { HomepageEntityStatItem } from '@news-triangulator/shared'
-import { toHomepageEntityStatItem } from '../mappers/homepageStats.js'
+import type {
+  ContradictionItem,
+  HomepageContradictionItem,
+  HomepageEntityStatItem,
+  HomepageMinuteItem,
+  HomepageSummaryStats,
+} from '@news-triangulator/shared'
+import {
+  toHomepageContradictionItem,
+  toHomepageEntityStatItem,
+  toHomepageMinuteItem,
+  toHomepageSummaryStats,
+} from '../mappers/homepageStats.js'
 import * as homepageStatsRepo from '../repositories/homepageStats.js'
 
 export const HOMEPAGE_ENTITY_STATS_WINDOW_HOURS = 24
 export const HOMEPAGE_ENTITY_STATS_LIMIT = 10
 export const HOMEPAGE_ENTITY_STATS_MAX_AGE_HOURS = 6
+export const HOMEPAGE_MINUTE_LIMIT = 9
+export const HOMEPAGE_CONTRADICTION_LIMIT = 4
 
 const HOUR_MS = 60 * 60 * 1000
+const HOMEPAGE_STATS_TIME_ZONE = 'Europe/Prague'
+const DATE_TIME_PARTS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: HOMEPAGE_STATS_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
 
 export interface HomepageEntityStatsRefreshResult {
   snapshotId: string | null
@@ -26,6 +50,40 @@ export function getHomepageEntityStatsWindow(now = new Date()): {
   const previousStart = new Date(previousEnd.getTime() - HOMEPAGE_ENTITY_STATS_WINDOW_HOURS * HOUR_MS)
 
   return { currentStart, currentEnd, previousStart, previousEnd }
+}
+
+function getDateTimePart(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): number {
+  const value = parts.find((part) => part.type === type)?.value
+  if (value === undefined) throw new Error(`Missing ${type} in formatted date parts`)
+  return Number(value)
+}
+
+function timeZoneOffsetMs(date: Date): number {
+  const parts = DATE_TIME_PARTS.formatToParts(date)
+  const asUtc = Date.UTC(
+    getDateTimePart(parts, 'year'),
+    getDateTimePart(parts, 'month') - 1,
+    getDateTimePart(parts, 'day'),
+    getDateTimePart(parts, 'hour'),
+    getDateTimePart(parts, 'minute'),
+    getDateTimePart(parts, 'second')
+  )
+  return asUtc - date.getTime()
+}
+
+export function getHomepageTodayStatsWindow(now = new Date()): {
+  currentStart: Date
+  currentEnd: Date
+} {
+  const parts = DATE_TIME_PARTS.formatToParts(now)
+  const localMidnightAsUtc = Date.UTC(
+    getDateTimePart(parts, 'year'),
+    getDateTimePart(parts, 'month') - 1,
+    getDateTimePart(parts, 'day')
+  )
+  const currentStart = new Date(localMidnightAsUtc - timeZoneOffsetMs(new Date(localMidnightAsUtc)))
+
+  return { currentStart, currentEnd: now }
 }
 
 export async function refreshHomepageEntityStats(
@@ -49,4 +107,50 @@ export async function getHomepageEntityStats(now = new Date()): Promise<Homepage
   const minimumWindowEnd = new Date(now.getTime() - HOMEPAGE_ENTITY_STATS_MAX_AGE_HOURS * HOUR_MS)
   const rows = await homepageStatsRepo.findLatestHomepageEntityStats({ minimumWindowEnd })
   return rows.map(toHomepageEntityStatItem)
+}
+
+export async function getHomepageSummaryStats(now = new Date()): Promise<HomepageSummaryStats> {
+  const { currentStart, currentEnd } = getHomepageTodayStatsWindow(now)
+  const row = await homepageStatsRepo.findHomepageSummaryStats({
+    windowStart: currentStart,
+    windowEnd: currentEnd,
+  })
+  return toHomepageSummaryStats(row)
+}
+
+export async function getHomepageMinuteFeed(): Promise<HomepageMinuteItem[]> {
+  const rows = await homepageStatsRepo.findHomepageMinuteRows(HOMEPAGE_MINUTE_LIMIT)
+  return rows.map(toHomepageMinuteItem)
+}
+
+function contradictionSourceCount(item: ContradictionItem): number {
+  return new Set(item.attributions.map((attribution) => attribution.outlet.trim()).filter(Boolean)).size
+}
+
+export async function getHomepageContradictions(now = new Date()): Promise<HomepageContradictionItem[]> {
+  const { currentStart, currentEnd } = getHomepageEntityStatsWindow(now)
+  const rows = await homepageStatsRepo.findHomepageContradictionAnalysisRows({
+    windowStart: currentStart,
+    windowEnd: currentEnd,
+  })
+
+  return rows
+    .flatMap((row) =>
+      (row.dimensions?.contradiction ?? [])
+        .map((item) => ({
+          row,
+          item: {
+            prose: item.prose.trim(),
+            sourceCount: contradictionSourceCount(item),
+          },
+        }))
+        .filter(({ item }) => item.prose.length > 0)
+    )
+    .sort((a, b) => {
+      const sourceDelta = b.item.sourceCount - a.item.sourceCount
+      if (sourceDelta !== 0) return sourceDelta
+      return b.row.createdAt.getTime() - a.row.createdAt.getTime()
+    })
+    .slice(0, HOMEPAGE_CONTRADICTION_LIMIT)
+    .map(({ row, item }) => toHomepageContradictionItem(row, item))
 }
