@@ -5,13 +5,8 @@ import { useLogout } from '@/services/auth/hooks'
 import { formatDate } from '@/lib/formatDate'
 import { useTheme } from '@/ds/useTheme'
 import { THEME_LABEL } from '@/ds/theme'
+import { getPrimaryNavItems } from './chromeNav'
 import './Chrome.css'
-
-// TODO(grill): matches e.html's own RUBS list exactly. This product has no Story.primaryCategory
-// field (docs/spec-event-graph.md's Out of Scope) — not a real filter yet, styled identically to
-// the reference (no dashed/disabled treatment) since the reference itself doesn't mark them as
-// placeholders either.
-const RUBRICS = ['Domácí', 'Ekonomika', 'Svět', 'Energetika', 'Regiony', 'Sport', 'Kultura']
 
 /** Route links shared by `.rubnav` (full header) and `.sticky__nav` (condensed header) — appended
  *  after the topic rubrics above so History/Admin pages stay reachable. `NavLink` sets
@@ -21,23 +16,20 @@ const RUBRICS = ['Domácí', 'Ekonomika', 'Svět', 'Energetika', 'Regiony', 'Spo
 function PrimaryNav({ compact = false }: { compact?: boolean }) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
-  const rubrics = compact ? RUBRICS.slice(0, 5) : RUBRICS
+  const navItems = getPrimaryNavItems(isAdmin, compact)
 
   return (
     <>
-      {rubrics.map((r) => (
-        <a href="#" key={r} onClick={(e) => e.preventDefault()}>
-          {r}
-        </a>
-      ))}
-      <NavLink to="/history">{isAdmin ? 'Historie' : 'Články'}</NavLink>
-      <NavLink to="/search">Hledat</NavLink>
-      {isAdmin && (
-        <>
-          <NavLink to="/new-analysis">Nová analýza</NavLink>
-          <NavLink to="/admin/users">Uživatelé</NavLink>
-          <NavLink to="/admin/ingestion">Sběr článků</NavLink>
-        </>
+      {navItems.map((item) =>
+        item.to === '#' ? (
+          <a href="#" key={item.label} onClick={(e) => e.preventDefault()}>
+            {item.label}
+          </a>
+        ) : (
+          <NavLink to={item.to} key={item.label}>
+            {item.label}
+          </NavLink>
+        )
       )}
     </>
   )
