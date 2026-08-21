@@ -4,6 +4,9 @@ const TIMEOUT_MS = 8_000
 // Requested alongside the full-size url so the response carries a ready-to-use thumbnail without
 // a second round trip — see MediaWiki's imageinfo `iiurlwidth` param.
 const THUMBNAIL_WIDTH = 500
+// A Narrative lead image (ticket 51) is shown large, at the top of the article — wider than
+// EntityImage's tooltip-sized thumbnail above.
+const LEAD_IMAGE_THUMBNAIL_WIDTH = 1200
 
 export interface WikimediaImage {
   externalId: string
@@ -25,6 +28,7 @@ interface CommonsImageInfoResponse {
     pages?: Record<
       string,
       {
+        title?: string
         imageinfo?: {
           url: string
           thumburl?: string
@@ -97,6 +101,63 @@ export async function findWikidataEntityImage(wikidataId: string): Promise<Wikim
 
   return {
     externalId: fileName,
+    imageUrl: info.url,
+    thumbnailUrl: info.thumburl,
+    author: info.extmetadata?.Artist ? stripHtml(info.extmetadata.Artist.value) : undefined,
+    license: info.extmetadata?.LicenseShortName?.value,
+    sourceUrl: info.descriptionurl,
+    width: info.width,
+    height: info.height,
+  }
+}
+
+/** Strips MediaWiki CirrusSearch operator syntax (quote/phrase, field-search `:`, exclusion `-`,
+ *  grouping, wildcards) out of a freeform query before it's interpolated into `gsrsearch` below.
+ *  `query` here is a generated headline or entity canonicalName, never written with CirrusSearch
+ *  in mind — an unbalanced quote or a stray colon would otherwise be parsed as query syntax
+ *  instead of literal text, which can silently swallow the `filetype:bitmap` filter this function
+ *  always appends into whatever phrase/field-search the corrupted syntax produced. Not a security
+ *  boundary (this only shapes a read-only search query, no command execution) — just correctness
+ *  for the query's own literal intent. Replacing with a space (not stripping outright) keeps
+ *  hyphenated/colon-joined words searchable as their separate parts. */
+function sanitizeSearchQuery(query: string): string {
+  return query
+    .replace(/["+\-~*?():\\[\]{}^]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Ticket 51: finds a topically-relevant illustrative image for a Narrative's lead image, by a
+ *  plain full-text search against Commons' own file titles/descriptions/categories — no LLM call,
+ *  deterministic and cheap (this codebase's default posture per ADR 0014). `filetype:bitmap`
+ *  excludes SVGs/PDFs (mostly logos, diagrams, maps — not photographic illustration).
+ *
+ *  Search relevance here is best-effort only, not guaranteed — exactly why a Narrative's rendered
+ *  lead image (NarrativeArticle.tsx) is always visibly captioned "Ilustrační foto" rather than
+ *  presented as documentary evidence of the event (ticket 51's Notes). Returns `null` when the
+ *  search has no bitmap-image hit; throws only for an actual HTTP failure, same convention as
+ *  `findWikidataEntityImage` above. */
+export async function searchWikimediaImageByQuery(query: string): Promise<WikimediaImage | null> {
+  const url = new URL('https://commons.wikimedia.org/w/api.php')
+  url.searchParams.set('action', 'query')
+  url.searchParams.set('generator', 'search')
+  url.searchParams.set('gsrsearch', `${sanitizeSearchQuery(query)} filetype:bitmap`)
+  url.searchParams.set('gsrnamespace', '6')
+  url.searchParams.set('gsrlimit', '1')
+  url.searchParams.set('prop', 'imageinfo')
+  url.searchParams.set('iiprop', 'url|size|extmetadata')
+  url.searchParams.set('iiurlwidth', String(LEAD_IMAGE_THUMBNAIL_WIDTH))
+  url.searchParams.set('format', 'json')
+
+  const res = await fetchWithTimeout(url.toString(), TIMEOUT_MS)
+  if (!res.ok) throw new Error(`Wikimedia Commons search returned HTTP ${res.status}`)
+  const body = (await res.json()) as CommonsImageInfoResponse
+  const page = Object.values(body.query?.pages ?? {})[0]
+  const info = page?.imageinfo?.[0]
+  if (!info || !page?.title) return null
+
+  return {
+    externalId: page.title.replace(/^File:/, ''),
     imageUrl: info.url,
     thumbnailUrl: info.thumburl,
     author: info.extmetadata?.Artist ? stripHtml(info.extmetadata.Artist.value) : undefined,

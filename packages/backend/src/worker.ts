@@ -11,6 +11,7 @@ import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
 import * as entityAliasRepo from './repositories/entityAlias.js'
 import * as entityImageRepo from './repositories/entityImage.js'
+import * as narrativeImageRepo from './repositories/narrativeImage.js'
 import * as storyRelationRepo from './repositories/storyRelation.js'
 import * as synthesisResultRepo from './repositories/synthesisResult.js'
 import * as threadRepo from './repositories/thread.js'
@@ -56,6 +57,8 @@ const start = async () => {
             findEntityMentionsForStory: entityRepo.findEntityMentionsForStory,
             updateSynthesisResultNarrative: synthesisResultRepo.updateSynthesisResultNarrative,
             markNarrativeGenerationFailedSafe: synthesisResultRepo.markNarrativeGenerationFailedSafe,
+            findNarrativeImageForSynthesisResult: narrativeImageRepo.findNarrativeImageForSynthesisResult,
+            createNarrativeImage: narrativeImageRepo.createNarrativeImage,
           },
           workerLog
         )

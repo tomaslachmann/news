@@ -844,6 +844,7 @@ describe('getAnalysisDetail', () => {
         narrative: null,
         headline: 'Headline',
         narrativeGenerationFailedAt: null,
+        narrativeImage: null,
       },
     })
 
@@ -880,6 +881,7 @@ describe('getAnalysisDetail', () => {
         narrative: null,
         headline: 'Headline',
         narrativeGenerationFailedAt: null,
+        narrativeImage: null,
       },
     })
 
@@ -907,6 +909,7 @@ describe('getAnalysisDetail', () => {
         narrative: null,
         headline: 'Headline',
         narrativeGenerationFailedAt: null,
+        narrativeImage: null,
       },
     })
 
@@ -1060,12 +1063,85 @@ describe('getAnalysisDetail', () => {
         narrative: cachedDocument,
         headline: null,
         narrativeGenerationFailedAt: null,
+        narrativeImage: null,
       },
     })
 
     const result = await getAnalysisDetail('a1')
 
     expect(result.narrative).toEqual(cachedDocument)
+  })
+
+  it('maps a persisted lead image (ticket 51), preferring its thumbnail over the full-resolution original', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        sourceOverlapPercentage: null,
+        agreementCategory: 'PARTIAL',
+        narrative: null,
+        headline: 'Headline',
+        narrativeGenerationFailedAt: null,
+        narrativeImage: {
+          id: 'img-1',
+          synthesisResultId: 's1',
+          provider: 'WIKIMEDIA',
+          externalId: 'Prague Castle.jpg',
+          imageUrl: 'https://upload.wikimedia.org/full/Prague_Castle.jpg',
+          thumbnailUrl: 'https://upload.wikimedia.org/thumb/Prague_Castle.jpg',
+          author: 'Jane Doe',
+          license: 'CC BY-SA 4.0',
+          sourceUrl: 'https://commons.wikimedia.org/wiki/File:Prague_Castle.jpg',
+          width: 6000,
+          height: 4000,
+          createdAt: new Date('2025-01-01T00:00:00Z'),
+        },
+      },
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(result.leadImage).toEqual({
+      imageUrl: 'https://upload.wikimedia.org/thumb/Prague_Castle.jpg',
+      author: 'Jane Doe',
+      license: 'CC BY-SA 4.0',
+      sourceUrl: 'https://commons.wikimedia.org/wiki/File:Prague_Castle.jpg',
+    })
+  })
+
+  it('returns no lead image when none was found or fetched', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      synthesisResult: {
+        id: 's1',
+        analysisId: 'a1',
+        dimensions: DIMENSIONS,
+        sourceOverlapPercentage: null,
+        agreementCategory: 'PARTIAL',
+        narrative: null,
+        headline: 'Headline',
+        narrativeGenerationFailedAt: null,
+        narrativeImage: null,
+      },
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(result.leadImage).toBeUndefined()
   })
 
   it('returns no narrative, without attempting generation, when none has been cached yet (pending or failed job alike)', async () => {
@@ -1086,6 +1162,7 @@ describe('getAnalysisDetail', () => {
         narrative: null,
         headline: null,
         narrativeGenerationFailedAt: new Date('2025-01-01T00:00:00Z'),
+        narrativeImage: null,
       },
     })
 
@@ -1224,6 +1301,7 @@ describe('getAnalysisDetail', () => {
         narrative: null,
         headline: 'Generated headline',
         narrativeGenerationFailedAt: null,
+        narrativeImage: null,
       },
     })
     expect((await getAnalysisDetail('a1')).title).toBe('Generated headline')

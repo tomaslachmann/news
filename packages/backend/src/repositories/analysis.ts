@@ -5,6 +5,7 @@ import type {
   Story,
   SynthesisResult,
   SynthesisAgreementCategory,
+  NarrativeImage,
 } from '@prisma/client'
 import { prisma } from '../db.js'
 import type { CoverageWithSource } from './coverage.js'
@@ -15,7 +16,7 @@ export type { Analysis, AnalysisStatus }
 
 export type AnalysisWithDetails = Analysis & {
   coverages: CoverageWithSource[]
-  synthesisResult: SynthesisResult | null
+  synthesisResult: (SynthesisResult & { narrativeImage: NarrativeImage | null }) | null
 }
 
 export type AnalysisWithStory = Analysis & { story: Story }
@@ -151,7 +152,7 @@ export async function findAnalysisWithDetails(id: string): Promise<AnalysisWithD
         orderBy: { id: 'asc' },
         include: { source: { select: { name: true } } },
       },
-      synthesisResult: true,
+      synthesisResult: { include: { narrativeImage: true } },
     },
   })
 }

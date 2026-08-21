@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { findWikidataEntityImage } from './wikimediaImageClient.js'
+import { findWikidataEntityImage, searchWikimediaImageByQuery } from './wikimediaImageClient.js'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
@@ -128,5 +128,88 @@ describe('findWikidataEntityImage', () => {
       .mockResolvedValueOnce(jsonResponse({}, 500))
 
     await expect(findWikidataEntityImage('Q123')).rejects.toThrow('HTTP 500')
+  })
+})
+
+const SEARCH_RESULT = {
+  query: {
+    pages: {
+      '456': {
+        title: 'File:Prague Castle aerial.jpg',
+        imageinfo: [
+          {
+            url: 'https://upload.wikimedia.org/full/Prague_Castle_aerial.jpg',
+            thumburl: 'https://upload.wikimedia.org/thumb/Prague_Castle_aerial.jpg',
+            width: 6000,
+            height: 4000,
+            descriptionurl: 'https://commons.wikimedia.org/wiki/File:Prague_Castle_aerial.jpg',
+            extmetadata: {
+              Artist: { value: '<a href="//example.org">Jane Doe</a>' },
+              LicenseShortName: { value: 'CC BY-SA 4.0' },
+            },
+          },
+        ],
+      },
+    },
+  },
+}
+
+describe('searchWikimediaImageByQuery', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('resolves the top search hit to a fully attributed image', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(SEARCH_RESULT))
+
+    const image = await searchWikimediaImageByQuery('Pražský hrad')
+
+    expect(image).toEqual({
+      externalId: 'Prague Castle aerial.jpg',
+      imageUrl: 'https://upload.wikimedia.org/full/Prague_Castle_aerial.jpg',
+      thumbnailUrl: 'https://upload.wikimedia.org/thumb/Prague_Castle_aerial.jpg',
+      author: 'Jane Doe',
+      license: 'CC BY-SA 4.0',
+      sourceUrl: 'https://commons.wikimedia.org/wiki/File:Prague_Castle_aerial.jpg',
+      width: 6000,
+      height: 4000,
+    })
+  })
+
+  it('restricts the search to bitmap files and the file namespace', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(SEARCH_RESULT))
+
+    await searchWikimediaImageByQuery('Pražský hrad')
+
+    const requestedUrl = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(requestedUrl.searchParams.get('gsrsearch')).toBe('Pražský hrad filetype:bitmap')
+    expect(requestedUrl.searchParams.get('gsrnamespace')).toBe('6')
+  })
+
+  it('strips CirrusSearch operator syntax out of the query so it cannot swallow the bitmap filter', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(SEARCH_RESULT))
+
+    await searchWikimediaImageByQuery('Rusko-ukrajinská válka: "mírová" jednání (2026)')
+
+    const requestedUrl = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(requestedUrl.searchParams.get('gsrsearch')).toBe(
+      'Rusko ukrajinská válka mírová jednání 2026 filetype:bitmap'
+    )
+  })
+
+  it('returns null when the search has no hits', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ query: { pages: {} } }))
+
+    await expect(searchWikimediaImageByQuery('nonexistent topic')).resolves.toBeNull()
+  })
+
+  it('throws on a non-OK search response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, 503))
+
+    await expect(searchWikimediaImageByQuery('Pražský hrad')).rejects.toThrow('HTTP 503')
   })
 })

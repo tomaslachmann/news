@@ -22,6 +22,7 @@ import type {
   NarrativeEntityRef,
   NarrativeSourceRef,
   NarrativeValueRef,
+  NarrativeLeadImage,
 } from '@news-triangulator/shared'
 import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
 import { cursorQueryParam } from '../pagination'
@@ -50,6 +51,7 @@ export type {
   NarrativeEntityRef,
   NarrativeSourceRef,
   NarrativeValueRef,
+  NarrativeLeadImage,
 }
 export { MIN_SOURCES_FOR_GAUGE }
 

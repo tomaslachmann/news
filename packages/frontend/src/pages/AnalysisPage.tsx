@@ -623,7 +623,7 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
           {totalItems > 0 && <SumBox dimensions={dimensions} />}
 
           {analysis.narrative && analysis.narrative.blocks.length > 0 && (
-            <NarrativeArticle document={analysis.narrative} />
+            <NarrativeArticle document={analysis.narrative} leadImage={analysis.leadImage} />
           )}
 
           {topContradiction && (
