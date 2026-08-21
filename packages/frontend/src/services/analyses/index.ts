@@ -3,6 +3,7 @@ import type {
   CandidateArticle,
   AnalysisDetail,
   AnalysisListItem,
+  AnalysisListSummary,
   AnalysisDimensions,
   DimensionItem,
   Attribution,
@@ -25,13 +26,13 @@ import type {
   NarrativeLeadImage,
 } from '@news-triangulator/shared'
 import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
-import { cursorQueryParam } from '../pagination'
 
 export type {
   CreateAnalysisResponse,
   CandidateArticle,
   AnalysisDetail,
   AnalysisListItem,
+  AnalysisListSummary,
   AnalysisDimensions,
   DimensionItem,
   Attribution,
@@ -124,7 +125,19 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
 }
 
 export async function fetchAnalyses(cursor?: string): Promise<Page<AnalysisListItem>> {
-  const res = await fetch(`/api/analyses${cursorQueryParam(cursor)}`, { credentials: 'include' })
+  const params = new URLSearchParams(cursor ? { cursor } : undefined)
+  const suffix = params.size > 0 ? `?${params.toString()}` : ''
+  const res = await fetch(`/api/analyses${suffix}`, { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst analýzy')
+
+  return res.json() as Promise<Page<AnalysisListItem>>
+}
+
+export async function fetchArticles(cursor?: string): Promise<Page<AnalysisListItem>> {
+  const params = new URLSearchParams(cursor ? { cursor } : undefined)
+  const suffix = params.size > 0 ? `?${params.toString()}` : ''
+  const res = await fetch(`/api/articles${suffix}`, { credentials: 'include' })
 
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst analýzy')
 

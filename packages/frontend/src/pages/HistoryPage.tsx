@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { AnalysisListItem } from '@/services/analyses'
-import { useAnalysesList } from '@/services/analyses/hooks'
+import { useAnalysesList, useArticlesList } from '@/services/analyses/hooks'
 import { useAuth } from '@/context/AuthContext'
 import { formatDate } from '@/lib/formatDate'
 import { ANALYSIS_STATUS_LABELS } from '@/lib/analysisStatusLabels'
@@ -19,11 +19,8 @@ const STATE_MODIFIER: Record<AnalysisListItem['status'], string> = {
 type StatusFilter = 'all' | AnalysisListItem['status']
 type SortOrder = 'newest' | 'oldest' | 'most-sources'
 
-/** Ticket 52: a non-Admin's list here only ever contains COMPLETE items (the API's own
- *  `GET /api/analyses` gate — see analyses.ts), so `/article/:id` is always right for them. An
- *  Admin's "Historie analýz" view still lists every status, and still needs to click through to
- *  the monitoring view for a not-yet-complete item — `/article/:id` would just show "not found"
- *  there, since it never renders the in-progress states. */
+/** Ticket 52: a reader-facing list row always points at `/article/:id`; the admin/internal list
+ *  can still include non-complete Analyses, which must link to the monitoring view instead. */
 function ArchiveRow({ item }: { item: AnalysisListItem }) {
   const href = item.status === 'complete' ? articlePath(item.id) : analysisPath(item.id)
   return (
@@ -40,12 +37,25 @@ function ArchiveRow({ item }: { item: AnalysisListItem }) {
   )
 }
 
-export default function HistoryPage() {
-  const { user } = useAuth()
-  const isAdmin = user?.role === 'ADMIN'
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useAnalysesList()
-  const allLoaded = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data])
+function HistoryContent({
+  isAdmin,
+  data,
+  isLoading,
+  isError,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+}: {
+  isAdmin: boolean
+  data: ReturnType<typeof useAnalysesList>['data']
 
+  isLoading: boolean
+  isError: boolean
+  fetchNextPage: () => Promise<unknown>
+  hasNextPage: boolean | undefined
+  isFetchingNextPage: boolean
+}) {
+  const allLoaded = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest')
   const [search, setSearch] = useState('')
@@ -164,4 +174,39 @@ export default function HistoryPage() {
       )}
     </div>
   )
+}
+
+function AdminHistoryPage() {
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useAnalysesList()
+  return (
+    <HistoryContent
+      isAdmin
+      data={data}
+      isLoading={isLoading}
+      isError={isError}
+      fetchNextPage={() => fetchNextPage()}
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={isFetchingNextPage}
+    />
+  )
+}
+
+function ReaderHistoryPage() {
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useArticlesList()
+  return (
+    <HistoryContent
+      isAdmin={false}
+      data={data}
+      isLoading={isLoading}
+      isError={isError}
+      fetchNextPage={() => fetchNextPage()}
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={isFetchingNextPage}
+    />
+  )
+}
+
+export default function HistoryPage() {
+  const { user } = useAuth()
+  return user?.role === 'ADMIN' ? <AdminHistoryPage /> : <ReaderHistoryPage />
 }
