@@ -1,8 +1,8 @@
-// Dev-only demo sections for /analysis/:id — no real data exists behind these yet. Each ships
-// behind import.meta.env.DEV at its render site in AnalysisPage.tsx, never reachable in a
-// production build, per the ticket's own "Mocked and dev-only" convention (already used for
-// .trend/.qa elsewhere). Kept in their own file so AnalysisPage.tsx itself stays limited to real
-// data paths.
+// Dev-only demo sections for the Article view (/article/:id, ArticlePage.tsx — ticket 52 moved
+// this out of AnalysisPage.tsx) — no real data exists behind these yet. Each ships behind
+// import.meta.env.DEV at its render site, never reachable in a production build, per the ticket's
+// own "Mocked and dev-only" convention (already used for .trend/.qa elsewhere). Kept in their own
+// file so the page component itself stays limited to real data paths.
 
 const SAMPLE_QCMP_DEMO = [
   { who: 'ČTK', time: '14:02', q: 'Rozpočet počítá se saldem 241 miliard korun.', kind: 'tisková zpráva' },

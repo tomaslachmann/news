@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage'
 import NewAnalysisPage from './pages/NewAnalysisPage'
 import ReviewPage from './pages/ReviewPage'
 import AnalysisPage from './pages/AnalysisPage'
+import ArticlePage from './pages/ArticlePage'
 import EntityDetailPage from './pages/EntityDetailPage'
 import SearchPage from './pages/SearchPage'
 import HistoryPage from './pages/HistoryPage'
@@ -57,7 +58,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-        <Route path="/analysis/:id" element={<AnalysisPage />} />
+        <Route path="/article/:id" element={<ArticlePage />} />
         <Route path="/entity/:key" element={<EntityDetailPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/history" element={<HistoryPage />} />
@@ -65,6 +66,14 @@ function AppRoutes() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route element={<AdminLayout />}>
+        <Route
+          path="/analysis/:id"
+          element={
+            <ProtectedRoute>
+              <AnalysisPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/review/:id" element={<ReviewPage />} />
         <Route
           path="/admin/users"

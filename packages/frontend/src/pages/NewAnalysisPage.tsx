@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { createAnalysis, discoverSources, attachSeedToMatch } from '@/services/analyses'
 import { ANALYSIS_STATUS_LABELS } from '@/lib/analysisStatusLabels'
+import { analysisPath } from '@/lib/analysisRoutes'
 import './NewAnalysisPage.css'
 
 type PageState =
@@ -168,7 +169,7 @@ function MatchedStep({
 
   const handleContinue = () => {
     if (matchedStatus === 'complete') {
-      void navigate(`/analysis/${analysisId}`)
+      void navigate(analysisPath(analysisId))
       return
     }
     attachMutation.mutate()
