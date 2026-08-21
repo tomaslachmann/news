@@ -7,6 +7,8 @@ import HomePage from './pages/HomePage'
 import NewAnalysisPage from './pages/NewAnalysisPage'
 import ReviewPage from './pages/ReviewPage'
 import AnalysisPage from './pages/AnalysisPage'
+import EntityDetailPage from './pages/EntityDetailPage'
+import SearchPage from './pages/SearchPage'
 import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
@@ -55,6 +57,8 @@ function AppRoutes() {
           }
         />
         <Route path="/analysis/:id" element={<AnalysisPage />} />
+        <Route path="/entity/:key" element={<EntityDetailPage />} />
+        <Route path="/search" element={<SearchPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<NotFoundPage />} />

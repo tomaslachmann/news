@@ -13,6 +13,7 @@ import {
   searchEntitiesByName,
   findEventsForEntity,
   findRelationsForEntity,
+  findEntityMentionsForStory,
 } from '../../src/repositories/entity.js'
 
 // Entity.key is globally unique across the whole shared test-container database (not scoped per
@@ -519,6 +520,63 @@ describe('Entity repository against a real Postgres instance', () => {
       // Analysis stays PENDING (createAnalysis's default) — never promoted to COMPLETE.
 
       expect(await findRelationsForEntity(from.key)).toEqual([])
+    })
+  })
+
+  describe('findEntityMentionsForStory (ticket 43)', () => {
+    it("returns this Story's own entities, most salient first", async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-mentions-1',
+        seedHeadline: 'x',
+      })
+      const central = {
+        key: 'person:entity-mentions-central',
+        name: 'Central Figure',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 0.9,
+      }
+      const peripheral = {
+        key: 'place:entity-mentions-peripheral',
+        name: 'Peripheral Place',
+        type: 'PLACE' as const,
+        confidence: 0.9,
+        salience: 0.2,
+      }
+      await replaceStoryEntities(storyId, [peripheral, central], [])
+
+      const mentions = await findEntityMentionsForStory(storyId)
+
+      expect(mentions).toEqual([
+        { key: central.key, canonicalName: central.name, type: 'PERSON' },
+        { key: peripheral.key, canonicalName: peripheral.name, type: 'PLACE' },
+      ])
+    })
+
+    it("does not include another Story's entities", async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-mentions-2',
+        seedHeadline: 'x',
+      })
+      const other = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-mentions-3',
+        seedHeadline: 'x',
+      })
+      await replaceStoryEntities(
+        other.storyId,
+        [
+          {
+            key: 'org:entity-mentions-other-story',
+            name: 'Other Story Org',
+            type: 'ORGANIZATION',
+            confidence: 0.9,
+            salience: 1,
+          },
+        ],
+        []
+      )
+
+      expect(await findEntityMentionsForStory(storyId)).toEqual([])
     })
   })
 })

@@ -10,6 +10,7 @@ import * as embeddingClientModule from './embeddingClient.js'
 import * as ingestionServiceModule from './ingestionService.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as threadRepo from '../repositories/thread.js'
+import * as entityRepo from '../repositories/entity.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
 import * as adminActionLogRepo from '../repositories/adminActionLog.js'
 import * as jobsEnqueue from '../jobs/enqueue.js'
@@ -35,6 +36,7 @@ vi.mock('./embeddingClient.js')
 vi.mock('./ingestionService.js')
 vi.mock('../repositories/storyRelation.js')
 vi.mock('../repositories/thread.js')
+vi.mock('../repositories/entity.js')
 vi.mock('../jobs/enqueue.js')
 vi.mock('../repositories/matchDecision.js')
 vi.mock('../repositories/adminActionLog.js')
@@ -777,6 +779,7 @@ describe('getAnalysisDetail', () => {
     vi.resetAllMocks()
     vi.mocked(storyRelationRepo.findPublishedRelationsForStory).mockResolvedValue([])
     vi.mocked(threadRepo.findThreadForStory).mockResolvedValue(null)
+    vi.mocked(entityRepo.findEntityMentionsForStory).mockResolvedValue([])
   })
 
   const OK_COVERAGE = {
@@ -1110,6 +1113,47 @@ describe('getAnalysisDetail', () => {
 
     expect(storyRelationRepo.findPublishedRelationsForStory).not.toHaveBeenCalled()
     expect(result.relatedEvents).toEqual([])
+  })
+
+  it("fetches this Story's entity mentions and includes them as entities (ticket 43)", async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+    vi.mocked(entityRepo.findEntityMentionsForStory).mockResolvedValue([
+      { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON' },
+    ])
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(entityRepo.findEntityMentionsForStory).toHaveBeenCalledWith('s1')
+    expect(result.entities).toEqual([
+      { key: 'person:donald-tusk', canonicalName: 'Donald Tusk', type: 'PERSON' },
+    ])
+  })
+
+  it('does not fetch entity mentions when the Analysis is not COMPLETE', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'PENDING',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+
+    const result = await getAnalysisDetail('a1')
+
+    expect(entityRepo.findEntityMentionsForStory).not.toHaveBeenCalled()
+    expect(result.entities).toEqual([])
   })
 
   it('prefers the generated headline as title when present, falling back to the working title otherwise', async () => {

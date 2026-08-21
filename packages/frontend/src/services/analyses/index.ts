@@ -14,6 +14,7 @@ import type {
   ThreadMemberItem,
   Page,
   SourceOverlapInfo,
+  EntityMentionItem,
 } from '@news-triangulator/shared'
 import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
 import { cursorQueryParam } from '../pagination'
@@ -34,6 +35,7 @@ export type {
   ThreadMemberItem,
   Page,
   SourceOverlapInfo,
+  EntityMentionItem,
 }
 export { MIN_SOURCES_FOR_GAUGE }
 

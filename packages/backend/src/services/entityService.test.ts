@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as entityRepo from '../repositories/entity.js'
+import * as entityAliasRepo from '../repositories/entityAlias.js'
 import { searchEntities, getEntityDetail } from './entityService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/entity.js')
+vi.mock('../repositories/entityAlias.js')
 
 const ENTITY = {
   id: 'e-1',
@@ -43,9 +45,10 @@ describe('getEntityDetail', () => {
     await expect(getEntityDetail('person:nobody', undefined, 20)).rejects.toThrow(NotFoundError)
     expect(entityRepo.findEventsForEntity).not.toHaveBeenCalled()
     expect(entityRepo.findRelationsForEntity).not.toHaveBeenCalled()
+    expect(entityAliasRepo.findAliasesForEntity).not.toHaveBeenCalled()
   })
 
-  it('assembles entity fields, paginated events, and attributed relations', async () => {
+  it('assembles entity fields, paginated events, attributed relations, and known aliases', async () => {
     vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
     vi.mocked(entityRepo.findEventsForEntity).mockResolvedValue([
       {
@@ -66,14 +69,17 @@ describe('getEntityDetail', () => {
         headline: null,
       },
     ])
+    vi.mocked(entityAliasRepo.findAliasesForEntity).mockResolvedValue([{ canonicalName: 'P. Fiala' }])
 
     const detail = await getEntityDetail('person:petr-fiala', undefined, 20)
 
+    expect(entityAliasRepo.findAliasesForEntity).toHaveBeenCalledWith(ENTITY.id)
     expect(detail).toEqual({
       key: 'person:petr-fiala',
       canonicalName: 'Petr Fiala',
       type: 'PERSON',
       wikidataId: 'Q108371',
+      aliases: ['P. Fiala'],
       events: {
         items: [{ analysisId: 'a-1', title: 'Headline 1', createdAt: '2026-08-01T00:00:00.000Z' }],
         nextCursor: null,
@@ -90,15 +96,17 @@ describe('getEntityDetail', () => {
     })
   })
 
-  it('degrades gracefully to a null wikidataId and an empty relations list when neither exists', async () => {
+  it('degrades gracefully to a null wikidataId, empty relations, and empty aliases when none exist', async () => {
     vi.mocked(entityRepo.findEntityByKey).mockResolvedValue({ ...ENTITY, wikidataId: null })
     vi.mocked(entityRepo.findEventsForEntity).mockResolvedValue([])
     vi.mocked(entityRepo.findRelationsForEntity).mockResolvedValue([])
+    vi.mocked(entityAliasRepo.findAliasesForEntity).mockResolvedValue([])
 
     const detail = await getEntityDetail('person:petr-fiala', undefined, 20)
 
     expect(detail.wikidataId).toBeNull()
     expect(detail.relations).toEqual([])
+    expect(detail.aliases).toEqual([])
     expect(detail.events).toEqual({ items: [], nextCursor: null })
   })
 })

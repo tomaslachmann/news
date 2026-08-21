@@ -491,8 +491,9 @@ a.threadband:hover {
   margin-bottom: var(--sp-3);
 }
 
-/* Entity mentions — no entities field exists on AnalysisDetail at all (no extraction feature
-   behind it yet). Dev-only demo, reusing Home's .ents/.erow visual language. */
+/* Entity mentions (ticket 43) — each row links to /entity/:key, reusing Home's .ents/.erow visual
+   language (EntsPanel, HomePage.tsx) with .erow__dot showing a type-initial letter instead of a
+   24h mention count (this project has no such notion). */
 .ents {
   border-top: var(--bw-rule) solid var(--line-strong);
   padding-top: var(--sp-3);
@@ -504,6 +505,9 @@ a.threadband:hover {
   align-items: center;
   padding: 0.35rem 0;
   border-bottom: var(--bw-hair) solid var(--line-2);
+}
+a.erow:hover {
+  background: var(--surface-2);
 }
 .erow__dot {
   display: grid;

@@ -11,6 +11,7 @@ import {
   mergeEntities,
   findCandidatePairs,
   rejectCandidatePair,
+  findAliasesForEntity,
   AlreadyMergedError,
 } from '../../src/repositories/entityAlias.js'
 
@@ -254,6 +255,26 @@ describe('entityAlias repository against a real Postgres instance', () => {
       expect(fulfilled).toHaveLength(1)
       expect(rejected).toHaveLength(1)
       expect(rejected[0]?.reason).toBeInstanceOf(AlreadyMergedError)
+    })
+  })
+
+  describe('findAliasesForEntity (ticket 43)', () => {
+    it("returns the merged-away entity's own canonicalName, not its raw key", async () => {
+      const survivor = await createAnalysis({ seedUrl: 'https://example.cz/alias-f1a', seedHeadline: 'x' })
+      const mergedAway = await createAnalysis({ seedUrl: 'https://example.cz/alias-f1b', seedHeadline: 'x' })
+      const survivorId = await seedEntity(survivor.storyId, 'country:entity-alias-f1-usa', 'United States')
+      const mergedAwayId = await seedEntity(mergedAway.storyId, 'country:entity-alias-f1-us', 'US')
+
+      await mergeEntities(survivorId, mergedAwayId, ADMIN_ID)
+
+      expect(await findAliasesForEntity(survivorId)).toEqual([{ canonicalName: 'US' }])
+    })
+
+    it('returns an empty list for an entity that has never absorbed another', async () => {
+      const analysis = await createAnalysis({ seedUrl: 'https://example.cz/alias-f2', seedHeadline: 'x' })
+      const id = await seedEntity(analysis.storyId, 'country:entity-alias-f2-standalone', 'Standalone')
+
+      expect(await findAliasesForEntity(id)).toEqual([])
     })
   })
 

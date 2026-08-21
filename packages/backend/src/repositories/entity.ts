@@ -264,6 +264,27 @@ export async function countStories(): Promise<number> {
   return prisma.story.count()
 }
 
+export interface EntityMentionRow {
+  key: string
+  canonicalName: string
+  type: EntityType
+}
+
+/** Every entity `storyId`'s own extraction pass attached (ticket 43) — powers AnalysisPage's
+ *  "Entity ve zprávě" rail, each entity linking to its own `/entity/:key` page. Ordered by this
+ *  Story's own `StoryEntity.salience` (ticket 12) descending, not name/extraction order — the
+ *  entities most central to *this* Story's coverage lead the list. Unbounded: a single Story's own
+ *  entity count is small (ADR 0024/P1-9's 30-50 ceiling), unlike the cross-Story
+ *  `findEventsForEntity`/`findRelationsForEntity` reads above, which do need a bound. */
+export async function findEntityMentionsForStory(storyId: string): Promise<EntityMentionRow[]> {
+  const rows = await prisma.storyEntity.findMany({
+    where: { storyId },
+    select: { entity: { select: { key: true, canonicalName: true, type: true } } },
+    orderBy: { salience: 'desc' },
+  })
+  return rows.map((r) => r.entity)
+}
+
 export interface EntitySearchRow {
   key: string
   canonicalName: string
