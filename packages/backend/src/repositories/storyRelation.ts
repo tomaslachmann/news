@@ -37,8 +37,8 @@ export interface RawRelationCandidateStory {
  *  Excludes `excludeStoryId` (the Story generating candidates for itself doesn't need itself as a
  *  candidate — redundant given the createdAt bound, but explicit). Own window, distinct from
  *  storyMatching.ts's DEDUP_WINDOW_HOURS — see storyRelationScoring.ts. `entities`/
- *  `entityRelations` come back already in the shape scoring needs (`{key, storyCount}[]` /
- *  `{fromKey, toKey, type}[]`, repositories/entity.ts's types) — no defensive parsing required
+ *  `entityRelations` come back already in the shape scoring needs (`{key, storyCount, salience}[]`
+ *  / `{fromKey, toKey, type}[]`, repositories/entity.ts's types) — no defensive parsing required
  *  the way the JSON-column form this replaced needed (ADR 0024). */
 export async function findRelationCandidateStories(
   excludeStoryId: string,
@@ -54,7 +54,9 @@ export async function findRelationCandidateStories(
     },
     include: {
       analysis: { select: { id: true } },
-      storyEntities: { select: { entity: { select: { key: true, storyCount: true } } } },
+      storyEntities: {
+        select: { salience: true, entity: { select: { key: true, storyCount: true } } },
+      },
       storyEntityRelations: {
         select: {
           type: true,
@@ -72,7 +74,7 @@ export async function findRelationCandidateStories(
       analysisId: r.analysis.id,
       anchorHeadline: r.anchorHeadline,
       embedding: r.embedding,
-      entities: r.storyEntities.map((se) => se.entity),
+      entities: r.storyEntities.map((se) => ({ ...se.entity, salience: se.salience })),
       entityRelations: r.storyEntityRelations.map((rel) => ({
         fromKey: rel.fromEntity.key,
         toKey: rel.toEntity.key,

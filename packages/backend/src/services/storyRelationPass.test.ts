@@ -325,13 +325,14 @@ describe('extractEntitiesAndLinkStoryRelations', () => {
     const weakEmbeddingSharedEntityCandidate = {
       ...RAW_CANDIDATE,
       embedding: [1, 2, 0],
-      entities: [{ key: 'person:old', storyCount: 3 }],
+      entities: [{ key: 'person:old', storyCount: 3, salience: 0 }],
     }
     vi.mocked(llmClientModule.callJsonModel).mockResolvedValue({ related: false })
     const replaceStoryEntities = vi.fn().mockResolvedValue(undefined)
-    const findStoryEntitiesForScoring = vi
-      .fn()
-      .mockResolvedValue({ entities: [{ key: 'person:old', storyCount: 3 }], entityRelations: [] })
+    const findStoryEntitiesForScoring = vi.fn().mockResolvedValue({
+      entities: [{ key: 'person:old', storyCount: 3, salience: 0 }],
+      entityRelations: [],
+    })
     const countStories = vi.fn().mockResolvedValue(10)
     const findRelationCandidateStories = vi.fn().mockResolvedValue([weakEmbeddingSharedEntityCandidate])
     const createStoryRelation = vi.fn().mockResolvedValue(undefined)

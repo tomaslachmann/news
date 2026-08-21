@@ -23,6 +23,9 @@ export interface EntityRelationInput {
 export interface EntityForScoring {
   key: string
   storyCount: number
+  /** This Story's own `StoryEntity.salience` for the entity (ticket 44) — how central it was to
+   *  *this* Story's coverage, as opposed to `storyCount`'s cross-corpus rarity signal. */
+  salience: number
 }
 
 export interface EntityRecord {
@@ -179,14 +182,16 @@ export async function replaceStoryEntities(
 
 /** The current, authoritative entity/entity-relation set for one Story, shaped for
  *  storyRelationScoring.ts — `storyCount` alongside each key is what makes IDF weighting
- *  possible (ADR 0024), something the JSON form this replaces could never expose. */
+ *  possible (ADR 0024), something the JSON form this replaces could never expose. `salience` is
+ *  this Story's own `StoryEntity.salience` (ticket 44), not an `Entity` field — pulled from the
+ *  join row alongside the key/storyCount it's selected together with. */
 export async function findStoryEntitiesForScoring(
   storyId: string
 ): Promise<{ entities: EntityForScoring[]; entityRelations: EntityRelationForScoring[] }> {
   const [storyEntities, storyEntityRelations] = await Promise.all([
     prisma.storyEntity.findMany({
       where: { storyId },
-      select: { entity: { select: { key: true, storyCount: true } } },
+      select: { salience: true, entity: { select: { key: true, storyCount: true } } },
     }),
     prisma.storyEntityRelation.findMany({
       where: { storyId },
@@ -199,7 +204,7 @@ export async function findStoryEntitiesForScoring(
   ])
 
   return {
-    entities: storyEntities.map((se) => se.entity),
+    entities: storyEntities.map((se) => ({ ...se.entity, salience: se.salience })),
     entityRelations: storyEntityRelations.map((r) => ({
       fromKey: r.fromEntity.key,
       toKey: r.toEntity.key,

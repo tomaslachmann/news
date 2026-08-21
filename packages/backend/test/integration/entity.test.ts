@@ -34,7 +34,7 @@ describe('Entity repository against a real Postgres instance', () => {
     )
 
     const result = await findStoryEntitiesForScoring(storyId)
-    expect(result.entities).toEqual([{ key: 'person:entity-test-1', storyCount: 1 }])
+    expect(result.entities).toEqual([{ key: 'person:entity-test-1', storyCount: 1, salience: 0.5 }])
   })
 
   it('persists salience alongside confidence', async () => {
@@ -73,7 +73,7 @@ describe('Entity repository against a real Postgres instance', () => {
     await replaceStoryEntities(second.storyId, [entity], [])
 
     const result = await findStoryEntitiesForScoring(second.storyId)
-    expect(result.entities).toEqual([{ key: 'country:entity-test-2', storyCount: 2 }])
+    expect(result.entities).toEqual([{ key: 'country:entity-test-2', storyCount: 2, salience: 1 }])
   })
 
   it('does not double-count when the same Story re-extracts and re-includes an already-attached entity', async () => {
@@ -90,7 +90,7 @@ describe('Entity repository against a real Postgres instance', () => {
     await replaceStoryEntities(storyId, [entity], [])
 
     const result = await findStoryEntitiesForScoring(storyId)
-    expect(result.entities).toEqual([{ key: 'place:entity-test-3', storyCount: 1 }])
+    expect(result.entities).toEqual([{ key: 'place:entity-test-3', storyCount: 1, salience: 1 }])
   })
 
   it('does not double-count storyCount when two calls for the same Story race concurrently', async () => {
@@ -111,7 +111,7 @@ describe('Entity repository against a real Postgres instance', () => {
     ])
 
     const result = await findStoryEntitiesForScoring(storyId)
-    expect(result.entities).toEqual([{ key: 'place:entity-test-3b', storyCount: 1 }])
+    expect(result.entities).toEqual([{ key: 'place:entity-test-3b', storyCount: 1, salience: 1 }])
   })
 
   it('decrements storyCount for an entity a Story drops on re-extraction, without affecting another Story still attached to it', async () => {
@@ -139,10 +139,10 @@ describe('Entity repository against a real Postgres instance', () => {
 
     const droppingResult = await findStoryEntitiesForScoring(dropping.storyId)
     const stillAttachedResult = await findStoryEntitiesForScoring(stillAttached.storyId)
-    expect(droppingResult.entities).toEqual([{ key: 'place:entity-test-5', storyCount: 1 }])
+    expect(droppingResult.entities).toEqual([{ key: 'place:entity-test-5', storyCount: 1, salience: 1 }])
     // storyCount for the dropped entity reflects only `stillAttached` now — the drop decremented
     // it once, not to zero.
-    expect(stillAttachedResult.entities).toEqual([{ key: 'org:entity-test-4', storyCount: 1 }])
+    expect(stillAttachedResult.entities).toEqual([{ key: 'org:entity-test-4', storyCount: 1, salience: 1 }])
   })
 
   it('persists entity relations and resolves them to the correct from/to keys', async () => {
@@ -244,7 +244,9 @@ describe('Entity repository against a real Postgres instance', () => {
       )
 
       const result = await findStoryEntitiesForScoring(storyId)
-      expect(result.entities).toEqual([{ key: 'country:entity-test-alias-survivor', storyCount: 1 }])
+      expect(result.entities).toEqual([
+        { key: 'country:entity-test-alias-survivor', storyCount: 1, salience: 1 },
+      ])
     })
 
     it('collapses two raw keys from the same batch that resolve to the same key into one attachment, not two', async () => {
@@ -279,7 +281,7 @@ describe('Entity repository against a real Postgres instance', () => {
       const result = await findStoryEntitiesForScoring(storyId)
       // One attachment, storyCount 1 — not 2, which a naive per-raw-key upsert would produce.
       expect(result.entities).toEqual([
-        { key: 'country:entity-test-alias-collision-survivor', storyCount: 1 },
+        { key: 'country:entity-test-alias-collision-survivor', storyCount: 1, salience: 1 },
       ])
     })
 
