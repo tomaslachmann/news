@@ -1,10 +1,18 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { createAnalysis, disconnect } from '../../src/repositories/analysis.js'
+import {
+  createAnalysis,
+  updateAnalysisStatus,
+  setAnalysisCreatedAtForTesting,
+  disconnect,
+} from '../../src/repositories/analysis.js'
 import {
   replaceStoryEntities,
   findStoryEntitiesForScoring,
   findStoryEntity,
   countStories,
+  searchEntitiesByName,
+  findEventsForEntity,
+  findRelationsForEntity,
 } from '../../src/repositories/entity.js'
 
 // Entity.key is globally unique across the whole shared test-container database (not scoped per
@@ -314,6 +322,201 @@ describe('Entity repository against a real Postgres instance', () => {
           type: 'REPRESENTS',
         },
       ])
+    })
+  })
+
+  describe('searchEntitiesByName (ticket 42)', () => {
+    it('finds an entity by a close but not exact name match, ranked by similarity', async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-search-1',
+        seedHeadline: 'x',
+      })
+      await replaceStoryEntities(
+        storyId,
+        [
+          {
+            key: 'person:entity-search-fiala',
+            name: 'Petr Fiala Ticket42Search',
+            type: 'PERSON',
+            confidence: 0.9,
+            salience: 1,
+          },
+        ],
+        []
+      )
+
+      const results = await searchEntitiesByName('Petr Fiala Ticket42Search', 10)
+      expect(results.map((r) => r.key)).toContain('person:entity-search-fiala')
+    })
+
+    it('excludes an entity whose name is nothing like the query', async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-search-2',
+        seedHeadline: 'x',
+      })
+      await replaceStoryEntities(
+        storyId,
+        [
+          {
+            key: 'place:entity-search-unrelated',
+            name: 'Xqzvwkmpljbnr Ticket42Unrelated',
+            type: 'PLACE',
+            confidence: 0.9,
+            salience: 1,
+          },
+        ],
+        []
+      )
+
+      const results = await searchEntitiesByName('Petr Fiala Ticket42Search', 10)
+      expect(results.map((r) => r.key)).not.toContain('place:entity-search-unrelated')
+    })
+  })
+
+  describe('findEventsForEntity (ticket 42)', () => {
+    it('only returns Events whose Analysis is COMPLETE', async () => {
+      const complete = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-events-1',
+        seedHeadline: 'x',
+      })
+      const pending = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-events-2',
+        seedHeadline: 'x',
+      })
+      const entity = {
+        key: 'person:entity-events-test-1',
+        name: 'Entity Events Test',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      await replaceStoryEntities(complete.storyId, [entity], [])
+      await replaceStoryEntities(pending.storyId, [entity], [])
+      await updateAnalysisStatus(complete.id, 'COMPLETE')
+      // pending.status stays PENDING (default from createAnalysis) — not completed.
+
+      const page = await findEventsForEntity('person:entity-events-test-1', undefined, 10)
+
+      expect(page.map((r) => r.id)).toEqual([complete.id])
+    })
+
+    it('keyset-paginates a high-storyCount entity newest-first, resuming exactly where the previous page left off', async () => {
+      // Same convention as pagination.test.ts's findAnalysesPage/findDraftsPage tests: fetch
+      // generously (limit far larger than this test's own row count) and simulate a smaller real
+      // page size by manually slicing the cursor, rather than relying on the repo's own `limit +
+      // 1` "peel off the extra row" mechanics (pagination.ts's fetchPage/splitPage's job, not the
+      // repository's).
+      const entity = {
+        key: 'country:entity-events-test-paginated',
+        name: 'Paginated Country',
+        type: 'COUNTRY' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+
+      const analyses = []
+      for (let i = 0; i < 5; i++) {
+        const a = await createAnalysis({
+          seedUrl: `https://example.cz/entity-events-paginated-${i}`,
+          seedHeadline: 'x',
+        })
+        await replaceStoryEntities(a.storyId, [entity], [])
+        await updateAnalysisStatus(a.id, 'COMPLETE')
+        // Deterministic ordering: i=0 is oldest, i=4 is newest — real wall-clock creation order
+        // can't be relied on precisely enough for keyset-pagination assertions (ticket 03's own
+        // integration tests use the same setAnalysisCreatedAtForTesting escape hatch).
+        await setAnalysisCreatedAtForTesting(a.id, new Date(2026, 0, i + 1))
+        analyses.push(a)
+      }
+      const ownIds = new Set(analyses.map((a) => a.id))
+
+      const firstPage = (await findEventsForEntity(entity.key, undefined, 50)).filter((r) => ownIds.has(r.id))
+      expect(firstPage.map((r) => r.id)).toEqual([
+        analyses[4].id,
+        analyses[3].id,
+        analyses[2].id,
+        analyses[1].id,
+        analyses[0].id,
+      ])
+
+      // Pretend the "real" page size was 2 — resume after the second row.
+      const cursorRow = firstPage[1]
+      const secondPage = (
+        await findEventsForEntity(entity.key, { createdAt: cursorRow.createdAt, id: cursorRow.id }, 50)
+      ).filter((r) => ownIds.has(r.id))
+      expect(secondPage.map((r) => r.id)).toEqual([analyses[2].id, analyses[1].id, analyses[0].id])
+    })
+  })
+
+  describe('findRelationsForEntity (ticket 42)', () => {
+    it('returns a relation attributed to its asserting (COMPLETE) Event, from either side', async () => {
+      const { storyId, id: analysisId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-relations-1',
+        seedHeadline: 'Relation seed headline',
+      })
+      const tusk = {
+        key: 'person:entity-relations-test-tusk',
+        name: 'Donald Tusk',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      const poland = {
+        key: 'country:entity-relations-test-poland',
+        name: 'Poland',
+        type: 'COUNTRY' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      await replaceStoryEntities(
+        storyId,
+        [tusk, poland],
+        [{ from: tusk.key, to: poland.key, type: 'REPRESENTS', confidence: 0.85 }]
+      )
+      await updateAnalysisStatus(analysisId, 'COMPLETE')
+
+      const fromTusk = await findRelationsForEntity(tusk.key)
+      expect(fromTusk).toHaveLength(1)
+      expect(fromTusk[0]).toMatchObject({
+        type: 'REPRESENTS',
+        fromEntity: { key: tusk.key },
+        toEntity: { key: poland.key },
+        analysisId,
+        seedHeadline: 'Relation seed headline',
+      })
+
+      const fromPoland = await findRelationsForEntity(poland.key)
+      expect(fromPoland).toHaveLength(1)
+      expect(fromPoland[0]?.id).toBe(fromTusk[0]?.id)
+    })
+
+    it('excludes a relation asserted only by a not-yet-COMPLETE Analysis', async () => {
+      const { storyId } = await createAnalysis({
+        seedUrl: 'https://example.cz/entity-relations-2',
+        seedHeadline: 'x',
+      })
+      const from = {
+        key: 'person:entity-relations-test-pending-from',
+        name: 'Pending From',
+        type: 'PERSON' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      const to = {
+        key: 'country:entity-relations-test-pending-to',
+        name: 'Pending To',
+        type: 'COUNTRY' as const,
+        confidence: 0.9,
+        salience: 1,
+      }
+      await replaceStoryEntities(
+        storyId,
+        [from, to],
+        [{ from: from.key, to: to.key, type: 'REPRESENTS', confidence: 0.85 }]
+      )
+      // Analysis stays PENDING (createAnalysis's default) — never promoted to COMPLETE.
+
+      expect(await findRelationsForEntity(from.key)).toEqual([])
     })
   })
 })

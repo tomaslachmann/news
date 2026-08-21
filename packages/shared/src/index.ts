@@ -299,6 +299,69 @@ export interface WikidataCandidateItem {
   description?: string
 }
 
+// Ticket 42 — reader-facing entity browse/search (public, no auth)
+
+/// Matches the backend's EntityRelationType Prisma enum exactly — see entityTypes.ts.
+export type EntityRelationTypeLabel =
+  | 'REPRESENTS'
+  | 'HOLDS_POSITION_IN'
+  | 'WORKS_FOR'
+  | 'MEMBER_OF'
+  | 'LOCATED_IN'
+  | 'BASED_IN'
+  | 'PART_OF'
+  | 'INVOLVES'
+  | 'MEETS'
+  | 'ATTACKS'
+  | 'ACCUSES'
+  | 'ANNOUNCES'
+
+export const EntitySearchQuerySchema = z.object({
+  q: z.string().min(1),
+})
+export type EntitySearchQuery = z.infer<typeof EntitySearchQuerySchema>
+
+/** One name-search match — keyed by `Entity.key` (the stable, publicly-referenceable identifier,
+ *  ADR 0034), never the internal id. */
+export interface EntitySearchResultItem {
+  key: string
+  canonicalName: string
+  type: EntityTypeLabel
+  storyCount: number
+}
+
+/** One Event (Story) that mentions this entity — `analysisId` is what an entity page links to
+ *  (ticket 43), same id every other reader-facing surface navigates Articles by. */
+export interface EntityEventItem {
+  analysisId: string
+  title: string
+  createdAt: string
+}
+
+/** One `StoryEntityRelation` this entity participates in, attributed to the Event whose coverage
+ *  asserted it — never a bare fact list (ADR 0022's "Story-scoped assertion, not a global fact",
+ *  CLAUDE.md's attribution principle). `direction` says which side of `type` this entity was on
+ *  (e.g. `type: REPRESENTS, direction: 'from'` reads "this entity REPRESENTS otherEntity"). */
+export interface EntityRelationItem {
+  id: string
+  type: EntityRelationTypeLabel
+  direction: 'from' | 'to'
+  otherEntity: { key: string; canonicalName: string; type: EntityTypeLabel }
+  assertedBy: { analysisId: string; title: string }
+}
+
+export interface EntityDetail {
+  key: string
+  canonicalName: string
+  type: EntityTypeLabel
+  /** Confirmed Wikidata link (ticket 41), if any — null when unlinked, whether because ticket 41
+   *  hasn't shipped or this particular entity just hasn't been linked yet. Never a broken/missing
+   *  section either way (docs/spec-entity-wiki.md). */
+  wikidataId: string | null
+  events: Page<EntityEventItem>
+  relations: EntityRelationItem[]
+}
+
 /** A PUBLISHED StoryRelation (ticket 35), from the current Analysis's point of view — the
  *  *other* Story's own display title/id/source count, already resolved server-side. Only ever
  *  present when the other side's Analysis is COMPLETE (see ticket 37) — nothing here ever links

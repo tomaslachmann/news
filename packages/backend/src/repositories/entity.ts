@@ -1,5 +1,7 @@
 import type { EntityType, EntityRelationType } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
+import type { Cursor } from '../pagination.js'
 
 export type { EntityType, EntityRelationType }
 
@@ -255,4 +257,123 @@ export async function clearEntityWikidataId(id: string): Promise<void> {
  *  no caching); revisit if Story grows large enough for this to show up as a real cost. */
 export async function countStories(): Promise<number> {
   return prisma.story.count()
+}
+
+export interface EntitySearchRow {
+  key: string
+  canonicalName: string
+  type: EntityType
+  storyCount: number
+}
+
+/** Name search for the reader-facing entity browse feature (ticket 42), over
+ *  `entity_canonicalName_trgm_idx` — same `%`-filter/`similarity()`-order combination as
+ *  `findCandidatePairs` (ticket 40): `%` lets the GIN trigram index do the filtering, `similarity`
+ *  orders the (already-small) filtered set by closeness to `query`. */
+export async function searchEntitiesByName(query: string, limit: number): Promise<EntitySearchRow[]> {
+  return prisma.$queryRaw<EntitySearchRow[]>`
+    SELECT key, "canonicalName", type, "storyCount"
+    FROM "Entity"
+    WHERE "canonicalName" % ${query}
+    ORDER BY similarity("canonicalName", ${query}) DESC
+    LIMIT ${limit}
+  `
+}
+
+export interface EntityEventRow {
+  /** The mentioning Event's Analysis id — what a reader navigates to (ticket 43), and the
+   *  keyset-pagination cursor's own id half (mirrors `AnalysisListRow.id`, ticket 03). */
+  id: string
+  createdAt: Date
+  seedHeadline: string
+  headline: string | null
+}
+
+/** Row-tuple comparison over `Analysis.createdAt`/`id`, not `Story`'s own `createdAt` — an Entity
+ *  attaches to a Story (`StoryEntity`), but "recency" here means when the mentioning *Event*
+ *  (Analysis) was created, the same field every other reader-facing list already orders/paginates
+ *  by (ticket 03's `cursorWhere`/`findAnalysesPage`). */
+function entityEventCursorWhere(cursor: Cursor | undefined) {
+  return cursor
+    ? Prisma.sql`AND (a."createdAt" < ${cursor.createdAt} OR (a."createdAt" = ${cursor.createdAt} AND a.id < ${cursor.id}))`
+    : Prisma.empty
+}
+
+/** Every Event (Story) mentioning `entityKey`, keyset-paginated newest-first (ticket 42, mirrors
+ *  ticket 03's pattern) — fetches `limit + 1` rows, same "peel off the extra one" convention as
+ *  `findAnalysesPage`/`pagination.ts`'s `splitPage`. Only `COMPLETE` Analyses: this is a public,
+ *  unauthenticated read (docs/spec-entity-wiki.md), and a Draft/Pending Analysis isn't a stable
+ *  Article yet for a reader to land on (same rule `GET /api/analyses` already applies for a
+ *  non-Admin reader). */
+export async function findEventsForEntity(
+  entityKey: string,
+  cursor: Cursor | undefined,
+  limit: number
+): Promise<EntityEventRow[]> {
+  return prisma.$queryRaw<EntityEventRow[]>`
+    SELECT a.id, a."createdAt", a."seedHeadline", sr.headline
+    FROM "StoryEntity" se
+    JOIN "Entity" e ON e.id = se."entityId"
+    JOIN "Story" s ON s.id = se."storyId"
+    JOIN "Analysis" a ON a."storyId" = s.id
+    LEFT JOIN "SynthesisResult" sr ON sr."analysisId" = a.id
+    WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
+      ${entityEventCursorWhere(cursor)}
+    ORDER BY a."createdAt" DESC, a.id DESC
+    LIMIT ${limit + 1}
+  `
+}
+
+export interface EntityRelationForEntityRow {
+  id: string
+  type: EntityRelationType
+  fromEntity: { key: string; canonicalName: string; type: EntityType }
+  toEntity: { key: string; canonicalName: string; type: EntityType }
+  /** The asserting Event's own Analysis id/title fields (ticket 42) — every relation is shown
+   *  attributed to the coverage that asserted it, never as a standalone fact (ADR 0022). */
+  analysisId: string
+  seedHeadline: string
+  headline: string | null
+}
+
+/** Every `StoryEntityRelation` `entityKey` participates in, either side, each carrying its own
+ *  asserting Event — deliberately not deduped across Events: two Stories independently asserting
+ *  the same relation are two distinct attributed claims, not one fact (ADR 0022, docs/spec-
+ *  entity-wiki.md). Only relations asserted by a `COMPLETE` Analysis, same public-read rule as
+ *  `findEventsForEntity`. */
+export async function findRelationsForEntity(entityKey: string): Promise<EntityRelationForEntityRow[]> {
+  const rows = await prisma.storyEntityRelation.findMany({
+    where: {
+      OR: [{ fromEntity: { key: entityKey } }, { toEntity: { key: entityKey } }],
+      story: { analysis: { status: 'COMPLETE' } },
+    },
+    select: {
+      id: true,
+      type: true,
+      fromEntity: { select: { key: true, canonicalName: true, type: true } },
+      toEntity: { select: { key: true, canonicalName: true, type: true } },
+      story: {
+        select: {
+          analysis: {
+            select: { id: true, seedHeadline: true, synthesisResult: { select: { headline: true } } },
+          },
+        },
+      },
+    },
+  })
+
+  // The `where` above already guarantees a COMPLETE Analysis exists; the `!== null` filter here
+  // is only to satisfy the nullable-relation type Prisma's `select` produces, not a real runtime
+  // exclusion.
+  return rows
+    .filter((r) => r.story.analysis !== null)
+    .map((r) => ({
+      id: r.id,
+      type: r.type,
+      fromEntity: r.fromEntity,
+      toEntity: r.toEntity,
+      analysisId: r.story.analysis!.id,
+      seedHeadline: r.story.analysis!.seedHeadline,
+      headline: r.story.analysis!.synthesisResult?.headline ?? null,
+    }))
 }
