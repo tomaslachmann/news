@@ -19,6 +19,9 @@ import type {
   NarrativeDocument,
   NarrativeBlock,
   NarrativeInline,
+  NarrativeEntityRef,
+  NarrativeSourceRef,
+  NarrativeValueRef,
 } from '@news-triangulator/shared'
 import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
 import { cursorQueryParam } from '../pagination'
@@ -44,6 +47,9 @@ export type {
   NarrativeDocument,
   NarrativeBlock,
   NarrativeInline,
+  NarrativeEntityRef,
+  NarrativeSourceRef,
+  NarrativeValueRef,
 }
 export { MIN_SOURCES_FOR_GAUGE }
 

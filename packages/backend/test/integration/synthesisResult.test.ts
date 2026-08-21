@@ -99,7 +99,9 @@ describe('SynthesisResult repository against a real Postgres instance', () => {
             valueRefs: [],
           },
         ],
-        entityRefs: [{ id: 'e1', entityKey: 'person:petr-fiala', canonicalName: 'Petr Fiala' }],
+        entityRefs: [
+          { id: 'e1', entityKey: 'person:petr-fiala', canonicalName: 'Petr Fiala', imageUrl: null },
+        ],
         sourceRefs: [{ id: 's1', outlet: 'iDnes', articleUrl: 'https://idnes.cz/x' }],
         valueRefs: [],
       }

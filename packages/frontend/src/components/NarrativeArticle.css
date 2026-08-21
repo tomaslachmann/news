@@ -1,0 +1,115 @@
+/* Ticket 48 — the structured Cross-Source Narrative (ADR 0034), rendered as continuous prose.
+   .prose's own block typography (p/h2/h3/blockquote/lists) is ported from AnalysisPage.css's
+   original ticket-39 rules (moved here once the component that owns them moved out of
+   AnalysisPage.tsx); .nref/.nquote/.nlist are new, added for this ticket — no reference mockup
+   covers inline entity/source/value citation styling, so these are original, tokens-only designs
+   consistent with the rest of the system (.chip/.tooltip in ds/components.css). */
+
+.prose {
+  max-width: var(--measure);
+}
+.prose > p {
+  margin-bottom: var(--sp-4);
+}
+.prose > h2 {
+  margin: var(--sp-6) 0 var(--sp-3);
+  font-size: var(--text-h3);
+  font-variation-settings: 'opsz' var(--opsz-h4);
+}
+.prose > h3 {
+  margin: var(--sp-5) 0 var(--sp-2);
+  font-size: var(--text-h4);
+}
+.prose b,
+.prose strong {
+  font-weight: 600;
+}
+
+/* Entity/source/value inline references — a shared base (.nref) so the three read as one family
+   of "this isn't just prose" annotations, distinguished by an accent-colour scheme rather than
+   three unrelated treatments: entity is a real link (accent underline), source is a citation-style
+   chip (bracketed, muted, matching .chip's existing citation vocabulary from AnalysisPage.css's
+   OutletBadge), value is a plain emphasis (tabular numerals, no interactivity). */
+.nref {
+  font-weight: 500;
+}
+.nref--entity {
+  color: inherit;
+  border-bottom: var(--bw-hair) solid var(--accent);
+  transition: color var(--dur-fast) var(--ease);
+}
+.nref--entity:hover {
+  color: var(--accent);
+}
+.nref--source {
+  font-family: var(--font-sans);
+  font-size: 0.92em;
+  color: var(--ink-3);
+  border-bottom: var(--bw-hair) dotted var(--line-strong);
+  cursor: default;
+}
+.nref--source:hover,
+.nref--source:focus-visible {
+  color: var(--ink);
+  border-bottom-color: var(--ink-3);
+}
+.nref--value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.nref__img {
+  display: block;
+  width: 100%;
+  max-width: 8rem;
+  aspect-ratio: 1;
+  object-fit: cover;
+  margin-bottom: 0.35rem;
+}
+.nref__srclist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nref__srclist a {
+  color: var(--paper);
+  border-bottom: var(--bw-hair) solid color-mix(in oklab, var(--paper) 50%, transparent);
+}
+
+/* A quote block always names exactly one Source (ADR 0034) — visibly attributed, not just
+   styled to look like a quote. */
+.nquote {
+  margin: var(--sp-5) 0;
+  padding-left: var(--sp-4);
+  border-left: var(--bw-rule) solid var(--line-strong);
+  font-family: var(--font-serif);
+  font-size: var(--text-h4);
+  font-style: italic;
+  line-height: var(--lh-relaxed);
+}
+.nquote p {
+  margin: 0;
+}
+.nquote__attr {
+  margin-top: var(--sp-2);
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.nquote__attr cite {
+  font-style: normal;
+}
+.nquote__attr cite::before {
+  content: '— ';
+}
+
+.nlist {
+  margin: var(--sp-4) 0;
+  padding-left: var(--sp-5);
+  line-height: var(--lh-relaxed);
+}
+.nlist li + li {
+  margin-top: var(--sp-2);
+}

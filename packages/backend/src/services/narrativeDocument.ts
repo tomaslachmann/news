@@ -304,6 +304,10 @@ export interface KnownEntity {
   key: string
   canonicalName: string
   type: EntityTypeLabel
+  /** This Entity's `EntityImage.imageUrl` (ticket 41), if any — resolved here, never asked of the
+   *  LLM (same treatment as `canonicalName`); `buildUserContent` (narrativePass.ts) deliberately
+   *  strips this back out of what's sent to the model, since it has no use for an image URL. */
+  imageUrl: string | null
 }
 
 export interface NarrativeBuildContext {
@@ -346,6 +350,7 @@ export function buildNarrativeDocument(
     id: ref.id,
     entityKey: ref.entityKey,
     canonicalName: ctx.entitiesByKey.get(ref.entityKey)?.canonicalName ?? ref.entityKey,
+    imageUrl: ctx.entitiesByKey.get(ref.entityKey)?.imageUrl ?? null,
   }))
 
   const sourceRefs: NarrativeSourceRef[] = doc.sourceRefs.map((ref) => ({

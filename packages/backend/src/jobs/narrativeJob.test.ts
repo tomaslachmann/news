@@ -114,7 +114,9 @@ describe('runNarrativeJob', () => {
     const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
     const findEntityMentionsForStory = vi
       .fn()
-      .mockResolvedValue([{ key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON' }])
+      .mockResolvedValue([
+        { key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON', imageUrl: null },
+      ])
     mockRunNarrativePass.mockResolvedValue(DOCUMENT)
 
     await runNarrativeJob(
@@ -126,7 +128,7 @@ describe('runNarrativeJob', () => {
     expect(mockRunNarrativePass).toHaveBeenCalledWith(
       [{ outlet: 'iDnes', articleUrl: 'https://idnes.cz/x', fullText: 'Plný text článku.' }],
       DIMENSIONS,
-      [{ key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON' }],
+      [{ key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON', imageUrl: null }],
       undefined
     )
     expect(baseDeps.updateSynthesisResultNarrative).toHaveBeenCalledWith('a1', DOCUMENT)

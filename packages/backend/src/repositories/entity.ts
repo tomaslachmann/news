@@ -268,6 +268,11 @@ export interface EntityMentionRow {
   key: string
   canonicalName: string
   type: EntityType
+  /** This Entity's `EntityImage.imageUrl` (ticket 41), if one has been fetched — null otherwise.
+   *  `toEntityMentionItem` (mappers/analysis.ts) drops this for the "Entity ve zprávě" rail, which
+   *  never showed images; the Narrative pass (ticket 48 / ADR 0034) is this row's only consumer
+   *  that reads it, via `KnownEntity`. */
+  imageUrl: string | null
 }
 
 export interface EntityRelationForStoryRow {
@@ -310,10 +315,26 @@ export async function findEntityRelationsForStory(storyId: string): Promise<Enti
 export async function findEntityMentionsForStory(storyId: string): Promise<EntityMentionRow[]> {
   const rows = await prisma.storyEntity.findMany({
     where: { storyId },
-    select: { entity: { select: { key: true, canonicalName: true, type: true } } },
+    select: {
+      entity: {
+        select: {
+          key: true,
+          canonicalName: true,
+          type: true,
+          // v1 has no `isPrimary` to prioritize among (ADR 0034) — an Entity has at most one
+          // provider (Wikimedia) today, so the first row is the only row.
+          images: { select: { imageUrl: true }, take: 1 },
+        },
+      },
+    },
     orderBy: { salience: 'desc' },
   })
-  return rows.map((r) => r.entity)
+  return rows.map((r) => ({
+    key: r.entity.key,
+    canonicalName: r.entity.canonicalName,
+    type: r.entity.type,
+    imageUrl: r.entity.images[0]?.imageUrl ?? null,
+  }))
 }
 
 export interface EntitySearchRow {

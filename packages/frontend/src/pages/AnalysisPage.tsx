@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Gauge } from '@/components/Gauge'
+import { NarrativeArticle } from '@/components/NarrativeArticle'
 import {
   openAnalysisStream,
   MIN_SOURCES_FOR_GAUGE,
@@ -10,8 +11,6 @@ import {
   type Attribution,
   type AnalysisDimensions,
   type DimensionItem,
-  type NarrativeDocument,
-  type NarrativeInline,
   type CoverageInfo,
   type RelatedEventItem,
   type ThreadSummaryItem,
@@ -74,48 +73,6 @@ const MAX_REFERENCE_EXCERPT_LENGTH = 100
 function truncateExcerpt(text: string): string {
   if (text.length <= MAX_REFERENCE_EXCERPT_LENGTH) return text
   return text.slice(0, MAX_REFERENCE_EXCERPT_LENGTH).trimEnd() + '…'
-}
-
-/** Plain-text rendering of the inline runs inside one NarrativeBlock's `children` — entity/
- *  source/value refs render as their run's own display text, with no citation styling or linking
- *  yet. A placeholder pending ticket 48 (blocked by this one, ADR 0034's "backend-then-UI split"),
- *  which replaces this with real inline entity/source/value styling. */
-function inlineText(children: NarrativeInline[]): string {
-  return children.map((run) => run.text).join('')
-}
-
-/** The Cross-Source Narrative (ADR 0012 / ADR 0034) — a structured NarrativeDocument of
- *  heading/paragraph/quote/list blocks. Rendered here as plain prose only; ticket 48 (blocked by
- *  this backend ticket) replaces this with the real inline entity/source/value citation styling
- *  the new document shape carries. */
-function NarrativeArticle({ document }: { document: NarrativeDocument }) {
-  return (
-    <div className="prose">
-      {document.blocks.map((block, i) => {
-        switch (block.type) {
-          case 'heading': {
-            const Heading = block.level === 2 ? 'h2' : 'h3'
-            return <Heading key={i}>{inlineText(block.children)}</Heading>
-          }
-          case 'quote':
-            return <blockquote key={i}>{inlineText(block.children)}</blockquote>
-          case 'list': {
-            const List = block.style === 'ordered' ? 'ol' : 'ul'
-            return (
-              <List key={i}>
-                {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{inlineText(item.children)}</li>
-                ))}
-              </List>
-            )
-          }
-          case 'paragraph':
-          default:
-            return <p key={i}>{inlineText(block.children)}</p>
-        }
-      })}
-    </div>
-  )
 }
 
 /** Deviation on top of the reference (ticket's own planned design change): widened from 3
