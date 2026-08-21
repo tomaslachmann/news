@@ -4,7 +4,7 @@
 
 **Blocked by:** 42 — Entity Browse/Search Backend.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Entity detail page (route `/entity/:key`): canonical name, type, paginated list of mentioning Events (each linking to its Article page), aggregated entity-relations (each shown with its asserting Event linked beside it — never a bare fact list).
 - [x] Search UI: a search box (nav-bar-surfaced or a dedicated search page — implementation-time judgment) that lists matching entities and links to their detail pages.
