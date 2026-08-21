@@ -1,5 +1,6 @@
+import { fetchWithTimeout } from './httpClient.js'
+
 const TIMEOUT_MS = 8_000
-const USER_AGENT = 'NewsTriangulator/1.0 (+https://github.com/tomaslachmann/news)'
 // Requested alongside the full-size url so the response carries a ready-to-use thumbnail without
 // a second round trip — see MediaWiki's imageinfo `iiurlwidth` param.
 const THUMBNAIL_WIDTH = 500
@@ -40,20 +41,24 @@ interface CommonsImageInfoResponse {
   }
 }
 
-async function fetchWithTimeout(url: string): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-  try {
-    return await fetch(url, { signal: controller.signal, headers: { 'User-Agent': USER_AGENT } })
-  } finally {
-    clearTimeout(timer)
-  }
+/** Decodes the handful of HTML entities MediaWiki's `extmetadata` fields actually use (named
+ *  entities plus numeric/hex escapes for accented characters) — good enough for attribution text,
+ *  not a general-purpose HTML decoder. */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
 }
 
 /** Wikimedia attribution fields (Artist) come back as an HTML fragment (often a link to the
  *  author's user page) — this codebase stores plain attribution text, not markup. */
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').trim()
+  return decodeHtmlEntities(html.replace(/<[^>]*>/g, '')).trim()
 }
 
 /** Given a confirmed `wikidataId`, finds that Wikidata item's depicting image (property P18) and
@@ -70,7 +75,7 @@ export async function findWikidataEntityImage(wikidataId: string): Promise<Wikim
   claimsUrl.searchParams.set('property', 'P18')
   claimsUrl.searchParams.set('format', 'json')
 
-  const claimsRes = await fetchWithTimeout(claimsUrl.toString())
+  const claimsRes = await fetchWithTimeout(claimsUrl.toString(), TIMEOUT_MS)
   if (!claimsRes.ok) throw new Error(`Wikidata claims lookup returned HTTP ${claimsRes.status}`)
   const claimsBody = (await claimsRes.json()) as WikidataClaimsResponse
   const fileName = claimsBody.claims?.P18?.[0]?.mainsnak?.datavalue?.value
@@ -84,7 +89,7 @@ export async function findWikidataEntityImage(wikidataId: string): Promise<Wikim
   infoUrl.searchParams.set('iiurlwidth', String(THUMBNAIL_WIDTH))
   infoUrl.searchParams.set('format', 'json')
 
-  const infoRes = await fetchWithTimeout(infoUrl.toString())
+  const infoRes = await fetchWithTimeout(infoUrl.toString(), TIMEOUT_MS)
   if (!infoRes.ok) throw new Error(`Wikimedia Commons imageinfo lookup returned HTTP ${infoRes.status}`)
   const infoBody = (await infoRes.json()) as CommonsImageInfoResponse
   const info = Object.values(infoBody.query?.pages ?? {})[0]?.imageinfo?.[0]

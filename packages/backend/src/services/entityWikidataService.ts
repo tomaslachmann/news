@@ -53,9 +53,13 @@ export async function linkEntityWikidata(
 }
 
 /** Clears a previously-confirmed Wikidata link (ticket 41) — leaves any already-fetched
- *  `EntityImage` rows in place (re-fetch/removal on unlink isn't scoped in this wave). */
+ *  `EntityImage` rows in place (re-fetch/removal on unlink isn't scoped in this wave). A no-op,
+ *  idempotent DELETE-style success for an entity with no link to begin with — it must not write a
+ *  DB update or an `entity.wikidata_unlinked` audit row for an unlink that never actually
+ *  happened. */
 export async function unlinkEntityWikidata(entityKey: string, actorId: string): Promise<void> {
   const entity = await findEntityOrThrow(entityKey)
+  if (!entity.wikidataId) return
 
   await entityRepo.clearEntityWikidataId(entity.id)
   await recordAdminActionSafe({

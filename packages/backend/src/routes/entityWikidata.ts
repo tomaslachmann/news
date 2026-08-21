@@ -7,14 +7,16 @@ import * as entityWikidataService from '../services/entityWikidataService.js'
 export function registerEntityWikidataRoutes(fastify: FastifyInstance): void {
   // GET /api/admin/entities/:key/wikidata-candidates?q=... — proxies Wikidata search, scoped to
   // one Entity's context.
-  fastify.get<{ Params: { key: string }; Querystring: { q?: string } }>(
+  fastify.get<{ Params: { key: string }; Querystring: { q?: string | string[] } }>(
     '/api/admin/entities/:key/wikidata-candidates',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      const candidates = await entityWikidataService.getWikidataCandidates(
-        request.params.key,
-        request.query.q ?? ''
-      )
+      // Fastify performs no schema validation on this querystring, so a repeated `?q=a&q=b` can
+      // arrive as an array rather than a string — take the first value rather than letting
+      // `.trim()` downstream throw on a non-string.
+      const rawQ = request.query.q
+      const q = Array.isArray(rawQ) ? rawQ[0] : rawQ
+      const candidates = await entityWikidataService.getWikidataCandidates(request.params.key, q ?? '')
       return reply.code(200).send(candidates)
     }
   )

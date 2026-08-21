@@ -72,6 +72,33 @@ describe('findWikidataEntityImage', () => {
     })
   })
 
+  it('decodes HTML entities in the author field after stripping tags', async () => {
+    const commonsWithEncodedAuthor = {
+      query: {
+        pages: {
+          '123': {
+            imageinfo: [
+              {
+                ...COMMONS_IMAGEINFO.query.pages['123'].imageinfo[0],
+                extmetadata: {
+                  Artist: { value: '<a href="//example.org">Jan Kol&#225;&#345; &amp; Sons</a>' },
+                  LicenseShortName: { value: 'CC BY-SA 4.0' },
+                },
+              },
+            ],
+          },
+        },
+      },
+    }
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(CLAIMS_WITH_IMAGE))
+      .mockResolvedValueOnce(jsonResponse(commonsWithEncodedAuthor))
+
+    const image = await findWikidataEntityImage('Q123')
+
+    expect(image?.author).toBe('Jan Kolář & Sons')
+  })
+
   it('returns null and never calls Commons when the item has no P18 image claim', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ claims: {} }))
 

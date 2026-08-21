@@ -1,4 +1,4 @@
-import type { EntityImageProvider } from '@prisma/client'
+import { Prisma, type EntityImageProvider } from '@prisma/client'
 import { prisma } from '../db.js'
 
 export type { EntityImageProvider }
@@ -24,6 +24,17 @@ export async function findEntityImageForEntity(entityId: string): Promise<{ id: 
   return prisma.entityImage.findFirst({ where: { entityId }, select: { id: true } })
 }
 
+/** The existence check in `entityImageEnrichJob.ts` and this insert aren't atomic, so two
+ *  concurrently-run enrich jobs for the same Entity (a double-link, or a retry overlapping a
+ *  fresh enqueue) can both pass that check and race here — the loser hits this same
+ *  `[provider, externalId]` pair the winner just inserted. That's not a real failure (the image
+ *  is enriched either way), so it's swallowed as a no-op rather than surfaced, keeping the job
+ *  handler's "never rethrows" contract intact for this case too. */
 export async function createEntityImage(input: NewEntityImage): Promise<void> {
-  await prisma.entityImage.create({ data: input })
+  try {
+    await prisma.entityImage.create({ data: input })
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return
+    throw err
+  }
 }

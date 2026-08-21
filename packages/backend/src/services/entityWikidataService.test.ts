@@ -111,6 +111,15 @@ describe('unlinkEntityWikidata', () => {
     })
   })
 
+  it('is a no-op — no DB write, no audit log — when the entity has no link to begin with', async () => {
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY) // wikidataId: null
+
+    await unlinkEntityWikidata('person:petr-fiala', ACTOR_ID)
+
+    expect(entityRepo.clearEntityWikidataId).not.toHaveBeenCalled()
+    expect(adminActionLogRepo.recordAdminActionSafe).not.toHaveBeenCalled()
+  })
+
   it('throws NotFoundError for an unknown entity key', async () => {
     vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(null)
 
