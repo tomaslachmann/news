@@ -202,6 +202,59 @@ describe('entityAlias repository against a real Postgres instance', () => {
 
       await expect(mergeEntities(idC, idA, ADMIN_ID)).rejects.toThrow(AlreadyMergedError)
     })
+
+    it('redirects onto the true survivor when survivingEntityId was itself already merged away (a stale candidate list)', async () => {
+      // A merges into B first. A later, stale candidate list still shows {C, A} — the Admin
+      // confirms with A as the chosen survivor, not realizing A no longer holds that role. The
+      // merge must land C on B (A's own true survivor), not create a dangling alias through A.
+      const a1 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m6a', seedHeadline: 'x' })
+      const a2 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m6b', seedHeadline: 'x' })
+      const a3 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m6c', seedHeadline: 'x' })
+      const idA = await seedEntity(a1.storyId, 'country:entity-alias-m6-a', 'A Name')
+      const idB = await seedEntity(a2.storyId, 'country:entity-alias-m6-b', 'B Name')
+      const idC = await seedEntity(a3.storyId, 'country:entity-alias-m6-c', 'C Name')
+      await mergeEntities(idB, idA, ADMIN_ID) // A -> B
+
+      await mergeEntities(idA, idC, ADMIN_ID) // stale: "merge C into A"
+
+      expect(await resolveEntityKey('country:entity-alias-m6-c')).toBe('country:entity-alias-m6-b')
+      expect(await resolveEntityKey('country:entity-alias-m6-a')).toBe('country:entity-alias-m6-b')
+      expect((await findEntityById(idA))?.storyCount).toBe(0)
+      expect((await findEntityById(idB))?.storyCount).toBe(3)
+    })
+
+    it('throws AlreadyMergedError when survivingEntityId resolves onto mergedAwayEntityId itself', async () => {
+      const a1 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m7a', seedHeadline: 'x' })
+      const a2 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m7b', seedHeadline: 'x' })
+      const idA = await seedEntity(a1.storyId, 'country:entity-alias-m7-a', 'A Name')
+      const idB = await seedEntity(a2.storyId, 'country:entity-alias-m7-b', 'B Name')
+      await mergeEntities(idB, idA, ADMIN_ID) // A -> B
+
+      // Stale: "survivor is A, merge B away" — but A's own true survivor is already B, so this
+      // would ask B to merge into itself. mergedAwayEntityId (B) itself was never merged away, so
+      // this must hit the second guard (post-resolution self-merge), not the first.
+      await expect(mergeEntities(idA, idB, ADMIN_ID)).rejects.toThrow(AlreadyMergedError)
+    })
+
+    it('translates a genuine concurrent double-confirm race into AlreadyMergedError, not a raw Prisma error', async () => {
+      const a1 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m8a', seedHeadline: 'x' })
+      const a2 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m8b', seedHeadline: 'x' })
+      const a3 = await createAnalysis({ seedUrl: 'https://example.cz/alias-m8c', seedHeadline: 'x' })
+      const idA = await seedEntity(a1.storyId, 'country:entity-alias-m8-a', 'A Name')
+      const idB = await seedEntity(a2.storyId, 'country:entity-alias-m8-b', 'B Name')
+      const idC = await seedEntity(a3.storyId, 'country:entity-alias-m8-c', 'C Name')
+
+      const results = await Promise.allSettled([
+        mergeEntities(idB, idA, ADMIN_ID),
+        mergeEntities(idC, idA, ADMIN_ID),
+      ])
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled')
+      const rejected = results.filter((r) => r.status === 'rejected')
+      expect(fulfilled).toHaveLength(1)
+      expect(rejected).toHaveLength(1)
+      expect(rejected[0]?.reason).toBeInstanceOf(AlreadyMergedError)
+    })
   })
 
   describe('findCandidatePairs / rejectCandidatePair', () => {

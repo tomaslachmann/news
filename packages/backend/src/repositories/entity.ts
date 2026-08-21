@@ -50,10 +50,12 @@ async function resolveEntityInputs(
   entities: EntityInput[],
   resolveEntityKey: (key: string) => Promise<string>
 ): Promise<{ resolved: EntityInput[]; rawKeysByResolvedKey: Map<string, string[]> }> {
-  const resolvedKeyByRawKey = new Map<string, string>()
-  for (const rawKey of new Set(entities.map((e) => e.key))) {
-    resolvedKeyByRawKey.set(rawKey, await resolveEntityKey(rawKey))
-  }
+  // Independent lookups, parallelized — a human-seeded Story's extraction pass can produce 30-50
+  // distinct entities (ADR 0024/P1-9), and resolving them one at a time would serialize that many
+  // extra DB round trips before the transaction below even opens.
+  const uniqueRawKeys = [...new Set(entities.map((e) => e.key))]
+  const resolvedKeys = await Promise.all(uniqueRawKeys.map((rawKey) => resolveEntityKey(rawKey)))
+  const resolvedKeyByRawKey = new Map(uniqueRawKeys.map((rawKey, i) => [rawKey, resolvedKeys[i]]))
 
   const rawKeysByResolvedKey = new Map<string, string[]>()
   const byResolvedKey = new Map<string, EntityInput>()

@@ -1,4 +1,5 @@
 import type { EntityType } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 
 export type { EntityType }
@@ -141,8 +142,19 @@ export class AlreadyMergedError extends Error {}
  *  (by-then) surviving row" — if that surviving row later merges too, everything that already
  *  pointed at it has to move with it). The merged-away `Entity` row itself is never deleted.
  *
- *  Assumes both ids exist and share the same `type` — the caller (entityAliasService.ts) is the
- *  system boundary that validates a real request against real candidate data; this function
+ *  `survivingEntityId` itself might already have been merged away since the caller's candidate
+ *  list was fetched (a stale list, or a race between two admins acting on overlapping pairs) —
+ *  resolved to its own true current survivor first, so the new alias always lands on a live
+ *  entity, never an inert one. If that resolution lands on `mergedAwayEntityId` itself (the two
+ *  ids already resolve to the same entity), or `mergedAwayEntityId` has already been merged away
+ *  on its own, this throws `AlreadyMergedError` rather than silently doing nothing or corrupting
+ *  the single-lookup invariant `resolveEntityKey` depends on. The `EntityAlias.mergedFromEntityId`
+ *  unique constraint is the actual race backstop — the pre-checks above only avoid hitting it in
+ *  the common (non-racing) case; a genuine concurrent double-confirm still surfaces as
+ *  `AlreadyMergedError`, via the catch around the insert below, not a raw Prisma error.
+ *
+ *  Otherwise assumes both ids exist and share the same `type` — the caller (entityAliasService.ts)
+ *  is the system boundary that validates a real request against real candidate data; this function
  *  trusts its inputs, matching this codebase's "validate at the boundary" convention.
  *
  *  A Story that already has both entities separately attached (rare but possible — both were
@@ -162,12 +174,22 @@ export async function mergeEntities(
 ): Promise<void> {
   await prisma.$transaction(
     async (tx) => {
-      const alreadyMerged = await tx.entityAlias.findUnique({
-        where: { mergedFromEntityId: mergedAwayEntityId },
-      })
-      if (alreadyMerged) {
+      const [mergedAwayAlias, survivorAlias] = await Promise.all([
+        tx.entityAlias.findUnique({ where: { mergedFromEntityId: mergedAwayEntityId } }),
+        tx.entityAlias.findUnique({ where: { mergedFromEntityId: survivingEntityId } }),
+      ])
+      if (mergedAwayAlias) {
         throw new AlreadyMergedError(
           `Entity ${mergedAwayEntityId} has already been merged into another entity`
+        )
+      }
+      // survivorAlias's own entityId is guaranteed live (never itself merged away) — every prior
+      // merge flattens aliases the same way this one is about to, so a chain longer than one hop
+      // can't exist.
+      const trueSurvivingEntityId = survivorAlias?.entityId ?? survivingEntityId
+      if (trueSurvivingEntityId === mergedAwayEntityId) {
+        throw new AlreadyMergedError(
+          `Entity ${survivingEntityId} and ${mergedAwayEntityId} already resolve to the same entity`
         )
       }
 
@@ -178,21 +200,35 @@ export async function mergeEntities(
       // still needs re-resolving.
       await tx.entityAlias.updateMany({
         where: { entityId: mergedAwayEntityId },
-        data: { entityId: survivingEntityId },
+        data: { entityId: trueSurvivingEntityId },
       })
 
-      await tx.entityAlias.create({
-        data: {
-          entityId: survivingEntityId,
-          alias: mergedAway.key,
-          mergedFromEntityId: mergedAwayEntityId,
-          confirmedBy,
-        },
-      })
+      try {
+        await tx.entityAlias.create({
+          data: {
+            entityId: trueSurvivingEntityId,
+            alias: mergedAway.key,
+            mergedFromEntityId: mergedAwayEntityId,
+            confirmedBy,
+          },
+        })
+      } catch (err) {
+        // A concurrent transaction won the race on the same mergedFromEntityId (or, in principle,
+        // the same alias) between our pre-check above and this insert — READ COMMITTED doesn't
+        // stop two transactions from both passing the check before either commits. The unique
+        // constraint is the real backstop; this just gives the caller the documented error type
+        // instead of a raw Prisma one.
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          throw new AlreadyMergedError(
+            `Entity ${mergedAwayEntityId} was merged concurrently by another request`
+          )
+        }
+        throw err
+      }
 
       const [staleStoryEntities, survivorStoryEntities] = await Promise.all([
         tx.storyEntity.findMany({ where: { entityId: mergedAwayEntityId } }),
-        tx.storyEntity.findMany({ where: { entityId: survivingEntityId }, select: { storyId: true } }),
+        tx.storyEntity.findMany({ where: { entityId: trueSurvivingEntityId }, select: { storyId: true } }),
       ])
       const survivorStoryIds = new Set(survivorStoryEntities.map((r) => r.storyId))
       for (const se of staleStoryEntities) {
@@ -203,7 +239,7 @@ export async function mergeEntities(
         } else {
           await tx.storyEntity.update({
             where: { storyId_entityId: { storyId: se.storyId, entityId: mergedAwayEntityId } },
-            data: { entityId: survivingEntityId },
+            data: { entityId: trueSurvivingEntityId },
           })
         }
       }
@@ -215,8 +251,8 @@ export async function mergeEntities(
       // A row can appear in at most one of the two lists — the no-self-relation CHECK constraint
       // already rules out fromEntityId === toEntityId at creation time.
       for (const rel of [...staleFrom, ...staleTo]) {
-        const newFrom = rel.fromEntityId === mergedAwayEntityId ? survivingEntityId : rel.fromEntityId
-        const newTo = rel.toEntityId === mergedAwayEntityId ? survivingEntityId : rel.toEntityId
+        const newFrom = rel.fromEntityId === mergedAwayEntityId ? trueSurvivingEntityId : rel.fromEntityId
+        const newTo = rel.toEntityId === mergedAwayEntityId ? trueSurvivingEntityId : rel.toEntityId
         if (newFrom === newTo) {
           await tx.storyEntityRelation.delete({ where: { id: rel.id } })
           continue
@@ -241,8 +277,14 @@ export async function mergeEntities(
         }
       }
 
-      const storyCount = await tx.storyEntity.count({ where: { entityId: survivingEntityId } })
-      await tx.entity.update({ where: { id: survivingEntityId }, data: { storyCount } })
+      const storyCount = await tx.storyEntity.count({ where: { entityId: trueSurvivingEntityId } })
+      await tx.entity.update({ where: { id: trueSurvivingEntityId }, data: { storyCount } })
+      // The merged-away entity has zero StoryEntity rows left (every one was just repointed or
+      // dropped above) — its own storyCount must reflect that, not sit stale at whatever it was
+      // before the merge. `Entity.storyCount`'s own doc comment is "count of Stories this Entity
+      // is attached to"; leaving a nonzero value here would violate that for an entity nothing is
+      // attached to anymore.
+      await tx.entity.update({ where: { id: mergedAwayEntityId }, data: { storyCount: 0 } })
     },
     // Same generous margin as replaceStoryEntities: this does several sequential round trips
     // (repoint loops sized by however many Stories/relations mention the merged-away entity), not

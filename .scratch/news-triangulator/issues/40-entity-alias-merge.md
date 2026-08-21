@@ -21,3 +21,12 @@ Admin UI (candidates list, mirroring `DraftsSection`'s list-plus-action-buttons 
 into ticket 46 — this ticket ships the backend (model, migration, `resolveEntityKey`, merge
 mechanics, candidate query, routes) end to end and is independently mergeable/testable via the API
 directly; the frontend is a separate, later pass rather than blocking this one.
+
+`/code-review` on the first pass caught three real gaps in `mergeEntities`, all fixed and covered
+by new tests before this ticket closed: `survivingEntityId` itself being already merged away (a
+stale candidate list) landed the new alias on an inert entity instead of the true current
+survivor; a genuine concurrent double-confirm hit a raw Prisma unique-constraint error instead of
+the documented `AlreadyMergedError`, since the pre-check-then-insert wasn't atomic under READ
+COMMITTED; and `resolveEntityInputs` resolved each distinct key sequentially instead of in
+parallel. Fixing the first two also surfaced that a merged-away entity's own `storyCount` was left
+stale at its pre-merge value rather than zeroed, which is now fixed too.
