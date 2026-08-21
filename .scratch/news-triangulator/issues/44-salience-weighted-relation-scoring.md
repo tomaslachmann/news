@@ -4,10 +4,10 @@
 
 **Blocked by:** none — `salience` already exists and is populated (ticket 12).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `EntityForScoring` gains `salience: number`; `findStoryEntitiesForScoring`'s select clause includes it.
-- [ ] `weightedEntityContainment`'s per-entity weight changes from `idfWeight(e.storyCount, totalStories)` alone to a function of both IDF weight and salience — exact blend is an implementation-time tunable constant, evaluated against real Story data if any exists by then (the project's DB was empty as of ticket 12).
-- [ ] Unit tests: a high-salience entity now contributes more to the score than a low-salience one with identical `storyCount`; existing IDF-only test assumptions updated for the new factor.
-- [ ] No other consumer of `storyRelationScoring.ts`'s public scoring function needs to change.
-- [ ] New ADR documenting the exact formula chosen and why.
+- [x] `EntityForScoring` gains `salience: number`; `findStoryEntitiesForScoring`'s select clause includes it.
+- [x] `weightedEntityContainment`'s per-entity weight changes from `idfWeight(e.storyCount, totalStories)` alone to a function of both IDF weight and salience — exact blend is an implementation-time tunable constant, evaluated against real Story data if any exists by then (the project's DB was empty as of ticket 12).
+- [x] Unit tests: a high-salience entity now contributes more to the score than a low-salience one with identical `storyCount`; existing IDF-only test assumptions updated for the new factor.
+- [x] No other consumer of `storyRelationScoring.ts`'s public scoring function needs to change.
+- [x] New ADR documenting the exact formula chosen and why.

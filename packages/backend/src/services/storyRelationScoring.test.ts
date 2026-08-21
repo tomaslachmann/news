@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { scoreRelationCandidates, RELATION_CANDIDATE_POOL_SIZE } from './storyRelationScoring.js'
+import {
+  scoreRelationCandidates,
+  weightedEntityContainment,
+  RELATION_CANDIDATE_POOL_SIZE,
+} from './storyRelationScoring.js'
 
 const NOW = new Date('2026-01-15T00:00:00Z')
 const TOTAL_STORIES = 100
@@ -62,7 +66,7 @@ describe('scoreRelationCandidates', () => {
     // current stays at [1, 0, 0]; candidate embedding [1, 4, 0] gives cosine ≈ 0.24, which
     // combined with full time proximity scores well under the 0.35 threshold on its own — only
     // the shared entity should be able to push it over.
-    const sharedEntities = [{ key: 'person:donald-tusk', storyCount: 3 }]
+    const sharedEntities = [{ key: 'person:donald-tusk', storyCount: 3, salience: 0 }]
     const currentWithEntities = { ...CURRENT, entities: sharedEntities }
     const weakEmbeddingButSharedEntity = candidate({
       storyId: 'shared-entity',
@@ -196,10 +200,10 @@ describe('scoreRelationCandidates', () => {
   it('scores a small entity set fully contained in a much larger one highly, unlike Jaccard', () => {
     // Weak embedding match on its own (cosine ≈ 0.24, same setup as the tests above) — only the
     // containment score can push this over the threshold.
-    const small = Array.from({ length: 3 }, (_, i) => ({ key: `entity:${i}`, storyCount: 5 }))
+    const small = Array.from({ length: 3 }, (_, i) => ({ key: `entity:${i}`, storyCount: 5, salience: 0 }))
     const large = [
       ...small,
-      ...Array.from({ length: 37 }, (_, i) => ({ key: `other-entity:${i}`, storyCount: 5 })),
+      ...Array.from({ length: 37 }, (_, i) => ({ key: `other-entity:${i}`, storyCount: 5, salience: 0 })),
     ]
     const current = { ...CURRENT, embedding: [1, 4, 0], entities: small }
     const fullyContained = candidate({ storyId: 'fully-contained', embedding: [1, 4, 0], entities: large })
@@ -215,9 +219,9 @@ describe('scoreRelationCandidates', () => {
     const current = {
       ...CURRENT,
       entities: [
-        { key: 'person:rare', storyCount: 1 },
-        { key: 'place:czech-republic', storyCount: 99 },
-        { key: 'concept:government', storyCount: 99 },
+        { key: 'person:rare', storyCount: 1, salience: 0 },
+        { key: 'place:czech-republic', storyCount: 99, salience: 0 },
+        { key: 'concept:government', storyCount: 99, salience: 0 },
       ],
     }
     // Shares only the one rare entity (plus an unrelated entity of its own) — a raw entity-count
@@ -226,8 +230,8 @@ describe('scoreRelationCandidates', () => {
       storyId: 'shares-rare-only',
       embedding: [1, 4, 0],
       entities: [
-        { key: 'person:rare', storyCount: 1 },
-        { key: 'other:unrelated', storyCount: 50 },
+        { key: 'person:rare', storyCount: 1, salience: 0 },
+        { key: 'other:unrelated', storyCount: 50, salience: 0 },
       ],
     })
     // Shares both near-universal entities (plus an unrelated entity of its own) — a raw
@@ -236,9 +240,9 @@ describe('scoreRelationCandidates', () => {
       storyId: 'shares-universal-only',
       embedding: [1, 4, 0],
       entities: [
-        { key: 'place:czech-republic', storyCount: 99 },
-        { key: 'concept:government', storyCount: 99 },
-        { key: 'other:unrelated', storyCount: 50 },
+        { key: 'place:czech-republic', storyCount: 99, salience: 0 },
+        { key: 'concept:government', storyCount: 99, salience: 0 },
+        { key: 'other:unrelated', storyCount: 50, salience: 0 },
       ],
     })
 
@@ -247,5 +251,64 @@ describe('scoreRelationCandidates', () => {
     // IDF weighting inverts the raw-count ranking: the single rare, informative match clears the
     // threshold; matching twice as many near-universal, uninformative entities does not.
     expect(result.map((c) => c.storyId)).toEqual(['shares-rare-only'])
+  })
+
+  // Ticket 44 / ADR 0036: entityWeight scales idfWeight by (1 + 0.5 * salience), so an entity
+  // central to the CURRENT Story's own coverage contributes more to containment than one mentioned
+  // only in passing, even at identical storyCount. `current-only` (storyCount 1, salience 0) is
+  // included in both scenarios purely to stop the shared entity's containment ratio saturating at
+  // 1 regardless of salience (a single shared entity with nothing else in `current` is always
+  // fully contained) — see storyRelationScoring.ts's weightedEntityContainment doc comment.
+  it("weighs a high-salience entity's containment contribution higher than a low-salience one with identical storyCount", () => {
+    const currentOnlyEntity = { key: 'current-only', storyCount: 1, salience: 0 }
+    // The candidate's own copy of the shared entity is fixed at salience 1 in both scenarios —
+    // only the CURRENT Story's own salience for its extracted entity is under test here.
+    const candidateSharingEntity = candidate({
+      // cosine ≈ 0.067 with CURRENT's [1, 0, 0] — too weak alone to clear the 0.35 threshold.
+      embedding: [1, 15, 0],
+      createdAt: hoursAgo(0),
+      eventTime: hoursAgo(0),
+      entities: [{ key: 'shared', storyCount: 3, salience: 1 }],
+    })
+
+    const highSalienceCurrent = {
+      ...CURRENT,
+      entities: [{ key: 'shared', storyCount: 3, salience: 1 }, currentOnlyEntity],
+    }
+    const lowSalienceCurrent = {
+      ...CURRENT,
+      entities: [{ key: 'shared', storyCount: 3, salience: 0 }, currentOnlyEntity],
+    }
+
+    const highSalienceResult = scoreRelationCandidates(
+      highSalienceCurrent,
+      [candidateSharingEntity],
+      TOTAL_STORIES,
+      NOW
+    )
+    const lowSalienceResult = scoreRelationCandidates(
+      lowSalienceCurrent,
+      [candidateSharingEntity],
+      TOTAL_STORIES,
+      NOW
+    )
+
+    // Only the high-salience Story's version of the shared entity clears the threshold; the
+    // identical-storyCount, low-salience version does not.
+    expect(highSalienceResult).toEqual([candidateSharingEntity])
+    expect(lowSalienceResult).toEqual([])
+  })
+
+  // Regression for a defect code review caught: pre-salience, the same entity key always carried
+  // identical weight on both sides (idfWeight depends only on the shared, global storyCount), so
+  // intersectionWeight could never exceed either side's total weight. StoryEntity.salience is
+  // per-(Story, Entity) — the same entity can be highly salient in `a`'s Story (weight boosted up
+  // to 1.5x) and barely mentioned in `b`'s (weight left at its unboosted idfWeight), which without
+  // an explicit clamp pushes the raw ratio to 1.5 for this exact setup.
+  it("clamps weightedEntityContainment at 1 even when the shared entity's salience differs between the two Stories", () => {
+    const highSalienceInA = [{ key: 'shared', storyCount: 3, salience: 1 }]
+    const lowSalienceInB = [{ key: 'shared', storyCount: 3, salience: 0 }]
+
+    expect(weightedEntityContainment(highSalienceInA, lowSalienceInB, TOTAL_STORIES)).toBe(1)
   })
 })

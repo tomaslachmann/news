@@ -18,6 +18,10 @@ export function eventTimeOrFallback(story: { eventTime: Date | null; createdAt: 
 // reaction days later). Own constant, not a reuse — see ticket 35.
 export const RELATION_CANDIDATE_WINDOW_HOURS = 24 * 14
 
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n))
+}
+
 /** Linear decay to zero at the edge of the window — not storyMatching.ts's exponential
  *  half-life, which is tuned for an hours-scale window and wouldn't transfer meaningfully to one
  *  measured in weeks. Clamped to [0, 1]: zero for anything beyond the window, and — since
@@ -26,7 +30,7 @@ export const RELATION_CANDIDATE_WINDOW_HOURS = 24 * 14
  *  at 1 rather than let a bad future-dated timestamp inflate proximity, and the overall score,
  *  past what a same-instant candidate would score. */
 function timeProximity(ageHours: number): number {
-  return Math.min(1, Math.max(0, 1 - ageHours / RELATION_CANDIDATE_WINDOW_HOURS))
+  return clamp01(1 - ageHours / RELATION_CANDIDATE_WINDOW_HOURS)
 }
 
 /** ln((totalStories+1)/(storyCount+1)) — an entity attached to nearly every Story (e.g. "Czech
@@ -37,14 +41,42 @@ function idfWeight(storyCount: number, totalStories: number): number {
   return Math.log((totalStories + 1) / (storyCount + 1))
 }
 
+// ADR 0036: bounded multiplicative adjustment on top of IDF, not a replacement for it — IDF stays
+// the primary cross-story discriminative signal (a near-universal entity should weight close to
+// zero regardless of how salient it was to this one Story), while salience can at most 1.5x an
+// entity's weight, never overwhelm rarity or invert the ranking IDF alone already produces.
+// salience = 0 (an entity found by ticket 34's pre-salience extraction paths, or genuinely
+// mentioned only once) reduces to the pre-ticket-44 idfWeight-only formula exactly.
+const SALIENCE_WEIGHT_FACTOR = 0.5
+
+/** `idfWeight` scaled by how central this entity was to *this* Story's own coverage (ticket 44,
+ *  ADR 0036) — `StoryEntity.salience` is a fraction of source-text mentions and so is always
+ *  already within [0, 1] by construction (entityExtractionPass.ts), but clamped here defensively
+ *  since this function has no way to enforce that invariant on its caller's behalf. */
+function entityWeight(e: EntityForScoring, totalStories: number): number {
+  return idfWeight(e.storyCount, totalStories) * (1 + SALIENCE_WEIGHT_FACTOR * clamp01(e.salience))
+}
+
 /** IDF-weighted containment — Σ w(A∩B) / min(Σw(A), Σw(B)) — replacing plain Jaccard for entity
  *  overlap (docs/audit.md P1-9): Jaccard penalizes exactly the size asymmetry this project's two
  *  extraction paths produce (Ingestion: 2-5 entities from headlines alone; human-seeded: 30-50
  *  from full Coverage text) — 3 entities fully contained in 40 score 0.075 under Jaccard, despite
  *  perfect containment, and stays lost under the 0.35 threshold. Containment doesn't have that
  *  problem, and the IDF weighting on top keeps a handful of near-universal entities from
- *  dominating the signal the way an unweighted overlap measure would. */
-function weightedEntityContainment(
+ *  dominating the signal the way an unweighted overlap measure would.
+ *
+ *  Clamped to [0, 1] (ticket 44, ADR 0036): `intersectionWeight` sums each shared key's weight as
+ *  computed from `a`'s own `EntityForScoring` copy, not `b`'s. Before salience, that was harmless —
+ *  `entityWeight` depended only on the shared, global `Entity.storyCount`, so a and b's copies of
+ *  the same key always carried identical weight, guaranteeing `intersectionWeight <=
+ *  min(aWeight, bWeight)`. `StoryEntity.salience` is per-(Story, Entity): the same entity can be
+ *  highly salient in `a`'s Story and barely mentioned in `b`'s, so `intersectionWeight` (computed
+ *  from `a`'s higher weight) can now exceed `bWeight` when `bWeight` is the binding denominator —
+ *  without this clamp the ratio could exceed 1 and inflate `scoreRelationCandidates`'s weighted sum
+ *  past what its other three, genuinely [0,1]-bounded signals produce. */
+// Exported for direct unit testing (ticket 44's own testing decision) — no other production
+// consumer besides scoreRelationCandidates below.
+export function weightedEntityContainment(
   a: EntityForScoring[],
   b: EntityForScoring[],
   totalStories: number
@@ -54,14 +86,14 @@ function weightedEntityContainment(
   let intersectionWeight = 0
   let aWeight = 0
   for (const e of a) {
-    const w = idfWeight(e.storyCount, totalStories)
+    const w = entityWeight(e, totalStories)
     aWeight += w
     if (bKeys.has(e.key)) intersectionWeight += w
   }
   let bWeight = 0
-  for (const e of b) bWeight += idfWeight(e.storyCount, totalStories)
+  for (const e of b) bWeight += entityWeight(e, totalStories)
   const denom = Math.min(aWeight, bWeight)
-  return denom === 0 ? 0 : intersectionWeight / denom
+  return denom === 0 ? 0 : clamp01(intersectionWeight / denom)
 }
 
 function jaccard(a: Set<string>, b: Set<string>): number {

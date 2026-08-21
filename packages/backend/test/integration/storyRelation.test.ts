@@ -85,7 +85,7 @@ describe('StoryRelation repository against a real Postgres instance', () => {
     expect(ids).not.toContain(newer.storyId)
     expect(ids).toContain(older.storyId)
     const found = results.find((r) => r.storyId === older.storyId)
-    expect(found?.entities).toEqual([{ key: 'country:story-relation-test', storyCount: 1 }])
+    expect(found?.entities).toEqual([{ key: 'country:story-relation-test', storyCount: 1, salience: 1 }])
     expect(found?.entityRelations).toEqual([])
     expect(found?.anchorHeadline).toBe('Older')
   })

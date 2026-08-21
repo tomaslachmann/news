@@ -93,7 +93,7 @@ describe('entityAlias repository against a real Postgres instance', () => {
       await mergeEntities(survivorId, mergedAwayId, ADMIN_ID)
 
       const result = await findStoryEntitiesForScoring(analysis.storyId)
-      expect(result.entities).toEqual([{ key: 'country:entity-alias-m1-usa', storyCount: 2 }])
+      expect(result.entities).toEqual([{ key: 'country:entity-alias-m1-usa', storyCount: 2, salience: 1 }])
     })
 
     it('deletes the merged-away row instead of repointing when a Story already has both entities attached', async () => {
@@ -120,7 +120,7 @@ describe('entityAlias repository against a real Postgres instance', () => {
       await mergeEntities(survivorId, mergedAwayId, ADMIN_ID)
 
       const result = await findStoryEntitiesForScoring(storyId)
-      expect(result.entities).toEqual([{ key: 'country:entity-alias-m2-usa', storyCount: 1 }])
+      expect(result.entities).toEqual([{ key: 'country:entity-alias-m2-usa', storyCount: 1, salience: 1 }])
       expect((await findEntityById(survivorId))?.storyCount).toBe(1)
     })
 
