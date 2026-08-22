@@ -7,7 +7,7 @@ latest Articles.
 
 **Blocked by:** ticket 60.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Add ADR 0037 documenting read-model repositories for composed/aggregate read surfaces, and
       amend ADR 0010 with a short note pointing to that ADR.
