@@ -21,7 +21,6 @@ import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
 import { articlePath } from '@/lib/analysisRoutes'
 import NotFoundPage from './NotFoundPage'
 import { ErrorState } from './AnalysisPage'
-import { WordingDemoSection, ValueVariantsDemoSection } from './AnalysisPage.devDemos'
 import './AnalysisPage.css'
 
 /** Ticket 38 / ADR 0030 supplies `analysis.sourceOverlap`. Withheld below
@@ -245,9 +244,6 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
             </div>
             <CompareList items={dimensions.contradiction} coverageCount={coverageCount} markConflict />
           </section>
-
-          {import.meta.env.DEV && <ValueVariantsDemoSection />}
-          {import.meta.env.DEV && <WordingDemoSection />}
 
           {dimensions.uniqueReporting.length > 0 && (
             <section>

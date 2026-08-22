@@ -1,10 +1,11 @@
 /** The ten-segment `.gauge` bar (`ds/components.css`) — shared rendering for every gauge on the
  *  site. Domain-specific bits (what "bad" means, the aria-label wording) are each call site's own
- *  decision: AnalysisPage's real Source Overlap gauge (ticket 38 / ADR 0030) derives `bad` from
- *  the backend-interpreted tier, never re-deriving the 85/65 boundaries itself; HomePage's sample
- *  sections are a literal port of the reference mockup's own fabricated numbers and keep its
- *  hardcoded threshold — there is no real tier to read there. Only `.gauge i.is-on.is-bad` gets a
- *  distinct colour; there's no separate "mid" segment treatment. */
+ *  decision, never re-derived here: `ArticlePage`'s Source Overlap gauge (ticket 38 / ADR 0030)
+ *  and `HomePage`'s own two gauges (`StoryByline`'s per-Article overlap, `ConflictsSection`'s
+ *  contradiction overlap) all derive `bad`/`pct` from real backend-interpreted data (tickets
+ *  58–61's homepage-real-data work) — none of them read from fabricated sample numbers any more.
+ *  Only `.gauge i.is-on.is-bad` gets a distinct colour; there's no separate "mid" segment
+ *  treatment. */
 export function Gauge({
   pct,
   bad,
