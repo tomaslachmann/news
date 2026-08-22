@@ -7,7 +7,7 @@ structure locally.
 
 **Blocked by:** ticket 62.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Add a frontend fetch wrapper and TanStack Query hook for `GET /api/homepage/articles`.
 - [x] Stop `HomePage.tsx` from calling `useArticlesList` for the main homepage Article surface.
