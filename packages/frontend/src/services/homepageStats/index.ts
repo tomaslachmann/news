@@ -1,4 +1,6 @@
 import type {
+  HomepageArticleItem,
+  HomepageArticles,
   HomepageContradictionItem,
   HomepageEntityStatItem,
   HomepageMinuteItem,
@@ -7,6 +9,8 @@ import type {
 } from '@news-triangulator/shared'
 
 export type {
+  HomepageArticleItem,
+  HomepageArticles,
   HomepageContradictionItem,
   HomepageEntityStatItem,
   HomepageMinuteItem,
@@ -17,6 +21,14 @@ export type {
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as { error?: string }
   throw new Error(body.error ?? fallback)
+}
+
+export async function fetchHomepageArticles(): Promise<HomepageArticles> {
+  const res = await fetch('/api/homepage/articles', { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst články')
+
+  return res.json() as Promise<HomepageArticles>
 }
 
 export async function fetchHomepageEntityStats(): Promise<HomepageEntityStatItem[]> {
