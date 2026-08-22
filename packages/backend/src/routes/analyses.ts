@@ -147,4 +147,12 @@ export function registerAnalysesRoutes(fastify: FastifyInstance): void {
     const response = await analysisService.getAnalysisDetail(request.params.id, isAdmin)
     return reply.code(200).send(response)
   })
+
+  // POST /api/analyses/:id/view — records one anonymous "read" event (ticket 61), public, no
+  // auth, no body. A no-op for a missing/non-complete id, same "never leak existence via this
+  // response" posture as GET /api/analyses/:id — see recordAnalysisView's own docstring.
+  fastify.post<{ Params: { id: string } }>('/api/analyses/:id/view', async (request, reply) => {
+    await analysisService.recordAnalysisView(request.params.id)
+    return reply.code(204).send()
+  })
 }

@@ -2,10 +2,17 @@ import type {
   HomepageContradictionItem,
   HomepageEntityStatItem,
   HomepageMinuteItem,
+  HomepageMostReadItem,
   HomepageSummaryStats,
 } from '@news-triangulator/shared'
 
-export type { HomepageContradictionItem, HomepageEntityStatItem, HomepageMinuteItem, HomepageSummaryStats }
+export type {
+  HomepageContradictionItem,
+  HomepageEntityStatItem,
+  HomepageMinuteItem,
+  HomepageMostReadItem,
+  HomepageSummaryStats,
+}
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as { error?: string }
@@ -42,4 +49,12 @@ export async function fetchHomepageContradictions(): Promise<HomepageContradicti
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst rozpory')
 
   return res.json() as Promise<HomepageContradictionItem[]>
+}
+
+export async function fetchHomepageMostRead(): Promise<HomepageMostReadItem[]> {
+  const res = await fetch('/api/homepage/most-read', { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst nejčtenější')
+
+  return res.json() as Promise<HomepageMostReadItem[]>
 }

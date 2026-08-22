@@ -124,6 +124,18 @@ export async function fetchAnalysis(analysisId: string): Promise<AnalysisDetail>
   return res.json() as Promise<AnalysisDetail>
 }
 
+/** Fires the homepage "Nejčtenější" readership beacon (ticket 61) — best-effort, fire-and-forget:
+ *  a failed/blocked request must never disrupt reading the Article, so this never throws. Called
+ *  once per `ArticlePage` mount of a real, COMPLETE Article — see its own effect for the guard
+ *  against double-firing. */
+export async function recordAnalysisView(analysisId: string): Promise<void> {
+  try {
+    await fetch(`/api/analyses/${analysisId}/view`, { method: 'POST', credentials: 'include' })
+  } catch {
+    // Best-effort only — see docstring above.
+  }
+}
+
 export async function fetchAnalyses(cursor?: string): Promise<Page<AnalysisListItem>> {
   const params = new URLSearchParams(cursor ? { cursor } : undefined)
   const suffix = params.size > 0 ? `?${params.toString()}` : ''

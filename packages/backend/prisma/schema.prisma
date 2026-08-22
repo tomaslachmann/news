@@ -457,10 +457,30 @@ model Analysis {
   coverages        Coverage[]
   synthesisResult  SynthesisResult?
   pendingAdditions PendingAddition[]
+  views            AnalysisView[]
 
   /// The reader listing (status COMPLETE) and the Draft review queue (status DRAFT) both filter
   /// by status and sort by createdAt desc.
   @@index([status, createdAt])
+}
+
+/// One anonymous "read" event for the homepage "Nejčtenější" rail (ticket 61) — a raw page-load
+/// count, not a distinct-reader count: recorded with nothing that could identify who read it (no
+/// session id, no IP, no user-agent), so there's no reader identity here to dedupe against or leak.
+/// One row per successful `ArticlePage` render of a COMPLETE Analysis (`POST
+/// /api/analyses/:id/view`) -- never for the Admin-only `/analysis/:id` monitoring view, which
+/// isn't a genuine reading event. Computed live (COUNT ... GROUP BY over a time window), not
+/// materialized/snapshotted like `HomepageEntityStatSnapshot` -- this table is already small and
+/// purpose-built (unlike entity stats' expensive cross-table joins), so a live query is enough.
+model AnalysisView {
+  id         String   @id @default(cuid())
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  /// Serves the "most-read in the last N hours" query directly (WHERE createdAt >= ... GROUP BY
+  /// analysisId) -- covering, so the groupBy never touches the heap.
+  @@index([createdAt, analysisId])
 }
 
 model Coverage {

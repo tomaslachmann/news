@@ -67,6 +67,13 @@ export interface HomepageContradictionAnalysisRow {
   dimensions: AnalysisDimensions | null
 }
 
+export interface HomepageMostReadRow {
+  id: string
+  seedHeadline: string
+  headline: string | null
+  viewCount: number
+}
+
 function numberFromBigInt(value: bigint | number | null): number {
   if (value === null) return 0
   return typeof value === 'bigint' ? Number(value) : value
@@ -175,6 +182,56 @@ export async function findHomepageContradictionAnalysisRows(input: {
     sourceOverlapPercentage: row.synthesisResult?.sourceOverlapPercentage ?? null,
     dimensions: (row.synthesisResult?.dimensions as AnalysisDimensions | null) ?? null,
   }))
+}
+
+/** Ticket 61's homepage "Nejčtenější" rail — ranked by raw `AnalysisView` count in `windowStart..
+ *  now`, computed live (a `groupBy` + a follow-up `findMany`, no snapshot/job) since this table is
+ *  small and purpose-built, unlike entity stats' expensive cross-table joins (see
+ *  `AnalysisView`'s own schema comment). Two queries rather than one join: Prisma's `groupBy`
+ *  can't select non-aggregated columns from a different table, so the winning `analysisId`s are
+ *  found first, then their display fields are fetched by id. Re-checks `status: 'COMPLETE'` on
+ *  the second query — defensive only, since only a COMPLETE Analysis is ever viewed in the first
+ *  place (`recordAnalysisView`), but an Analysis is immutable-once-COMPLETE in this codebase so
+ *  this can't actually happen; kept anyway so a freak state never lets a non-COMPLETE Analysis
+ *  leak onto the public homepage this way. */
+export async function findHomepageMostReadRows(input: {
+  windowStart: Date
+  limit: number
+}): Promise<HomepageMostReadRow[]> {
+  const grouped = await prisma.analysisView.groupBy({
+    by: ['analysisId'],
+    where: { createdAt: { gte: input.windowStart } },
+    _count: { analysisId: true },
+    // Secondary tiebreak on most-recent view time — count-only ties are easy on a low-traffic
+    // instance, and an unordered tie means which ones land inside take(limit), and in what order,
+    // isn't stable across identical back-to-back requests. Same "add a deterministic secondary
+    // sort" convention findHomepageMinuteRows/findHomepageContradictionAnalysisRows above already
+    // use (their own `{ id: 'desc' }` tiebreak) — this one is `_max.createdAt` instead of `id`
+    // since that's what a `groupBy` aggregate actually has available to break ties on.
+    _max: { createdAt: true },
+    orderBy: [{ _count: { analysisId: 'desc' } }, { _max: { createdAt: 'desc' } }],
+    take: input.limit,
+  })
+  if (grouped.length === 0) return []
+
+  const analyses = await prisma.analysis.findMany({
+    where: { id: { in: grouped.map((g) => g.analysisId) }, status: 'COMPLETE' },
+    select: { id: true, seedHeadline: true, synthesisResult: { select: { headline: true } } },
+  })
+  const analysisById = new Map(analyses.map((a) => [a.id, a]))
+
+  return grouped
+    .map((g) => {
+      const analysis = analysisById.get(g.analysisId)
+      if (!analysis) return null
+      return {
+        id: analysis.id,
+        seedHeadline: analysis.seedHeadline,
+        headline: analysis.synthesisResult?.headline ?? null,
+        viewCount: g._count.analysisId,
+      }
+    })
+    .filter((row): row is HomepageMostReadRow => row !== null)
 }
 
 export async function computeHomepageEntityStats({

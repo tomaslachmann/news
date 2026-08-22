@@ -3,6 +3,7 @@ import {
   fetchHomepageContradictions,
   fetchHomepageEntityStats,
   fetchHomepageMinuteFeed,
+  fetchHomepageMostRead,
   fetchHomepageSummaryStats,
 } from './index'
 
@@ -32,5 +33,12 @@ export function useHomepageContradictions() {
   return useQuery({
     queryKey: ['homepageStats', 'contradictions'],
     queryFn: fetchHomepageContradictions,
+  })
+}
+
+export function useHomepageMostRead() {
+  return useQuery({
+    queryKey: ['homepageStats', 'mostRead'],
+    queryFn: fetchHomepageMostRead,
   })
 }

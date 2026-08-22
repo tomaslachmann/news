@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Gauge } from '@/components/Gauge'
@@ -5,6 +6,7 @@ import { NarrativeArticle } from '@/components/NarrativeArticle'
 import { SumBox, CompareList } from '@/components/AnalysisDimensionSections'
 import {
   MIN_SOURCES_FOR_GAUGE,
+  recordAnalysisView,
   type AnalysisDetail,
   type AnalysisDimensions,
   type CoverageInfo,
@@ -318,10 +320,29 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
  *  `GET /api/analyses/:id` enforces the COMPLETE-only bound server-side too for a non-Admin caller
  *  (see `getAnalysisDetail`'s own docstring) — this page's status check is a rendering choice on
  *  top of that, not the only thing standing between a public reader and an in-progress Analysis's
- *  internals. */
+ *  internals. Also fires the homepage "Nejčtenější" readership beacon (ticket 61) once a real
+ *  Article is confirmed renderable — see the effect below. */
 export default function ArticlePage() {
   const { id } = useParams<{ id: string }>()
   const { data: analysis, isLoading, isError } = useAnalysisDetail(id)
+  const recordedViewForId = useRef<string | undefined>(undefined)
+
+  // Fires the readership beacon (ticket 61) exactly once per distinct `id`, and only once the
+  // fetch has confirmed this is a real, renderable, COMPLETE Article — never during loading, never
+  // for a 404/not-yet-published/error outcome. Guards by *which id* was last recorded, not a plain
+  // boolean: `/article/:id` is a single route (App.tsx), so React Router reuses this same
+  // component instance across an in-place navigation between two articles (e.g. clicking a
+  // thread/related-event Link below) rather than unmounting/remounting it — a plain "have I ever
+  // recorded a view this mount" boolean would permanently suppress the beacon for every article
+  // after the first one visited that way. Comparing against the id instead still collapses React
+  // 18 StrictMode's dev-only double-invoke and any unrelated refetch of the same Article into one
+  // beacon, while still firing again for a genuinely different Article reached without a remount.
+  useEffect(() => {
+    if (!id || !analysis || analysis.status !== 'complete' || !analysis.synthesisResult) return
+    if (recordedViewForId.current === id) return
+    recordedViewForId.current = id
+    void recordAnalysisView(id)
+  }, [id, analysis])
 
   if (isLoading) {
     return (

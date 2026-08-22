@@ -2,12 +2,14 @@ import type {
   HomepageContradictionItem,
   HomepageEntityStatItem,
   HomepageMinuteItem,
+  HomepageMostReadItem,
   HomepageSummaryStats,
 } from '@news-triangulator/shared'
 import type {
   HomepageContradictionAnalysisRow,
   HomepageEntityStatStoredRow,
   HomepageMinuteRow,
+  HomepageMostReadRow,
   HomepageSummaryStatsRow,
 } from '../repositories/homepageStats.js'
 import { resolveDisplayTitle } from './analysis.js'
@@ -46,6 +48,14 @@ export function toHomepageMinuteItem(row: HomepageMinuteRow): HomepageMinuteItem
     createdAt: row.createdAt.toISOString(),
     sourceCount: row.sourceCount,
     hasConflict: (row.dimensions?.contradiction.length ?? 0) > 0,
+  }
+}
+
+export function toHomepageMostReadItem(row: HomepageMostReadRow): HomepageMostReadItem {
+  return {
+    analysisId: row.id,
+    title: resolveDisplayTitle(row.headline, row.seedHeadline),
+    viewCount: row.viewCount,
   }
 }
 
