@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Gauge } from '@/components/Gauge'
 import type { AnalysisListSummary } from '@/services/analyses'
-import { useArticlesList } from '@/services/analyses/hooks'
+import type { HomepageArticleItem } from '@/services/homepageStats'
 import {
+  useHomepageArticles,
   useHomepageContradictions,
   useHomepageEntityStats,
   useHomepageMinuteFeed,
@@ -18,8 +18,6 @@ import {
   formatEntityTrend,
   getEntityDotSize,
   getStorySignal,
-  splitHomePageStories,
-  type HomePageStory,
 } from './homePageViewModel'
 import './HomePage.css'
 
@@ -31,7 +29,7 @@ const TIME = new Intl.DateTimeFormat('cs-CZ', {
   timeZone: 'Europe/Prague',
 })
 
-function StoryByline({ story, big }: { story: HomePageStory; big?: boolean }) {
+function StoryByline({ story, big }: { story: HomepageArticleItem; big?: boolean }) {
   const overlap = story.summary.sourceOverlap
   const signal = getStorySignal(story.summary)
 
@@ -71,7 +69,7 @@ function StoryFigure({
   thumb,
   caption,
 }: {
-  story: HomePageStory
+  story: HomepageArticleItem
   thumb?: boolean
   caption?: boolean
 }) {
@@ -96,15 +94,18 @@ function StoryFigure({
   )
 }
 
-/** Main-column section header ("Ve středu pozornosti", "Další zprávy dne") — e.css's `.sec`. */
+/** Main-column section header ("Ve středu pozornosti", "Další zprávy dne") — e.css's `.sec`.
+ *  `linkText` always points at `/history` (ticket 61's own demo-data cleanup): the reference
+ *  mockup's own trailing link was a `#`-placeholder, and `/history` — the reader-facing "Články"
+ *  archive — is the one real destination that already exists for "see more than what's on this
+ *  homepage." Not filtered to "today only," since HistoryPage has no date filter; the label still
+ *  reads honestly as "go see more," not as a promise of a same-day-only view. */
 function Sec({ title, linkText }: { title: string; linkText: string }) {
   return (
     <div className="sec">
       <h2>{title}</h2>
       <span className="rule" aria-hidden="true" />
-      <a href="#" onClick={(e) => e.preventDefault()}>
-        {linkText}
-      </a>
+      <Link to="/history">{linkText}</Link>
     </div>
   )
 }
@@ -139,7 +140,7 @@ function joinNames(names: string[], totalCount?: number): string {
   return totalCount && totalCount > names.length ? `${shown} a další` : shown
 }
 
-function LeadArticle({ story }: { story: HomePageStory }) {
+function LeadArticle({ story }: { story: HomepageArticleItem }) {
   return (
     <article className="lead">
       <span className="kicker">analýza {story.coverageCount} zdrojů</span>
@@ -174,7 +175,7 @@ function LeadArticle({ story }: { story: HomePageStory }) {
   )
 }
 
-function TwoCards({ stories }: { stories: HomePageStory[] }) {
+function TwoCards({ stories }: { stories: HomepageArticleItem[] }) {
   return (
     <div className="cards">
       {stories.map((story) => (
@@ -194,7 +195,7 @@ function TwoCards({ stories }: { stories: HomePageStory[] }) {
   )
 }
 
-function StoryListSection({ stories }: { stories: HomePageStory[] }) {
+function StoryListSection({ stories }: { stories: HomepageArticleItem[] }) {
   return (
     <section className="storylist">
       {stories.map((story) => (
@@ -224,6 +225,9 @@ function StoryListSection({ stories }: { stories: HomePageStory[] }) {
   )
 }
 
+/** "Entity dne" rail (ticket 59). `přehled →` points at `/search` — the reader-facing entity
+ *  search page (ticket 43/`SearchPage.tsx`) is the one real "browse entities" destination that
+ *  already exists; not a dedicated "today's entities" view, since no such page exists. */
 function EntsPanel() {
   const { data: entities = [], isLoading, isError } = useHomepageEntityStats()
   const mentions = entities.map((e) => e.recentEventCount)
@@ -236,9 +240,7 @@ function EntsPanel() {
         noBorder
         trailing={
           <span>
-            <a href="#" onClick={(e) => e.preventDefault()}>
-              přehled →
-            </a>
+            <Link to="/search">přehled →</Link>
           </span>
         }
       />
@@ -448,12 +450,7 @@ function DayStatsBar() {
 }
 
 export default function HomePage() {
-  const { data, isLoading, isError } = useArticlesList()
-  const sections = useMemo(() => {
-    const items = data?.pages.flatMap((page) => page.items) ?? []
-    return splitHomePageStories(items)
-  }, [data])
-  const { lead, twoCards, listStories } = sections
+  const { data: articles, isLoading, isError } = useHomepageArticles()
 
   return (
     <>
@@ -468,21 +465,21 @@ export default function HomePage() {
               <div className="error" style={{ marginTop: 'var(--sp-5)' }}>
                 <p className="error__p">Nepodařilo se načíst články.</p>
               </div>
-            ) : lead ? (
+            ) : articles?.lead ? (
               <>
-                <LeadArticle story={lead} />
+                <LeadArticle story={articles.lead} />
 
-                {twoCards.length > 0 && (
+                {articles.spotlight.length > 0 && (
                   <>
                     <Sec title="Ve středu pozornosti" linkText="Vše z dneška" />
-                    <TwoCards stories={twoCards} />
+                    <TwoCards stories={articles.spotlight} />
                   </>
                 )}
 
-                {listStories.length > 0 && (
+                {articles.latest.length > 0 && (
                   <>
                     <Sec title="Další zprávy dne" linkText="Archiv" />
-                    <StoryListSection stories={listStories} />
+                    <StoryListSection stories={articles.latest} />
                   </>
                 )}
               </>

@@ -245,6 +245,22 @@ export interface AnalysisListSummary {
   leadImage?: NarrativeLeadImage
 }
 
+/** An `AnalysisListItem` narrowed to the invariant the homepage Article read model guarantees
+ *  (ticket 62 / ADR 0037): only ever a COMPLETE Analysis with a SynthesisResult, so `status` and
+ *  `summary` are never the wider/absent cases `AnalysisListItem` allows for other, mixed-status
+ *  list surfaces (HistoryPage, the Ingestion queue). */
+export type HomepageArticleItem = AnalysisListItem & { status: 'complete'; summary: AnalysisListSummary }
+
+/** `GET /api/homepage/articles` (ticket 62) — the backend-owned slotting for the homepage's main
+ *  Article column, so the frontend never has to decide "index 0 is the lead" itself. `lead` is
+ *  `null`, and `spotlight`/`latest` are empty, exactly when there are no COMPLETE Articles yet —
+ *  never a partially-filled shape a consumer has to guess about. */
+export interface HomepageArticles {
+  lead: HomepageArticleItem | null
+  spotlight: HomepageArticleItem[]
+  latest: HomepageArticleItem[]
+}
+
 export interface PendingAdditionItem {
   id: string
   analysisId: string

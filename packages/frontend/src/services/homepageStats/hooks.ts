@@ -1,11 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
 import {
+  fetchHomepageArticles,
   fetchHomepageContradictions,
   fetchHomepageEntityStats,
   fetchHomepageMinuteFeed,
   fetchHomepageMostRead,
   fetchHomepageSummaryStats,
 } from './index'
+
+/** Ticket 63: not polled — unlike `useHomepageMinuteFeed`'s `refetchInterval`, the main Article
+ *  column doesn't need to feel "live"; `Minuta` stays the one homepage rail that does. */
+export function useHomepageArticles() {
+  return useQuery({
+    queryKey: ['homepageStats', 'articles'],
+    queryFn: fetchHomepageArticles,
+  })
+}
 
 export function useHomepageEntityStats() {
   return useQuery({

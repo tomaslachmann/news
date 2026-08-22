@@ -7,26 +7,50 @@ latest Articles.
 
 **Blocked by:** ticket 60.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Add ADR 0037 documenting read-model repositories for composed/aggregate read surfaces, and
+- [x] Add ADR 0037 documenting read-model repositories for composed/aggregate read surfaces, and
       amend ADR 0010 with a short note pointing to that ADR.
-- [ ] Add shared types reusing the existing typed article shape:
+- [x] Add shared types reusing the existing typed article shape:
       `HomepageArticleItem = AnalysisListItem & { status: 'complete'; summary: AnalysisListSummary }`
       and `HomepageArticles = { lead: HomepageArticleItem | null; spotlight: HomepageArticleItem[];
       latest: HomepageArticleItem[] }`.
-- [ ] Add public `GET /api/homepage/articles` with no Admin/auth middleware.
-- [ ] Implement dedicated backend modules for this surface:
+- [x] Add public `GET /api/homepage/articles` with no Admin/auth middleware.
+- [x] Implement dedicated backend modules for this surface:
       `repositories/homepageArticles.ts`, `mappers/homepageArticles.ts`, and
       `services/homepageArticlesService.ts`.
-- [ ] Include only reader-visible `COMPLETE` Analyses that have a `SynthesisResult`.
-- [ ] Order deterministically by `Analysis.createdAt DESC, Analysis.id DESC`.
-- [ ] Slot the ordered rows as `lead` (first item), `spotlight` (next two), and `latest` (next
+- [x] Include only reader-visible `COMPLETE` Analyses that have a `SynthesisResult`.
+- [x] Order deterministically by `Analysis.createdAt DESC, Analysis.id DESC`.
+- [x] Slot the ordered rows as `lead` (first item), `spotlight` (next two), and `latest` (next
       eight).
-- [ ] Reuse the existing display-title and `AnalysisListSummary` mapping semantics; do not invent
+- [x] Reuse the existing display-title and `AnalysisListSummary` mapping semantics; do not invent
       a new homepage teaser, image, entity, or outlet DTO.
-- [ ] Add backend tests at the existing project seams: route/service tests, and repository coverage
+- [x] Add backend tests at the existing project seams: route/service tests, and repository coverage
       only if the query becomes complex enough to warrant DB-level verification.
+
+## Implementation notes (agent, 2026-08-22)
+
+- Ticket 60's real merge status wasn't reflected in its own Status field (merged via GitHub PR #86
+  without going through `ticket-done.mjs`) — corrected both that and ticket 61's Status directly on
+  `main` before starting this ticket, so `ticket-start.mjs`'s blockedBy check would pass honestly
+  rather than being bypassed.
+- No route-level test file exists anywhere in this codebase (routes are thin — validate, call one
+  service, respond, per ADR 0010) — tests landed at the service (`homepageArticlesService.test.ts`)
+  and mapper (`homepageArticles.test.ts`) seams, matching every other `/api/homepage/*` route's own
+  test coverage. No repository-level test: the query is no more complex than `findAnalysesPage`'s
+  own (no dedicated test either), so DB-level verification wasn't warranted per the ticket's own
+  hedge.
+- `toHomepageArticleItem` throws (doesn't silently degrade) if a row somehow isn't actually
+  COMPLETE-with-summary — the repository query is the real guarantee, this is a loud defensive
+  check at the one call site that assumes it holds.
+- Smoke-tested live against the real dev DB: `GET /api/homepage/articles` correctly slots the
+  newest Article as `lead`, the next two as `spotlight`, and returns however many `latest` rows
+  actually exist (4, not padded to 8) given the dev DB currently has 7 COMPLETE Articles total.
+- Self-review (`/code-review`) found that `findHomepageArticleRows` had copy-pasted
+  `findAnalysesPage`'s entire Prisma `include` and row-projection verbatim instead of sharing it —
+  a real risk of the two silently desyncing on what an `AnalysisListRow` selects. Fixed by
+  extracting `ANALYSIS_LIST_ROW_INCLUDE`/`toAnalysisListRow` into `repositories/analysis.ts` and
+  having both `findAnalysesPage` and `findHomepageArticleRows` call them.
 
 ## Notes
 
