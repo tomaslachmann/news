@@ -187,61 +187,57 @@ export interface AnalysisListRow {
   entityNames: string[]
 }
 
-/** Fetches `limit + 1` rows (the caller peels off the extra one to know whether a next page
- *  exists — see `pagination.ts`'s `splitPage`). Admins see every status; everyone else only
- *  COMPLETE. */
-export async function findAnalysesPage(
-  includeAllStatuses: boolean,
-  cursor: Cursor | undefined,
-  limit: number
-): Promise<AnalysisListRow[]> {
-  const rows = await prisma.analysis.findMany({
-    where: {
-      ...(includeAllStatuses ? {} : { status: 'COMPLETE' }),
-      ...cursorWhere(cursor),
+/** The `include` shape every `AnalysisListRow` consumer needs — shared so `findAnalysesPage` and
+ *  `homepageArticles.ts`'s `findHomepageArticleRows` (ticket 62 / ADR 0037) can't silently drift
+ *  apart on what a "list row" actually selects. A change here (a new field, a different
+ *  OK-coverage filter, a different story-entities take/orderBy) changes both call sites at once,
+ *  which is exactly the point — the two features must not develop competing definitions of the
+ *  same conceptual row. */
+export const ANALYSIS_LIST_ROW_INCLUDE = {
+  _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },
+  coverages: {
+    where: { status: 'OK', excluded: false },
+    orderBy: { id: 'asc' },
+    select: {
+      status: true,
+      extractionResult: true,
+      source: { select: { name: true } },
     },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: limit + 1,
-    include: {
-      _count: { select: { coverages: { where: { status: 'OK', excluded: false } } } },
-      coverages: {
-        where: { status: 'OK', excluded: false },
-        orderBy: { id: 'asc' },
-        select: {
-          status: true,
-          extractionResult: true,
-          source: { select: { name: true } },
-        },
+  },
+  story: {
+    select: {
+      storyEntities: {
+        orderBy: [{ salience: 'desc' }, { entityId: 'asc' }],
+        take: 4,
+        select: { entity: { select: { canonicalName: true } } },
       },
-      story: {
+    },
+  },
+  synthesisResult: {
+    select: {
+      headline: true,
+      dimensions: true,
+      sourceOverlapPercentage: true,
+      narrativeImage: {
         select: {
-          storyEntities: {
-            orderBy: [{ salience: 'desc' }, { entityId: 'asc' }],
-            take: 4,
-            select: { entity: { select: { canonicalName: true } } },
-          },
-        },
-      },
-      synthesisResult: {
-        select: {
-          headline: true,
-          dimensions: true,
-          sourceOverlapPercentage: true,
-          narrativeImage: {
-            select: {
-              imageUrl: true,
-              thumbnailUrl: true,
-              author: true,
-              license: true,
-              sourceUrl: true,
-            },
-          },
+          imageUrl: true,
+          thumbnailUrl: true,
+          author: true,
+          license: true,
+          sourceUrl: true,
         },
       },
     },
-  })
+  },
+} satisfies Prisma.AnalysisInclude
 
-  return rows.map((r) => ({
+type AnalysisListRowSource = Prisma.AnalysisGetPayload<{ include: typeof ANALYSIS_LIST_ROW_INCLUDE }>
+
+/** Projects a raw Prisma row (queried with `ANALYSIS_LIST_ROW_INCLUDE`) into the shared
+ *  `AnalysisListRow` shape — the other half of the "don't duplicate the list-row query" pairing
+ *  above. */
+export function toAnalysisListRow(r: AnalysisListRowSource): AnalysisListRow {
+  return {
     id: r.id,
     seedHeadline: r.seedHeadline,
     headline: r.synthesisResult?.headline ?? null,
@@ -257,7 +253,28 @@ export async function findAnalysesPage(
     sourceOverlapPercentage: r.synthesisResult?.sourceOverlapPercentage ?? null,
     leadImage: r.synthesisResult?.narrativeImage ?? null,
     entityNames: r.story.storyEntities.map((storyEntity) => storyEntity.entity.canonicalName),
-  }))
+  }
+}
+
+/** Fetches `limit + 1` rows (the caller peels off the extra one to know whether a next page
+ *  exists — see `pagination.ts`'s `splitPage`). Admins see every status; everyone else only
+ *  COMPLETE. */
+export async function findAnalysesPage(
+  includeAllStatuses: boolean,
+  cursor: Cursor | undefined,
+  limit: number
+): Promise<AnalysisListRow[]> {
+  const rows = await prisma.analysis.findMany({
+    where: {
+      ...(includeAllStatuses ? {} : { status: 'COMPLETE' }),
+      ...cursorWhere(cursor),
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    include: ANALYSIS_LIST_ROW_INCLUDE,
+  })
+
+  return rows.map(toAnalysisListRow)
 }
 
 export interface DraftListRow {
