@@ -1,14 +1,19 @@
-/* ticket 39 — /analysis/:id, ported from ds/components.css §"DETAIL ZPRÁVY" (article.html). The
-   largest single screen in the ticket: the reference assumes richer structured data than our
-   synthesis actually produces in a few spots (a fixed 3-source quote comparison, per-source
-   numeric "value variants", entity extraction) — those ship as import.meta.env.DEV-guarded sample
-   sections with a TODO, same treatment the ticket already prescribes for .trend/.qa elsewhere.
-   Structural deviation from the reference, confirmed with the user: no Radix Tabs — one flowing
-   page (sumbox, prose narrative, contradiction detail, related, thread), matching both article.html
-   itself (which has no tabs at all) and CLAUDE.md's framing of the Narrative as a *presentation* of
-   the four dimensions, not a peer of them. The Cross-Source Narrative itself (.prose and its inline
-   entity/source/value citation styling) is its own component, NarrativeArticle.tsx/.css (ticket
-   48) — not styled in this file. */
+/* ticket 39 — originally /analysis/:id, ported from ds/components.css §"DETAIL ZPRÁVY"
+   (article.html); ticket 52 split the reader-facing render tree out to ArticlePage.tsx, which
+   still imports this file for its `.arthead`/`.byline`/`.sumbox`/`.compare`/`.threadband`/
+   `.artfoot`/`.cards` rules (AnalysisPage.tsx, the Admin-only monitoring view, keeps only its own
+   `.live-*`/`.source-row`/`.rail-stat` rules from this same file). The reference assumed richer
+   structured data than our synthesis produces in a few spots — a fixed 3-source quote comparison,
+   per-source numeric "value variants", entity extraction — the first two shipped as
+   import.meta.env.DEV-guarded sample sections and were removed outright by ticket 57 once neither
+   could be backed by real data without inventing a fake intermediary (see that ticket's own
+   Implementation notes); entity extraction shipped for real instead (tickets 43/47,
+   `EntityMentionsSection`). Structural deviation from the reference, confirmed with the user: no
+   Radix Tabs — one flowing page (sumbox, prose narrative, contradiction detail, related, thread),
+   matching both article.html itself (which has no tabs at all) and CLAUDE.md's framing of the
+   Narrative as a *presentation* of the four dimensions, not a peer of them. The Cross-Source
+   Narrative itself (.prose and its inline entity/source/value citation styling) is its own
+   component, NarrativeArticle.tsx/.css (ticket 48) — not styled in this file. */
 
 .crumbs {
   display: flex;
