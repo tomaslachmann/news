@@ -3,12 +3,14 @@ import type {
   HomepageContradictionItem,
   HomepageEntityStatItem,
   HomepageMinuteItem,
+  HomepageMostReadItem,
   HomepageSummaryStats,
 } from '@news-triangulator/shared'
 import {
   toHomepageContradictionItem,
   toHomepageEntityStatItem,
   toHomepageMinuteItem,
+  toHomepageMostReadItem,
   toHomepageSummaryStats,
 } from '../mappers/homepageStats.js'
 import * as homepageStatsRepo from '../repositories/homepageStats.js'
@@ -18,6 +20,8 @@ export const HOMEPAGE_ENTITY_STATS_LIMIT = 10
 export const HOMEPAGE_ENTITY_STATS_MAX_AGE_HOURS = 6
 export const HOMEPAGE_MINUTE_LIMIT = 9
 export const HOMEPAGE_CONTRADICTION_LIMIT = 4
+export const HOMEPAGE_MOST_READ_WINDOW_HOURS = 24
+export const HOMEPAGE_MOST_READ_LIMIT = 5
 
 const HOUR_MS = 60 * 60 * 1000
 const HOMEPAGE_STATS_TIME_ZONE = 'Europe/Prague'
@@ -121,6 +125,19 @@ export async function getHomepageSummaryStats(now = new Date()): Promise<Homepag
 export async function getHomepageMinuteFeed(): Promise<HomepageMinuteItem[]> {
   const rows = await homepageStatsRepo.findHomepageMinuteRows(HOMEPAGE_MINUTE_LIMIT)
   return rows.map(toHomepageMinuteItem)
+}
+
+/** Ticket 61's "Nejčtenější" rail — most `AnalysisView`-counted Analyses in the last
+ *  `HOMEPAGE_MOST_READ_WINDOW_HOURS` hours. Same rolling-window shape as the other live-computed
+ *  rails above (Minute/Contradictions), not a snapshot — see `findHomepageMostReadRows`'s own
+ *  docstring for why this table doesn't need one. */
+export async function getHomepageMostRead(now = new Date()): Promise<HomepageMostReadItem[]> {
+  const windowStart = new Date(now.getTime() - HOMEPAGE_MOST_READ_WINDOW_HOURS * HOUR_MS)
+  const rows = await homepageStatsRepo.findHomepageMostReadRows({
+    windowStart,
+    limit: HOMEPAGE_MOST_READ_LIMIT,
+  })
+  return rows.map(toHomepageMostReadItem)
 }
 
 function contradictionSourceCount(item: ContradictionItem): number {

@@ -21,4 +21,9 @@ export function registerHomepageStatsRoutes(fastify: FastifyInstance): void {
     const items = await homepageStatsService.getHomepageEntityStats()
     return reply.code(200).send(items)
   })
+
+  fastify.get('/api/homepage/most-read', async (_request, reply) => {
+    const items = await homepageStatsService.getHomepageMostRead()
+    return reply.code(200).send(items)
+  })
 }

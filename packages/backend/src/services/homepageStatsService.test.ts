@@ -5,11 +5,14 @@ import {
   getHomepageEntityStats,
   getHomepageEntityStatsWindow,
   getHomepageMinuteFeed,
+  getHomepageMostRead,
   getHomepageSummaryStats,
   getHomepageTodayStatsWindow,
   HOMEPAGE_CONTRADICTION_LIMIT,
   HOMEPAGE_ENTITY_STATS_LIMIT,
   HOMEPAGE_MINUTE_LIMIT,
+  HOMEPAGE_MOST_READ_LIMIT,
+  HOMEPAGE_MOST_READ_WINDOW_HOURS,
   refreshHomepageEntityStats,
 } from './homepageStatsService.js'
 
@@ -172,6 +175,33 @@ describe('getHomepageMinuteFeed', () => {
       },
     ])
     expect(homepageStatsRepo.findHomepageMinuteRows).toHaveBeenCalledWith(HOMEPAGE_MINUTE_LIMIT)
+  })
+})
+
+describe('getHomepageMostRead', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('returns the most-viewed Articles in rail shape, windowed and limited', async () => {
+    vi.mocked(homepageStatsRepo.findHomepageMostReadRows).mockResolvedValue([
+      { id: 'a-1', seedHeadline: 'Seed title', headline: 'Generated title', viewCount: 42 },
+      { id: 'a-2', seedHeadline: 'Seed title 2', headline: null, viewCount: 10 },
+    ])
+
+    const now = new Date('2026-08-21T12:00:00Z')
+    await expect(getHomepageMostRead(now)).resolves.toEqual([
+      { analysisId: 'a-1', title: 'Generated title', viewCount: 42 },
+      { analysisId: 'a-2', title: 'Seed title 2', viewCount: 10 },
+    ])
+    expect(homepageStatsRepo.findHomepageMostReadRows).toHaveBeenCalledWith({
+      windowStart: new Date(now.getTime() - HOMEPAGE_MOST_READ_WINDOW_HOURS * 60 * 60 * 1000),
+      limit: HOMEPAGE_MOST_READ_LIMIT,
+    })
+  })
+
+  it('returns an empty rail when nothing has been read yet', async () => {
+    vi.mocked(homepageStatsRepo.findHomepageMostReadRows).mockResolvedValue([])
+
+    await expect(getHomepageMostRead(new Date())).resolves.toEqual([])
   })
 })
 

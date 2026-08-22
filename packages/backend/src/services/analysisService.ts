@@ -28,6 +28,7 @@ import { approveDraft } from './ingestionService.js'
 import { MAX_COVERAGES_PER_ANALYSIS, MAX_CONCURRENT_COVERAGE_SCRAPES } from './coverageLimits.js'
 import { NotFoundError, ValidationError, ExternalServiceError } from '../errors.js'
 import * as analysisRepo from '../repositories/analysis.js'
+import * as analysisViewRepo from '../repositories/analysisView.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as storyRelationRepo from '../repositories/storyRelation.js'
 import * as matchDecisionRepo from '../repositories/matchDecision.js'
@@ -428,6 +429,20 @@ export async function getAnalysisDetail(analysisId: string, isAdmin: boolean): P
   }
 
   return toAnalysisDetail(analysis, relatedEvents, thread, entities, entityRelations)
+}
+
+/** Records one anonymous "read" event for the homepage "Nejčtenější" rail (ticket 61) — called
+ *  from `ArticlePage`'s own successful render of a COMPLETE Analysis, never from the Admin-only
+ *  `/analysis/:id` monitoring view (that's not a genuine reading event). A no-op, not an error,
+ *  for a missing id or one that hasn't reached COMPLETE — this is a best-effort beacon the caller
+ *  fires and forgets, and silently ignoring an invalid id also means this endpoint's response
+ *  never distinguishes "doesn't exist" from "not published yet," same posture as
+ *  `getAnalysisDetail`'s own non-Admin gate. */
+export async function recordAnalysisView(analysisId: string): Promise<void> {
+  const analysis = await analysisRepo.findAnalysisById(analysisId)
+  if (!analysis || analysis.status !== 'COMPLETE') return
+
+  await analysisViewRepo.createAnalysisView(analysisId)
 }
 
 export async function listAnalyses(

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as analysisRepo from '../repositories/analysis.js'
+import * as analysisViewRepo from '../repositories/analysisView.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as articleScraperModule from './articleScraper.js'
 import * as keywordExtractorModule from './keywordExtractor.js'
@@ -21,11 +22,13 @@ import {
   discoverSources,
   confirmCoverages,
   getAnalysisDetail,
+  recordAnalysisView,
   listAnalyses,
 } from './analysisService.js'
 import { ExternalServiceError, NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/analysis.js')
+vi.mock('../repositories/analysisView.js')
 vi.mock('../repositories/coverage.js')
 vi.mock('./articleScraper.js')
 vi.mock('./keywordExtractor.js')
@@ -1352,6 +1355,51 @@ describe('getAnalysisDetail', () => {
       synthesisResult: null,
     })
     expect((await getAnalysisDetail('a2', true)).title).toBe('Working title')
+  })
+})
+
+describe('recordAnalysisView', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('records a view for a COMPLETE Analysis', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    })
+
+    await recordAnalysisView('a1')
+
+    expect(analysisViewRepo.createAnalysisView).toHaveBeenCalledWith('a1')
+  })
+
+  it.each(['DRAFT', 'PENDING', 'FAILED'] as const)(
+    'does not record a view when the Analysis is %s',
+    async (status) => {
+      vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue({
+        id: 'a1',
+        storyId: 's1',
+        seedUrl: 'https://example.cz/x',
+        seedHeadline: 'Headline',
+        status,
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+      })
+
+      await recordAnalysisView('a1')
+
+      expect(analysisViewRepo.createAnalysisView).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not throw and does not record a view when the Analysis does not exist', async () => {
+    vi.mocked(analysisRepo.findAnalysisById).mockResolvedValue(null)
+
+    await expect(recordAnalysisView('missing')).resolves.toBeUndefined()
+
+    expect(analysisViewRepo.createAnalysisView).not.toHaveBeenCalled()
   })
 })
 

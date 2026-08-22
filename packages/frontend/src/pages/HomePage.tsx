@@ -7,6 +7,7 @@ import {
   useHomepageContradictions,
   useHomepageEntityStats,
   useHomepageMinuteFeed,
+  useHomepageMostRead,
   useHomepageSummaryStats,
 } from '@/services/homepageStats/hooks'
 import { articlePath } from '@/lib/analysisRoutes'
@@ -29,14 +30,6 @@ const TIME = new Intl.DateTimeFormat('cs-CZ', {
   minute: '2-digit',
   timeZone: 'Europe/Prague',
 })
-
-const SAMPLE_MOSTREAD = [
-  { title: 'Rozpor: kolik bytů se skutečně dotkne nová pražská vyhláška', src: 7 },
-  { title: 'Tři redakce citují pasáž, která v oficiálním přepisu chybí', src: 11 },
-  { title: 'Jak se za 24 hodin změnilo číslo o objemu investice ČEZ', src: 6 },
-  { title: 'Kdo první uvedl termín září u dodávek munice', src: 8 },
-  { title: 'Přehled: kde se agentury nejčastěji rozcházejí', src: 14 },
-]
 
 function StoryByline({ story, big }: { story: HomePageStory; big?: boolean }) {
   const overlap = story.summary.sourceOverlap
@@ -362,19 +355,33 @@ function ConflictsSection() {
   )
 }
 
+/** Real readership rail (ticket 61) — ranked by `AnalysisView` count in the last 24h, recorded by
+ *  `ArticlePage`'s own view beacon. Replaces the old hardcoded `SAMPLE_MOSTREAD` array: a genuinely
+ *  empty rail (no reads recorded yet — realistic on a low-traffic/local instance) is shown as such
+ *  rather than backfilled with fake ranking. */
 function MostReadSection() {
+  const { data: items = [], isLoading, isError } = useHomepageMostRead()
+
   return (
     <section>
       <BHead title="Nejčtenější" trailing={<span>dnes</span>} />
-      {SAMPLE_MOSTREAD.map((m, i) => (
-        <a className="minute" href="#" key={m.title} onClick={(e) => e.preventDefault()}>
-          <span className="minute__t">{i + 1}.</span>
-          <span>
-            <span className="minute__x hl">{m.title}</span>
-            <span className="minute__s">{m.src} zdrojů</span>
-          </span>
-        </a>
-      ))}
+      {isLoading ? (
+        <p className="legend">Načítání nejčtenějších…</p>
+      ) : isError ? (
+        <p className="legend">Nepodařilo se načíst nejčtenější.</p>
+      ) : items.length === 0 ? (
+        <p className="legend">Zatím žádná čtení za posledních 24 hodin.</p>
+      ) : (
+        items.map((m, i) => (
+          <Link className="minute" to={articlePath(m.analysisId)} key={m.analysisId}>
+            <span className="minute__t">{i + 1}.</span>
+            <span>
+              <span className="minute__x hl">{m.title}</span>
+              <span className="minute__s">{formatCzechCount(m.viewCount, 'čtení', 'čtení', 'čtení')}</span>
+            </span>
+          </Link>
+        ))
+      )}
     </section>
   )
 }

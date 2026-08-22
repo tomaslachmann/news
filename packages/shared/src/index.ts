@@ -386,6 +386,16 @@ export interface HomepageContradictionItem {
   sourceOverlapPercentage?: number
 }
 
+/** Homepage "Nejčtenější" row (ticket 61) — ranked by `AnalysisView` count in the last 24h.
+ *  `viewCount` is a raw page-load count, not a distinct-reader count: recording a view carries no
+ *  reader identity at all (no session/cookie/IP), so there is nothing to dedupe against — the same
+ *  visitor reloading the same Article twice counts as two views, by design. */
+export interface HomepageMostReadItem {
+  analysisId: string
+  title: string
+  viewCount: number
+}
+
 /** One Event (Story) that mentions this entity — `analysisId` is what an entity page links to
  *  (ticket 43), same id every other reader-facing surface navigates Articles by. */
 export interface EntityEventItem {
