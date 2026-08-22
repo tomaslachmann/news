@@ -7,7 +7,7 @@ separates "build a real aggregate" from "omit the section until a real signal ex
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Decide and document what `Minuta` represents in this product (latest completed Articles,
       latest updates to unfolding Stories, or something else reader-facing enough to justify the

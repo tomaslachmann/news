@@ -7,7 +7,7 @@ count.
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Decide what "read" means for this local product: Article page view, distinct session view,
       time-on-page threshold, or another concrete metric.
