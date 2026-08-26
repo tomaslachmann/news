@@ -19,7 +19,7 @@ import {
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
 import { scrapeForCoverage } from './articleScraper.js'
-import { resolvePrimaryCategory } from './articleCategoryMapping.js'
+import { resolveCategoryForCandidate } from './articleCategoryMapping.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import { NotFoundError, ValidationError } from '../errors.js'
@@ -168,7 +168,7 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
                 articleUrl: item.url,
                 publishedAt: item.publishedAt,
                 status: 'PENDING',
-                primaryCategory: resolvePrimaryCategory(item.sourceId, item.rawCategories),
+                primaryCategory: resolveCategoryForCandidate(item),
               },
             ],
             MAX_COVERAGES_PER_ANALYSIS
@@ -190,7 +190,7 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
           title: item.title,
           articleUrl: item.url,
           publishedAt: item.publishedAt,
-          primaryCategory: resolvePrimaryCategory(item.sourceId, item.rawCategories),
+          primaryCategory: resolveCategoryForCandidate(item),
         })
         summary.flagged++
       } else {
@@ -230,7 +230,7 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
         articleUrl: item.url,
         publishedAt: item.publishedAt,
         status: 'PENDING',
-        primaryCategory: resolvePrimaryCategory(item.sourceId, item.rawCategories),
+        primaryCategory: resolveCategoryForCandidate(item),
       },
     ])
     summary.created++

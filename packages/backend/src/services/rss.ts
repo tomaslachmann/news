@@ -50,6 +50,7 @@ async function fetchFeed(feed: SourceFeedWithSource, log?: FastifyBaseLogger): P
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
         excerpt: item.contentSnippet?.trim() || undefined,
         rawCategories: item.categories?.length ? item.categories : undefined,
+        feedCategory: feed.category,
       }))
   } catch (err) {
     log?.warn(`RSS feed failed for ${feed.source.name} (${feed.url}): ${(err as Error).message}`)

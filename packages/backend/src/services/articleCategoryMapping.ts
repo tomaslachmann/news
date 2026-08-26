@@ -94,3 +94,18 @@ export function resolvePrimaryCategory(
   }
   return null
 }
+
+/** Ticket 79's feed-implied categorization: a `CandidateArticle` whose `SourceFeed` is itself
+ *  scoped to one rubric (e.g. iRozhlas's `/section/ekonomika`, iDnes's `?c=domaci`) carries that
+ *  feed's `feedCategory` (rss.ts) straight through as `primaryCategory` -- no per-item raw-tag
+ *  mapping-table lookup needed, since the feed URL itself is already the category signal. Falls
+ *  back to resolvePrimaryCategory's per-item mapping-table lookup (ticket 78) for a candidate from
+ *  an all-articles feed (feedCategory unset). */
+export function resolveCategoryForCandidate(item: {
+  sourceId: string
+  rawCategories?: string[]
+  feedCategory?: ArticleCategory | null
+}): ArticleCategory | null {
+  if (item.feedCategory) return item.feedCategory
+  return resolvePrimaryCategory(item.sourceId, item.rawCategories)
+}

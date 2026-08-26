@@ -32,6 +32,12 @@ export interface CandidateArticle {
    *  table (articleCategoryMapping.ts) into a canonical ArticleCategory at Coverage-creation
    *  time — never persisted as-is. */
   rawCategories?: string[]
+  /** The category this candidate's own SourceFeed is scoped to (ticket 79, e.g. iRozhlas's
+   *  `/section/ekonomika`, iDnes's `?c=domaci`) — only rss.ts populates this, and only for a feed
+   *  whose SourceFeed.category is set. Takes priority over rawCategories when resolving
+   *  primaryCategory (resolveCategoryForCandidate, articleCategoryMapping.ts): the feed URL itself
+   *  is already the category signal, so no per-item raw-tag lookup is needed. */
+  feedCategory?: ArticleCategory | null
 }
 
 /// Matches the backend's ArticleCategory Prisma enum exactly — see CONTEXT.md's Category entry

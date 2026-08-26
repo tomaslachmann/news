@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolvePrimaryCategory } from './articleCategoryMapping.js'
+import { resolvePrimaryCategory, resolveCategoryForCandidate } from './articleCategoryMapping.js'
 
 describe('resolvePrimaryCategory', () => {
   it('picks the first raw category value that maps to a real ArticleCategory', () => {
@@ -40,5 +40,47 @@ describe('resolvePrimaryCategory', () => {
 
   it("maps Deník N's own domestic-rubric wording (Česko), distinct from the other outlets' Domácí", () => {
     expect(resolvePrimaryCategory('src-denikn', ['Česko'])).toBe('DOMESTIC')
+  })
+})
+
+describe('resolveCategoryForCandidate', () => {
+  it("uses the feed's own category directly, without consulting the per-item mapping table at all (ticket 79)", () => {
+    // src-irozhlas has no mapping table (per-item tags carry no signal for it) -- feedCategory
+    // must still win, since a category-scoped feed URL needs no per-item lookup.
+    expect(
+      resolveCategoryForCandidate({
+        sourceId: 'src-irozhlas',
+        rawCategories: undefined,
+        feedCategory: 'ECONOMY',
+      })
+    ).toBe('ECONOMY')
+  })
+
+  it('ignores rawCategories entirely when feedCategory is set, even if they would resolve differently', () => {
+    expect(
+      resolveCategoryForCandidate({
+        sourceId: 'src-novinky',
+        rawCategories: ['Sport'],
+        feedCategory: 'ECONOMY',
+      })
+    ).toBe('ECONOMY')
+  })
+
+  it('falls back to the per-item mapping-table lookup when feedCategory is null (an all-articles feed)', () => {
+    expect(
+      resolveCategoryForCandidate({
+        sourceId: 'src-novinky',
+        rawCategories: ['Domácí'],
+        feedCategory: null,
+      })
+    ).toBe('DOMESTIC')
+  })
+
+  it('falls back to the per-item mapping-table lookup when feedCategory is undefined', () => {
+    expect(resolveCategoryForCandidate({ sourceId: 'src-novinky', rawCategories: ['Sport'] })).toBe('SPORT')
+  })
+
+  it('returns null when neither feedCategory nor any raw category resolves', () => {
+    expect(resolveCategoryForCandidate({ sourceId: 'src-irozhlas', rawCategories: undefined })).toBeNull()
   })
 })
