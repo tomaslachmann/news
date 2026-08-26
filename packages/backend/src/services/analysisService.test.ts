@@ -425,6 +425,7 @@ describe('attachSeedToMatch', () => {
         extractionResult: null,
         status: 'PENDING',
         excluded: false,
+        primaryCategory: null,
         createdAt: new Date('2026-01-01T00:00:00Z'),
       },
     ])
@@ -543,6 +544,7 @@ describe('discoverSources', () => {
           articleUrl: 'https://idnes.cz/x',
           publishedAt: '2025-01-01T00:00:00Z',
           status: 'PENDING',
+          primaryCategory: null,
         },
       ],
       25
@@ -631,6 +633,7 @@ describe('confirmCoverages', () => {
     extractionResult: null,
     status: 'PENDING' as const,
     excluded: false,
+    primaryCategory: null,
     createdAt: new Date('2026-01-01T00:00:00Z'),
   }
 
@@ -792,6 +795,7 @@ describe('getAnalysisDetail', () => {
     extractionResult: null,
     status: 'OK' as const,
     excluded: false,
+    primaryCategory: null,
     createdAt: new Date('2026-01-01T00:00:00Z'),
   }
 

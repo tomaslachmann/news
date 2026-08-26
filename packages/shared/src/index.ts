@@ -26,6 +26,48 @@ export interface CandidateArticle {
   /** Short excerpt/summary where the source provides one (e.g. RSS description) — used as
    *  cheap embedding input for Ingestion's candidate matching, not populated by every source. */
   excerpt?: string
+  /** Raw RSS `<category>` value(s), in feed order, straight from rss-parser — only rss.ts's RSS
+   *  candidates populate this (ticket 78); GDELT and human-seeded candidates never have RSS
+   *  category signal, so it stays undefined for those. Resolved against the source's own mapping
+   *  table (articleCategoryMapping.ts) into a canonical ArticleCategory at Coverage-creation
+   *  time — never persisted as-is. */
+  rawCategories?: string[]
+}
+
+/// Matches the backend's ArticleCategory Prisma enum exactly — see CONTEXT.md's Category entry
+/// (ticket 78, ticket 77's grilling).
+export type ArticleCategory =
+  | 'DOMESTIC'
+  | 'WORLD'
+  | 'ECONOMY'
+  | 'POLITICS'
+  | 'SPORT'
+  | 'CULTURE'
+  | 'SCIENCE_TECH'
+  | 'CRIME'
+  | 'LIFESTYLE'
+  | 'COMMENTARY'
+  | 'HEALTH'
+  | 'REGIONAL'
+  | 'OTHER'
+
+/** Czech display label for each ArticleCategory value — declared alongside the type it labels
+ *  (ticket 78) so the wording can't drift between ticket 80's nav rubric links and its
+ *  `/category/:slug` browse page. */
+export const ARTICLE_CATEGORY_LABELS: Record<ArticleCategory, string> = {
+  DOMESTIC: 'Domácí',
+  WORLD: 'Svět',
+  ECONOMY: 'Ekonomika',
+  POLITICS: 'Politika',
+  SPORT: 'Sport',
+  CULTURE: 'Kultura',
+  SCIENCE_TECH: 'Věda a technika',
+  CRIME: 'Krimi',
+  LIFESTYLE: 'Životní styl',
+  COMMENTARY: 'Komentáře',
+  HEALTH: 'Zdraví',
+  REGIONAL: 'Regiony',
+  OTHER: 'Ostatní',
 }
 
 // Synthesis pass output types

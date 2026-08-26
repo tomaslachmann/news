@@ -1,7 +1,7 @@
-import type { Coverage, CoverageStatus, Prisma } from '@prisma/client'
+import type { ArticleCategory, Coverage, CoverageStatus, Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 
-export type { Coverage, CoverageStatus }
+export type { Coverage, CoverageStatus, ArticleCategory }
 
 export interface NewCoverage {
   analysisId: string
@@ -10,6 +10,10 @@ export interface NewCoverage {
   articleUrl: string
   publishedAt?: string
   status: CoverageStatus
+  /** Resolved via resolvePrimaryCategory (articleCategoryMapping.ts) before this is constructed
+   *  -- omitted (never persisted as a guessed default) for candidates with no source mapping
+   *  table or no matching raw category (ticket 78). */
+  primaryCategory?: ArticleCategory | null
 }
 
 export type CoverageWithSource = Coverage & { source: { name: string } }

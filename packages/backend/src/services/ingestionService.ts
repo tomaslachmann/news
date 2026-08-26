@@ -19,6 +19,7 @@ import {
 import { verifyCandidatesAgainstAnchorInBatches } from './storyVerification.js'
 import { MAX_COVERAGES_PER_ANALYSIS } from './coverageLimits.js'
 import { scrapeForCoverage } from './articleScraper.js'
+import { resolvePrimaryCategory } from './articleCategoryMapping.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import { NotFoundError, ValidationError } from '../errors.js'
@@ -167,6 +168,7 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
                 articleUrl: item.url,
                 publishedAt: item.publishedAt,
                 status: 'PENDING',
+                primaryCategory: resolvePrimaryCategory(item.sourceId, item.rawCategories),
               },
             ],
             MAX_COVERAGES_PER_ANALYSIS
@@ -188,6 +190,7 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
           title: item.title,
           articleUrl: item.url,
           publishedAt: item.publishedAt,
+          primaryCategory: resolvePrimaryCategory(item.sourceId, item.rawCategories),
         })
         summary.flagged++
       } else {
@@ -227,6 +230,7 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
         articleUrl: item.url,
         publishedAt: item.publishedAt,
         status: 'PENDING',
+        primaryCategory: resolvePrimaryCategory(item.sourceId, item.rawCategories),
       },
     ])
     summary.created++
@@ -419,6 +423,7 @@ export async function approvePendingAddition(
         articleUrl: pendingAddition.articleUrl,
         publishedAt: pendingAddition.publishedAt ?? undefined,
         status: 'PENDING',
+        primaryCategory: pendingAddition.primaryCategory,
       },
     ],
     MAX_COVERAGES_PER_ANALYSIS

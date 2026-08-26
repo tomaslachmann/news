@@ -110,6 +110,28 @@ enum EntityImageProvider {
   WIKIMEDIA
 }
 
+/// A Coverage's rubric, per CONTEXT.md's Category entry (ticket 78, ticket 77's grilling) — the
+/// canonical, fixed set every per-source raw category signal (RSS `<category>` tag, short code,
+/// or eventually a per-category feed URL) maps onto. "Energetika" was considered and dropped: no
+/// real outlet evidence for it in ticket 77's research. Matches
+/// articleCategoryMapping.ts's own literal union exactly — kept in sync by hand, same convention
+/// as every other closed enum this schema mirrors (see StoryRelationType/EntityType).
+enum ArticleCategory {
+  DOMESTIC
+  WORLD
+  ECONOMY
+  POLITICS
+  SPORT
+  CULTURE
+  SCIENCE_TECH
+  CRIME
+  LIFESTYLE
+  COMMENTARY
+  HEALTH
+  REGIONAL
+  OTHER
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -566,6 +588,14 @@ model Coverage {
   extractionResult Json?
   status           CoverageStatus @default(PENDING)
   excluded         Boolean        @default(false)
+  /// This Coverage's own rubric, resolved from its source RSS item's raw `<category>` value(s) at
+  /// ingestion time (articleCategoryMapping.ts) — a per-source judgment, not a Story-wide fact
+  /// (ticket 78, ticket 77's grilling). Nullable, no backfill: every Coverage created before this
+  /// field existed, and every Coverage from a source with no mapping table entry for its raw
+  /// tag(s), stays `null` rather than a guessed default (ADR 0021's no-backfill convention). See
+  /// CONTEXT.md's Category entry. Story/Analysis derive their own aggregate at read time from
+  /// their Coverages' values here — never a persisted column of their own.
+  primaryCategory  ArticleCategory?
   /// Ingest time, not publishedAt (which is the outlet's own claimed publish time, a String, and
   /// sometimes absent). Bounds findAllArticleUrls' dedup-check window (P0-2, docs/audit.md,
   /// ticket 03) — a Coverage from months ago realistically never needs re-checking against a
@@ -667,6 +697,12 @@ model PendingAddition {
   articleUrl  String
   publishedAt String?
   status      PendingAdditionStatus @default(PENDING_REVIEW)
+  /// Resolved from the flagged RSS item's raw category signal at the same point Coverage.
+  /// primaryCategory would have been (ticket 78, code review) -- a PendingAddition sits in the
+  /// review queue for a while, and by approval time the original CandidateArticle's rawCategories
+  /// are long gone, so this is captured once here rather than re-derived later. Copied verbatim
+  /// onto the Coverage approvePendingAddition creates.
+  primaryCategory ArticleCategory?
   createdAt   DateTime              @default(now())
 
   /// listPendingAdditions filters by status and sorts by createdAt desc (ticket 45).
@@ -709,6 +745,12 @@ model SourceFeed {
   /// verified as genuine RSS 2.0 (see ADR 0032/ticket 10), including several that declare an
   /// xmlns:atom namespace only for a self-link tag — that's not evidence of an Atom feed.
   parserKind String   @default("rss2")
+  /// Which rubric this feed URL is itself scoped to (a real per-section/`?c=`-style feed, not the
+  /// outlet's all-articles feed) — unused until ticket 79 configures real per-category feed URLs
+  /// for iRozhlas/iDnes; every SourceFeed today points at an all-articles feed, so this stays
+  /// `null` for all of them (ticket 78). Distinct from Coverage.primaryCategory, which is resolved
+  /// per-item from inline `<category>` signal, not from which feed URL found the item.
+  category   ArticleCategory?
   createdAt  DateTime @default(now())
 
   @@index([sourceId])

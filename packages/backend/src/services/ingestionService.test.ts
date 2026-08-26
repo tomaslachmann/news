@@ -161,6 +161,7 @@ describe('runIngestionPass', () => {
         articleUrl: RSS_ITEM.url,
         publishedAt: RSS_ITEM.publishedAt,
         status: 'PENDING',
+        primaryCategory: null,
       },
     ])
     expect(summary).toEqual({ checked: 1, created: 1, attached: 0, flagged: 0, skipped: 0 })
@@ -243,6 +244,7 @@ describe('runIngestionPass', () => {
           articleUrl: RSS_ITEM.url,
           publishedAt: RSS_ITEM.publishedAt,
           status: 'PENDING',
+          primaryCategory: null,
         },
       ],
       25
@@ -328,8 +330,32 @@ describe('runIngestionPass', () => {
       title: RSS_ITEM.title,
       articleUrl: RSS_ITEM.url,
       publishedAt: RSS_ITEM.publishedAt,
+      primaryCategory: null,
     })
     expect(summary).toEqual({ checked: 1, created: 0, attached: 0, flagged: 1, skipped: 0 })
+  })
+
+  it("resolves primaryCategory from the flagged item's source and raw categories, since it won't be re-derivable once the PendingAddition sits in the review queue", async () => {
+    stubCommon()
+    const categorizedItem = { ...RSS_ITEM, sourceId: 'src-novinky', rawCategories: ['Domácí'] }
+    vi.mocked(rssModule.queryRssFeeds).mockResolvedValue([categorizedItem])
+    vi.mocked(analysisRepo.findRecentStoriesForMatching).mockResolvedValue([
+      {
+        storyId: 'story-x',
+        analysisId: 'completed-1',
+        analysisStatus: 'COMPLETE',
+        anchorHeadline: 'Anchor headline',
+        headline: null,
+        embedding: MATCHING_EMBEDDING,
+        createdAt: new Date(),
+      },
+    ])
+
+    await runIngestionPass()
+
+    expect(pendingAdditionRepo.createPendingAddition).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryCategory: 'DOMESTIC' })
+    )
   })
 
   it('skips without side effects when the match is against a FAILED (rejected) Analysis', async () => {
@@ -485,6 +511,7 @@ function makeCoverage(id: string, title: string) {
     extractionResult: null,
     status: 'PENDING' as const,
     excluded: false,
+    primaryCategory: null,
     createdAt: new Date('2026-01-01T00:00:00Z'),
   }
 }
@@ -710,6 +737,7 @@ describe('listPendingAdditions', () => {
         articleUrl: 'https://idnes.cz/x',
         publishedAt: '2026-01-01T00:00:00Z',
         status: 'PENDING_REVIEW',
+        primaryCategory: null,
         createdAt: new Date('2026-01-02T00:00:00Z'),
         analysis: { seedHeadline: 'Original story' },
         source: { name: 'iDnes' },
@@ -744,6 +772,7 @@ describe('listPendingAdditions', () => {
         articleUrl: 'https://idnes.cz/a',
         publishedAt: '2026-01-02T00:00:00Z',
         status: 'PENDING_REVIEW',
+        primaryCategory: null,
         createdAt: new Date('2026-01-02T00:00:00Z'),
         analysis: { seedHeadline: 'Story A' },
         source: { name: 'iDnes' },
@@ -756,6 +785,7 @@ describe('listPendingAdditions', () => {
         articleUrl: 'https://novinky.cz/b',
         publishedAt: '2026-01-01T00:00:00Z',
         status: 'PENDING_REVIEW',
+        primaryCategory: null,
         createdAt: new Date('2026-01-01T00:00:00Z'),
         analysis: { seedHeadline: 'Story B' },
         source: { name: 'Novinky' },
@@ -784,6 +814,7 @@ describe('approvePendingAddition', () => {
     articleUrl: 'https://idnes.cz/new-article',
     publishedAt: '2026-01-01T00:00:00Z',
     status: 'PENDING_REVIEW' as const,
+    primaryCategory: null,
     createdAt: new Date('2026-01-02T00:00:00Z'),
     analysis: { status: 'COMPLETE' as const },
   }
@@ -826,6 +857,7 @@ describe('approvePendingAddition', () => {
           articleUrl: 'https://idnes.cz/new-article',
           publishedAt: '2026-01-01T00:00:00Z',
           status: 'PENDING',
+          primaryCategory: null,
         },
       ],
       expect.any(Number)
@@ -857,6 +889,21 @@ describe('approvePendingAddition', () => {
       targetType: 'pending_addition',
       targetId: 'p1',
     })
+  })
+
+  it("copies the PendingAddition's own primaryCategory onto the Coverage it creates, verbatim", async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionById).mockResolvedValue({
+      ...PENDING_ADDITION,
+      primaryCategory: 'DOMESTIC',
+    })
+
+    await approvePendingAddition('p1', ACTOR_ID)
+
+    expect(coverageRepo.addCoveragesIfWithinLimit).toHaveBeenCalledWith(
+      'a1',
+      [expect.objectContaining({ primaryCategory: 'DOMESTIC' })],
+      expect.any(Number)
+    )
   })
 
   it('marks the Coverage EXTRACTION_FAILED and enqueues no coverageIds when scraping is unsuccessful', async () => {
@@ -985,6 +1032,7 @@ describe('rejectPendingAddition', () => {
     articleUrl: 'https://idnes.cz/new-article',
     publishedAt: '2026-01-01T00:00:00Z',
     status: 'PENDING_REVIEW' as const,
+    primaryCategory: null,
     createdAt: new Date('2026-01-02T00:00:00Z'),
     analysis: { status: 'COMPLETE' as const },
   }

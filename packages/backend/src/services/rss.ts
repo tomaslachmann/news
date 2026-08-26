@@ -16,6 +16,7 @@ interface RawFeedItem {
   title?: string
   pubDate?: string
   contentSnippet?: string
+  categories?: string[]
 }
 
 async function parseRss2(url: string): Promise<RawFeedItem[]> {
@@ -48,6 +49,7 @@ async function fetchFeed(feed: SourceFeedWithSource, log?: FastifyBaseLogger): P
         url: item.link!,
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
         excerpt: item.contentSnippet?.trim() || undefined,
+        rawCategories: item.categories?.length ? item.categories : undefined,
       }))
   } catch (err) {
     log?.warn(`RSS feed failed for ${feed.source.name} (${feed.url}): ${(err as Error).message}`)
