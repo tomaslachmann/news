@@ -10,9 +10,10 @@ export interface NewCoverage {
   articleUrl: string
   publishedAt?: string
   status: CoverageStatus
-  /** Resolved via resolvePrimaryCategory (articleCategoryMapping.ts) before this is constructed
-   *  -- omitted (never persisted as a guessed default) for candidates with no source mapping
-   *  table or no matching raw category (ticket 78). */
+  /** Resolved via resolveCategoryForCandidate (articleCategoryMapping.ts) before this is
+   *  constructed -- feed-implied (ticket 79's SourceFeed.category) when the candidate's own feed
+   *  is category-scoped, otherwise resolvePrimaryCategory's per-item mapping-table lookup (ticket
+   *  78). `null` (never a guessed default) when neither resolves. */
   primaryCategory?: ArticleCategory | null
 }
 
