@@ -10,6 +10,7 @@ import AnalysisPage from './pages/AnalysisPage'
 import ArticlePage from './pages/ArticlePage'
 import ThreadPage from './pages/ThreadPage'
 import ThreadsPage from './pages/ThreadsPage'
+import CategoryPage from './pages/CategoryPage'
 import EntityDetailPage from './pages/EntityDetailPage'
 import SearchPage from './pages/SearchPage'
 import HistoryPage from './pages/HistoryPage'
@@ -63,6 +64,7 @@ function AppRoutes() {
         <Route path="/article/:id" element={<ArticlePage />} />
         <Route path="/thread/:slug" element={<ThreadPage />} />
         <Route path="/threads" element={<ThreadsPage />} />
+        <Route path="/category/:slug" element={<CategoryPage />} />
         <Route path="/entity/:key" element={<EntityDetailPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/history" element={<HistoryPage />} />

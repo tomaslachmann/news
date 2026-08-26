@@ -20,8 +20,11 @@ type StatusFilter = 'all' | AnalysisListItem['status']
 type SortOrder = 'newest' | 'oldest' | 'most-sources'
 
 /** Ticket 52: a reader-facing list row always points at `/article/:id`; the admin/internal list
- *  can still include non-complete Analyses, which must link to the monitoring view instead. */
-function ArchiveRow({ item }: { item: AnalysisListItem }) {
+ *  can still include non-complete Analyses, which must link to the monitoring view instead.
+ *  Exported for CategoryPage.tsx (ticket 80), which shows the same row shape filtered by
+ *  category — every row it can show is COMPLETE-only (categoryBrowseService.ts), the same subset
+ *  ReaderHistoryPage renders here, so it reuses this row rather than a near-duplicate. */
+export function ArchiveRow({ item }: { item: AnalysisListItem }) {
   const href = item.status === 'complete' ? articlePath(item.id) : analysisPath(item.id)
   return (
     <Link to={href} className="archive-row">
