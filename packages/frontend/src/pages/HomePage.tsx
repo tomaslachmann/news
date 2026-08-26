@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Gauge } from '@/components/Gauge'
 import type { AnalysisListSummary } from '@/services/analyses'
-import { useArticlesList } from '@/services/analyses/hooks'
+import type { HomepageArticleItem } from '@/services/homepageStats'
 import {
+  useHomepageArticles,
   useHomepageContradictions,
   useHomepageEntityStats,
   useHomepageMinuteFeed,
@@ -18,8 +18,6 @@ import {
   formatEntityTrend,
   getEntityDotSize,
   getStorySignal,
-  splitHomePageStories,
-  type HomePageStory,
 } from './homePageViewModel'
 import './HomePage.css'
 
@@ -31,7 +29,7 @@ const TIME = new Intl.DateTimeFormat('cs-CZ', {
   timeZone: 'Europe/Prague',
 })
 
-function StoryByline({ story, big }: { story: HomePageStory; big?: boolean }) {
+function StoryByline({ story, big }: { story: HomepageArticleItem; big?: boolean }) {
   const overlap = story.summary.sourceOverlap
   const signal = getStorySignal(story.summary)
 
@@ -71,7 +69,7 @@ function StoryFigure({
   thumb,
   caption,
 }: {
-  story: HomePageStory
+  story: HomepageArticleItem
   thumb?: boolean
   caption?: boolean
 }) {
@@ -139,7 +137,7 @@ function joinNames(names: string[], totalCount?: number): string {
   return totalCount && totalCount > names.length ? `${shown} a další` : shown
 }
 
-function LeadArticle({ story }: { story: HomePageStory }) {
+function LeadArticle({ story }: { story: HomepageArticleItem }) {
   return (
     <article className="lead">
       <span className="kicker">analýza {story.coverageCount} zdrojů</span>
@@ -174,7 +172,7 @@ function LeadArticle({ story }: { story: HomePageStory }) {
   )
 }
 
-function TwoCards({ stories }: { stories: HomePageStory[] }) {
+function TwoCards({ stories }: { stories: HomepageArticleItem[] }) {
   return (
     <div className="cards">
       {stories.map((story) => (
@@ -194,7 +192,7 @@ function TwoCards({ stories }: { stories: HomePageStory[] }) {
   )
 }
 
-function StoryListSection({ stories }: { stories: HomePageStory[] }) {
+function StoryListSection({ stories }: { stories: HomepageArticleItem[] }) {
   return (
     <section className="storylist">
       {stories.map((story) => (
@@ -448,12 +446,7 @@ function DayStatsBar() {
 }
 
 export default function HomePage() {
-  const { data, isLoading, isError } = useArticlesList()
-  const sections = useMemo(() => {
-    const items = data?.pages.flatMap((page) => page.items) ?? []
-    return splitHomePageStories(items)
-  }, [data])
-  const { lead, twoCards, listStories } = sections
+  const { data: articles, isLoading, isError } = useHomepageArticles()
 
   return (
     <>
@@ -468,21 +461,21 @@ export default function HomePage() {
               <div className="error" style={{ marginTop: 'var(--sp-5)' }}>
                 <p className="error__p">Nepodařilo se načíst články.</p>
               </div>
-            ) : lead ? (
+            ) : articles?.lead ? (
               <>
-                <LeadArticle story={lead} />
+                <LeadArticle story={articles.lead} />
 
-                {twoCards.length > 0 && (
+                {articles.spotlight.length > 0 && (
                   <>
                     <Sec title="Ve středu pozornosti" linkText="Vše z dneška" />
-                    <TwoCards stories={twoCards} />
+                    <TwoCards stories={articles.spotlight} />
                   </>
                 )}
 
-                {listStories.length > 0 && (
+                {articles.latest.length > 0 && (
                   <>
                     <Sec title="Další zprávy dne" linkText="Archiv" />
-                    <StoryListSection stories={listStories} />
+                    <StoryListSection stories={articles.latest} />
                   </>
                 )}
               </>
