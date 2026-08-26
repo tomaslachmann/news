@@ -4,6 +4,7 @@ import type {
   ThreadArticleRow,
   ThreadArticleTag,
   ThreadDetail,
+  ThreadOpenQuestionItem,
   ThreadSourceRow,
   ThreadStatusLabel,
   ThreadTimelineItem,
@@ -33,6 +34,20 @@ function tagsForArticleUrl(articleUrl: string, dimensions: AnalysisDimensions): 
   if (cited(dimensions.contradiction)) tags.push('contradicts')
   if (cited(dimensions.uniqueReporting)) tags.push('unique')
   return tags
+}
+
+/** Strips ticket 74's `relatedItems` traceability citation back out for the reader-facing shape —
+ *  `ThreadOpenQuestionItem` only ever exposes `question`/`detail` (see its own doc comment). The
+ *  raw column is untyped `Json`, but every write to it goes through `updateThreadOpenQuestions`
+ *  (repositories/thread.js), which only ever persists `threadOpenQuestionsPass.ts`'s own verified
+ *  shape — this cast is safe for the same reason `mergeAgreementCategory`'s raw `dimensions` cast
+ *  already is (services/synthesisPass.ts): nothing outside this codebase's own write path can ever
+ *  write to this column. */
+function toThreadOpenQuestions(raw: unknown): ThreadOpenQuestionItem[] {
+  return (raw as { question: string; detail: string }[]).map(({ question, detail }) => ({
+    question,
+    detail,
+  }))
 }
 
 /** The dedicated Thread page's read model (ticket 68 / ADR 0037). `entities` is passed in
@@ -123,5 +138,6 @@ export function toThreadDetail(thread: ThreadDetailRow, entities: EntityMentionI
     articles: Array.from(articlesByUrl.values()),
     sources,
     entities,
+    openQuestions: toThreadOpenQuestions(thread.openQuestions),
   }
 }

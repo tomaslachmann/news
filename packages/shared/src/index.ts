@@ -545,12 +545,23 @@ export interface ThreadSourceRow {
   coverageCount: number
 }
 
+/** One entry in the Thread page's open-questions rail (ticket 67/74) — a tension still genuinely
+ *  unresolved across the Thread's members, per the LLM synthesis in `threadOpenQuestionsPass.ts`.
+ *  Backend-verified traceability (which specific dimension items each question is about) isn't
+ *  surfaced here, only the prose — see `Thread.openQuestions`'s persisted shape for the full
+ *  `relatedItems` citation. `[]` both before `thread.synthesizeOpenQuestions` has ever run and
+ *  when it ran and found nothing genuinely open — both render identically (an empty rail). */
+export interface ThreadOpenQuestionItem {
+  question: string
+  detail: string
+}
+
 /** The dedicated Thread page's full read model (ticket 68 / ADR 0037) — `GET /api/thread/:slug`.
  *  `averageAgreementPercentage`/`contradictionCount` are real aggregates over every visible
  *  member's own already-computed `sourceOverlap`/`contradiction` dimension, not new synthesis.
- *  Has no `openQuestions`/chart fields — ticket 67 (open-questions synthesis) and ticket 66 (chart
- *  `NarrativeBlock`) are unresolved; the open-questions rail ships as frontend-only placeholder
- *  content until 67 lands, and the trend chart isn't part of this page at all until 66 does. */
+ *  Has no chart field — ticket 66 (chart `NarrativeBlock`) never gained a Thread-side
+ *  `NarrativeDocument` to embed one in (ticket 73's Implementation notes); the trend chart isn't
+ *  part of this page at all until a future ticket gives Thread its own Narrative. */
 export interface ThreadDetail {
   title: string
   slug: string
@@ -565,6 +576,7 @@ export interface ThreadDetail {
   articles: ThreadArticleRow[]
   sources: ThreadSourceRow[]
   entities: EntityMentionItem[]
+  openQuestions: ThreadOpenQuestionItem[]
 }
 
 export interface AnalysisDetail {

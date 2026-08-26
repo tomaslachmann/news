@@ -9,6 +9,8 @@ import {
   upsertThreadFromComponent,
   findThreadForStory,
   setThreadStatusForTesting,
+  findVisibleMembersForOpenQuestions,
+  updateThreadOpenQuestions,
 } from '../../src/repositories/thread.js'
 import { findThreadDetailBySlug } from '../../src/repositories/threadDetail.js'
 
@@ -151,7 +153,7 @@ describe('Thread repository against a real Postgres instance', () => {
       const firstEventAt = new Date(Date.now() - 60 * 60 * 1000)
       const lastEventAt = new Date()
 
-      const thread = await upsertThreadFromComponent(
+      const { thread, changed } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -160,6 +162,7 @@ describe('Thread repository against a real Postgres instance', () => {
         { title: 'Kauza X', slug: `kauza-x-${a.storyId}` }
       )
 
+      expect(changed).toBe(true)
       expect(thread.title).toBe('Kauza X')
       expect(thread.status).toBe('ACTIVE')
       expect(thread.memberCount).toBe(2)
@@ -178,7 +181,7 @@ describe('Thread repository against a real Postgres instance', () => {
         firstEventAt: new Date('2026-01-01T00:00:00Z'),
         lastEventAt: new Date('2026-01-02T00:00:00Z'),
       }
-      const first = await upsertThreadFromComponent(
+      const { thread: first } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -187,7 +190,7 @@ describe('Thread repository against a real Postgres instance', () => {
         { title: 'First title', slug: `first-title-${a.storyId}` }
       )
 
-      const second = await upsertThreadFromComponent(
+      const { thread: second } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -212,7 +215,7 @@ describe('Thread repository against a real Postgres instance', () => {
         lastEventAt: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000),
       }
 
-      const thread = await upsertThreadFromComponent(
+      const { thread } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -231,7 +234,7 @@ describe('Thread repository against a real Postgres instance', () => {
         firstEventAt: new Date('2026-01-01T00:00:00Z'),
         lastEventAt: new Date('2026-01-02T00:00:00Z'),
       }
-      const created = await upsertThreadFromComponent(
+      const { thread: created } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -241,7 +244,7 @@ describe('Thread repository against a real Postgres instance', () => {
       )
       await setThreadStatusForTesting(created.id, 'CLOSED')
 
-      const recomputed = await upsertThreadFromComponent(
+      const { thread: recomputed } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -259,7 +262,7 @@ describe('Thread repository against a real Postgres instance', () => {
       const c = await createAnalysis({ seedUrl: 'https://example.cz/thread-merge-c', seedHeadline: 'C' })
       const d = await createAnalysis({ seedUrl: 'https://example.cz/thread-merge-d', seedHeadline: 'D' })
 
-      const older = await upsertThreadFromComponent(
+      const { thread: older } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -267,7 +270,7 @@ describe('Thread repository against a real Postgres instance', () => {
         { firstEventAt: new Date('2026-01-01T00:00:00Z'), lastEventAt: new Date('2026-01-02T00:00:00Z') },
         { title: 'Older arc', slug: `older-arc-${a.storyId}` }
       )
-      const newer = await upsertThreadFromComponent(
+      const { thread: newer } = await upsertThreadFromComponent(
         [
           { storyId: c.storyId, position: 0, role: 'ORIGIN' },
           { storyId: d.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -279,7 +282,7 @@ describe('Thread repository against a real Postgres instance', () => {
 
       // A new edge (e.g. B–C) bridges both arcs into one component — this must not crash on
       // ThreadMember.storyId's unique constraint, and must not silently corrupt either Thread.
-      const merged = await upsertThreadFromComponent(
+      const { thread: merged } = await upsertThreadFromComponent(
         [
           { storyId: a.storyId, position: 0, role: 'ORIGIN' },
           { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
@@ -311,21 +314,131 @@ describe('Thread repository against a real Postgres instance', () => {
         { storyId: a.storyId, position: 0, role: 'ORIGIN' as const },
         { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' as const },
       ]
-      const first = await upsertThreadFromComponent(memberInputs, span, {
+      const { thread: first, changed: firstChanged } = await upsertThreadFromComponent(memberInputs, span, {
         title: 'Unchanged case',
         slug: `unchanged-case-${a.storyId}`,
       })
+      expect(firstChanged).toBe(true)
 
       // Same members, same span, second call would recompute an identical title if it were
       // consulted — passing an obviously-different one proves the early-exit branch, not the
       // create branch, is what ran (create would have used this title).
-      const second = await upsertThreadFromComponent(memberInputs, span, {
+      const { thread: second, changed: secondChanged } = await upsertThreadFromComponent(memberInputs, span, {
         title: 'Would-be different title',
         slug: `different-${a.storyId}`,
       })
 
       expect(second.id).toBe(first.id)
       expect(second.title).toBe('Unchanged case')
+      expect(secondChanged).toBe(false)
+    })
+  })
+
+  describe('findVisibleMembersForOpenQuestions / updateThreadOpenQuestions', () => {
+    it('returns null for an unknown threadId', async () => {
+      expect(await findVisibleMembersForOpenQuestions('unknown-thread-id')).toBeNull()
+    })
+
+    it("returns only COMPLETE members' contradiction/agreement/uniqueReporting items, excluding framing, oldest first", async () => {
+      const a = await createAnalysis({ seedUrl: 'https://example.cz/oq-a', seedHeadline: 'A' })
+      const b = await createAnalysis({ seedUrl: 'https://example.cz/oq-b', seedHeadline: 'B' })
+      const c = await createAnalysis({ seedUrl: 'https://example.cz/oq-c', seedHeadline: 'C' })
+      await completeAnalysisWithSynthesis(
+        a.id,
+        {
+          agreement: [{ id: 'd-a-agree', prose: 'Shoda A', attributions: [] }],
+          contradiction: [{ id: 'd-a-contra', prose: 'Rozpor A', attributions: [] }],
+          uniqueReporting: [],
+          framing: [{ id: 'd-a-framing', prose: 'Framing A', attributions: [] }],
+        },
+        { headline: 'A', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+      )
+      await completeAnalysisWithSynthesis(
+        b.id,
+        {
+          agreement: [],
+          contradiction: [],
+          uniqueReporting: [{ id: 'd-b-unique', prose: 'Unikátní B', attributions: [] }],
+          framing: [],
+        },
+        { headline: 'B', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+      )
+      // c stays PENDING (no completeAnalysisWithSynthesis) — not currently visible, must be excluded.
+      const span = {
+        firstEventAt: new Date('2026-01-01T00:00:00Z'),
+        lastEventAt: new Date('2026-01-02T00:00:00Z'),
+      }
+      const { thread } = await upsertThreadFromComponent(
+        [
+          { storyId: a.storyId, position: 0, role: 'ORIGIN' },
+          { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
+          { storyId: c.storyId, position: 2, role: 'RESOLUTION' },
+        ],
+        span,
+        { title: 'Open questions case', slug: `open-questions-${a.storyId}` }
+      )
+
+      const members = await findVisibleMembersForOpenQuestions(thread.id)
+
+      expect(members?.every((m) => m.eventTime instanceof Date)).toBe(true)
+      expect(members?.map(({ eventTime: _eventTime, ...rest }) => rest)).toEqual([
+        {
+          analysisId: a.id,
+          contradiction: [{ id: 'd-a-contra', prose: 'Rozpor A' }],
+          agreement: [{ id: 'd-a-agree', prose: 'Shoda A' }],
+          uniqueReporting: [],
+        },
+        {
+          analysisId: b.id,
+          contradiction: [],
+          agreement: [],
+          uniqueReporting: [{ id: 'd-b-unique', prose: 'Unikátní B' }],
+        },
+      ])
+    })
+
+    it('persists and reads back the open-questions synthesis result via the Thread detail read model', async () => {
+      const a = await createAnalysis({ seedUrl: 'https://example.cz/oq-persist-a', seedHeadline: 'A' })
+      const b = await createAnalysis({ seedUrl: 'https://example.cz/oq-persist-b', seedHeadline: 'B' })
+      await completeAnalysisWithSynthesis(
+        a.id,
+        {
+          agreement: [],
+          contradiction: [{ id: 'd1', prose: 'x', attributions: [] }],
+          uniqueReporting: [],
+          framing: [],
+        },
+        { headline: 'A', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+      )
+      await completeAnalysisWithSynthesis(
+        b.id,
+        { agreement: [], contradiction: [], uniqueReporting: [], framing: [] },
+        { headline: 'B', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+      )
+      const span = {
+        firstEventAt: new Date('2026-01-01T00:00:00Z'),
+        lastEventAt: new Date('2026-01-02T00:00:00Z'),
+      }
+      const { thread } = await upsertThreadFromComponent(
+        [
+          { storyId: a.storyId, position: 0, role: 'ORIGIN' },
+          { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
+        ],
+        span,
+        { title: 'Persist case', slug: `persist-case-${a.storyId}` }
+      )
+
+      const openQuestions = [
+        {
+          question: 'Je otázka stále otevřená?',
+          detail: 'Ano.',
+          relatedItems: [{ analysisId: a.id, dimensionItemId: 'd1' }],
+        },
+      ]
+      await updateThreadOpenQuestions(thread.id, openQuestions)
+
+      const detail = await findThreadDetailBySlug(`persist-case-${a.storyId}`)
+      expect(detail?.openQuestions).toEqual(openQuestions)
     })
   })
 

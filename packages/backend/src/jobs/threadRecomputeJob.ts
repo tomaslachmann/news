@@ -3,6 +3,7 @@ import { runThreadTitlePass } from '../services/threadTitlePass.js'
 import { runStageOrThrow } from '../services/pipelineStage.js'
 import { resolveDisplayTitle } from '../mappers/analysis.js'
 import { COMBINING_DIACRITICS } from '../services/entityKey.js'
+import { enqueueJob } from './enqueue.js'
 import type {
   ThreadComponentMember,
   StoryAgreementForTitle,
@@ -20,7 +21,7 @@ export interface ThreadRecomputeJobDeps {
     members: UpsertThreadMemberInput[],
     span: { firstEventAt: Date; lastEventAt: Date },
     createIfMissing: { title: string; slug: string }
-  ) => Promise<Thread>
+  ) => Promise<{ thread: Thread; changed: boolean }>
 }
 
 /** First member is `ORIGIN`, last is `RESOLUTION` only once there are ≥3 members (a bare
@@ -154,11 +155,33 @@ export async function runThreadRecomputeJob(
     role: inferRole(i, members.length),
   }))
 
-  await runStageOrThrow({ seedStoryId: payload.seedStoryId }, 'Thread upsert', log, () =>
-    deps.upsertThreadFromComponent(
-      memberInputs,
-      { firstEventAt: members[0].eventTime, lastEventAt: members[members.length - 1].eventTime },
-      { title, slug: slugifyTitle(title, originStoryId) }
-    )
+  const { thread, changed } = await runStageOrThrow(
+    { seedStoryId: payload.seedStoryId },
+    'Thread upsert',
+    log,
+    () =>
+      deps.upsertThreadFromComponent(
+        memberInputs,
+        { firstEventAt: members[0].eventTime, lastEventAt: members[members.length - 1].eventTime },
+        { title, slug: slugifyTitle(title, originStoryId) }
+      )
   )
+
+  // thread.synthesizeOpenQuestions (ticket 67/74): chained off this job's own successful upsert,
+  // not enqueued from the same trigger points thread.recompute itself is — the open-questions
+  // pass reads the Thread/ThreadMember rows the upsert just wrote, so enqueueing it any earlier
+  // would race that write. Skipped entirely when `changed` is false: a duplicate thread.recompute
+  // for an unchanged component must stay the cheap no-op `upsertThreadFromComponent`'s own
+  // docstring promises, not chain a real, billed LLM call every time. Its own try/catch: a
+  // failure to enqueue must not fail thread.recompute, which has already succeeded by this point.
+  if (changed) {
+    try {
+      await enqueueJob(JobName.ThreadSynthesizeOpenQuestions, { threadId: thread.id })
+    } catch (err) {
+      log?.error(
+        { seedStoryId: payload.seedStoryId, threadId: thread.id, err },
+        'Failed to enqueue thread.synthesizeOpenQuestions after thread.recompute upsert'
+      )
+    }
+  }
 }

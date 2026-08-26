@@ -123,12 +123,18 @@ export interface UpsertThreadMemberInput {
  *
  *  Status never auto-leaves CLOSED: a Thread an Admin manually closed (ticket 17's Answer, Q4 —
  *  no admin surface ships yet, but the state itself is already reachable at the schema level)
- *  keeps accumulating members/span updates on later recomputes without silently reopening. */
+ *  keeps accumulating members/span updates on later recomputes without silently reopening.
+ *
+ *  `changed: false` on the early-exit path above lets `threadRecomputeJob.ts` (ticket 67/74) skip
+ *  chaining a real, billed LLM call (`thread.synthesizeOpenQuestions`) off a duplicate recompute
+ *  that did no work — without this, the "a duplicate `thread.recompute` for an unchanged
+ *  component is a cheap no-op" guarantee above would stop being true the moment anything expensive
+ *  gets chained off its completion. */
 export async function upsertThreadFromComponent(
   members: UpsertThreadMemberInput[],
   span: { firstEventAt: Date; lastEventAt: Date },
   createIfMissing: { title: string; slug: string }
-): Promise<Thread> {
+): Promise<{ thread: Thread; changed: boolean }> {
   return prisma.$transaction(async (tx) => {
     const storyIds = members.map((m) => m.storyId)
     const touched = await tx.threadMember.findMany({
@@ -169,7 +175,7 @@ export async function upsertThreadFromComponent(
       current.every((cm, i) => cm.storyId === members[i]?.storyId && cm.role === members[i]?.role) &&
       thread.firstEventAt.getTime() === span.firstEventAt.getTime() &&
       thread.lastEventAt.getTime() === span.lastEventAt.getTime()
-    if (unchanged) return thread
+    if (unchanged) return { thread, changed: false }
 
     await tx.threadMember.deleteMany({ where: { threadId: thread.id } })
     await tx.threadMember.createMany({
@@ -184,7 +190,7 @@ export async function upsertThreadFromComponent(
     const daysSinceLast = (Date.now() - span.lastEventAt.getTime()) / (1000 * 60 * 60 * 24)
     const status = thread.status === 'CLOSED' ? 'CLOSED' : daysSinceLast > 30 ? 'DORMANT' : 'ACTIVE'
 
-    return tx.thread.update({
+    const updated = await tx.thread.update({
       where: { id: thread.id },
       data: {
         status,
@@ -193,6 +199,7 @@ export async function upsertThreadFromComponent(
         memberCount: members.length,
       },
     })
+    return { thread: updated, changed: true }
   })
 }
 
@@ -255,6 +262,87 @@ export async function findThreadForStory(storyId: string): Promise<ThreadForRead
  *  that surface. Same convention as `setAnalysisCreatedAtForTesting` (repositories/analysis.ts). */
 export async function setThreadStatusForTesting(threadId: string, status: Thread['status']): Promise<void> {
   await prisma.thread.update({ where: { id: threadId }, data: { status } })
+}
+
+export interface ThreadDimensionItemForOpenQuestions {
+  id: string
+  prose: string
+}
+
+export interface ThreadMemberForOpenQuestions {
+  analysisId: string
+  eventTime: Date
+  contradiction: ThreadDimensionItemForOpenQuestions[]
+  agreement: ThreadDimensionItemForOpenQuestions[]
+  uniqueReporting: ThreadDimensionItemForOpenQuestions[]
+}
+
+/** Every currently-visible (COMPLETE) member of a Thread, with just the three dimension arrays
+ *  ticket 67's open-questions synthesis reads (`contradiction`/`agreement`/`uniqueReporting`) —
+ *  never `framing`, same exclusion `narrativePass.ts`'s own `NarrativeDimensions` makes and for
+ *  the same reason (ADR 0012: framing differences aren't a "still open" question, they're a
+ *  presentation difference). `null` for an unknown threadId. Ordered oldest-first by `eventTime`
+ *  (falling back to `createdAt`, ticket 16 convention) — chronology matters to the prompt's own
+ *  "was this addressed by a *later* member" framing. Only `id`/`prose` per dimension item, not the
+ *  full `Attribution[]` — the LLM judges from prose, same minimalism `findAgreementForTitle`
+ *  already applies to its own dimension read. */
+export async function findVisibleMembersForOpenQuestions(
+  threadId: string
+): Promise<ThreadMemberForOpenQuestions[] | null> {
+  const thread = await prisma.thread.findUnique({
+    where: { id: threadId },
+    include: {
+      members: {
+        orderBy: { position: 'asc' },
+        include: {
+          story: {
+            include: { analysis: { include: { synthesisResult: { select: { dimensions: true } } } } },
+          },
+        },
+      },
+    },
+  })
+  if (!thread) return null
+
+  const members: ThreadMemberForOpenQuestions[] = []
+  for (const m of thread.members) {
+    const analysis = m.story.analysis
+    if (!analysis || analysis.status !== 'COMPLETE' || !analysis.synthesisResult) continue
+    const dimensions = analysis.synthesisResult.dimensions as {
+      contradiction?: { id: string; prose: string }[]
+      agreement?: { id: string; prose: string }[]
+      uniqueReporting?: { id: string; prose: string }[]
+    }
+    // .map(...), not a bare cast — the stored dimensions JSON also carries `attributions` per
+    // item, which must actually be dropped here (not just re-typed away), both to keep the LLM
+    // prompt payload lean and because ThreadMemberForOpenQuestions's own contract promises
+    // `{ id, prose }` only.
+    const onlyIdAndProse = (items?: { id: string; prose: string }[]): ThreadDimensionItemForOpenQuestions[] =>
+      (items ?? []).map(({ id, prose }) => ({ id, prose }))
+    members.push({
+      analysisId: analysis.id,
+      eventTime: m.story.eventTime ?? m.story.createdAt,
+      contradiction: onlyIdAndProse(dimensions.contradiction),
+      agreement: onlyIdAndProse(dimensions.agreement),
+      uniqueReporting: onlyIdAndProse(dimensions.uniqueReporting),
+    })
+  }
+  return members
+}
+
+/** Persists ticket 67's open-questions synthesis result — see `threadOpenQuestionsPass.ts`.
+ *  `[]`, not `Prisma.JsonNull`, for "the LLM ran and found nothing genuinely open" — both the
+ *  never-yet-run and found-nothing states render identically on the Thread page (an empty rail),
+ *  so the distinction isn't worth a nullable column. */
+export async function updateThreadOpenQuestions(
+  threadId: string,
+  openQuestions: {
+    question: string
+    detail: string
+    relatedItems: { analysisId: string; dimensionItemId: string }[]
+  }[]
+): Promise<void> {
+  await prisma.thread.update({ where: { id: threadId }, data: { openQuestions } })
 }
 
 export interface VisibleThreadRankRow {
