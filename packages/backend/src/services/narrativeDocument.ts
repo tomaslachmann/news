@@ -64,6 +64,15 @@ const LlmNarrativeBlockSchema = z.discriminatedUnion('type', [
     style: z.enum(['ordered', 'bullet']),
     items: z.array(LlmNarrativeListItemSchema),
   }),
+  // `kind` is restricted to 'bar' at the LLM-transport layer (unlike the persisted NarrativeBlock's
+  // full 'bar'|'line'|'scatter'|'pie' union) — nothing backs 'line'/'scatter'/'pie' with real data
+  // yet (ticket 72), so the model is never given the option to emit one.
+  z.object({
+    type: z.literal('chart'),
+    kind: z.literal('bar'),
+    valueIds: z.array(z.string()),
+    text: z.string(),
+  }),
 ])
 export type LlmNarrativeBlock = z.infer<typeof LlmNarrativeBlockSchema>
 
@@ -168,11 +177,14 @@ function flagUndeclaredRefs(
 /** The document-level semantic checks schema validation can't express (ADR 0034): a ref
  *  (entity/source/value) tagged inline or cited by an assertion that doesn't resolve to a
  *  declared top-level ref (or, for an entity/source ref, doesn't resolve to a *real* one — a
- *  known Entity key or a given source's articleUrl), leftover raw `<nt:...>` transport markup
- *  from an unclosed or mismatched tag, a `quote` block's text that isn't a verbatim substring of
- *  its one cited Source, and an assertion citing a `dimensionItemId` that doesn't exist in the
- *  dimension it names. Returns every failure found (empty when the document is fully valid)
- *  rather than stopping at the first one, so a repair prompt can address them all at once. */
+ *  known Entity key or a given source's articleUrl), a `chart` block's `valueIds` that don't
+ *  resolve to declared `valueRefs`, that number fewer than two distinct entries (a chart with
+ *  nothing to compare), or that mix figures of different units (a bar chart plotting a death toll
+ *  against a currency amount as if they were the same quantity), leftover raw `<nt:...>` transport
+ *  markup from an unclosed or mismatched tag, a `quote` block's text that isn't a verbatim
+ *  substring of its one cited Source, and an assertion citing a `dimensionItemId` that doesn't
+ *  exist in the dimension it names. Returns every failure found (empty when the document is fully
+ *  valid) rather than stopping at the first one, so a repair prompt can address them all at once. */
 export function findNarrativeVerificationFailures(
   doc: LlmNarrativeDocument,
   ctx: NarrativeVerificationContext
@@ -182,6 +194,7 @@ export function findNarrativeVerificationFailures(
   const sourceRefIds = new Set(doc.sourceRefs.map((r) => r.id))
   const valueRefIds = new Set(doc.valueRefs.map((r) => r.id))
   const sourceRefById = new Map(doc.sourceRefs.map((r) => [r.id, r]))
+  const valueRefById = new Map(doc.valueRefs.map((r) => [r.id, r]))
 
   for (const ref of doc.entityRefs) {
     if (!ctx.knownEntityKeys.has(ref.entityKey)) {
@@ -224,6 +237,30 @@ export function findNarrativeVerificationFailures(
   doc.blocks.forEach((block, blockIndex) => {
     const where = `blocks[${blockIndex}]`
     blockText(block, where, checkText)
+
+    if (block.type === 'chart') {
+      flagUndeclaredRefs(block.valueIds, valueRefIds, 'valueIds', where, failures)
+
+      const distinctIds = new Set(block.valueIds)
+      if (distinctIds.size < 2) {
+        failures.push(
+          `${where}: chart must reference at least two distinct valueIds to compare, got ${distinctIds.size}`
+        )
+      } else {
+        const units = new Set(
+          [...distinctIds]
+            .map((id) => valueRefById.get(id))
+            .filter((ref): ref is (typeof doc.valueRefs)[number] => ref !== undefined)
+            .map((ref) => parseCzechNumeralValue(ref.text).unit)
+        )
+        if (units.size > 1) {
+          failures.push(
+            `${where}: chart's valueIds have mismatched units (${[...units].map((u) => u ?? 'none').join(', ')}) — a chart must compare figures of the same unit`
+          )
+        }
+      }
+      return
+    }
 
     if (block.type !== 'quote') return
     const ref = sourceRefById.get(block.sourceId)
@@ -329,6 +366,13 @@ function buildBlock(block: LlmNarrativeBlock): NarrativeBlock {
       }
     case 'paragraph':
       return { type: 'paragraph', children: parseInlineMarkup(block.text) }
+    case 'chart':
+      return {
+        type: 'chart',
+        kind: block.kind,
+        valueIds: block.valueIds,
+        caption: parseInlineMarkup(block.text),
+      }
   }
 }
 

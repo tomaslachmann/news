@@ -140,3 +140,17 @@
 .nlist li + li {
   margin-top: var(--sp-2);
 }
+
+/* A chart comparing multiple sources' reported figures (ticket 66/73) — the LLM-authored caption
+   reads like any other block's prose, styled the same as .nlead__cap's "this is a supplementary
+   annotation, not body text" treatment. */
+.nchart {
+  margin: var(--sp-5) 0;
+}
+.nchart__cap {
+  margin-top: var(--sp-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  text-align: center;
+}

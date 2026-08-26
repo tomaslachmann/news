@@ -21,12 +21,14 @@ describe('indexNarrativeRefs', () => {
     const refs = indexNarrativeRefs(DOCUMENT)
     expect(refs.entities.get('e1')).toEqual(DOCUMENT.entityRefs[0])
     expect(refs.sources.get('s1')).toEqual(DOCUMENT.sourceRefs[0])
+    expect(refs.values.get('v1')).toEqual(DOCUMENT.valueRefs[0])
   })
 
   it('returns empty maps for a document with no refs', () => {
     const refs = indexNarrativeRefs({ ...DOCUMENT, entityRefs: [], sourceRefs: [], valueRefs: [] })
     expect(refs.entities.size).toBe(0)
     expect(refs.sources.size).toBe(0)
+    expect(refs.values.size).toBe(0)
   })
 })
 

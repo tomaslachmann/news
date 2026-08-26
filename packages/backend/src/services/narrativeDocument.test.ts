@@ -76,6 +76,20 @@ describe('LlmNarrativeDocumentSchema', () => {
     )
     expect(result.success).toBe(true)
   })
+
+  it('accepts a chart block with kind "bar"', () => {
+    const result = LlmNarrativeDocumentSchema.safeParse(
+      validDoc({ blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v1', 'v2'], text: 'Srovnání zdrojů' }] })
+    )
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a chart block with a kind other than "bar"', () => {
+    const result = LlmNarrativeDocumentSchema.safeParse(
+      validDoc({ blocks: [{ type: 'chart', kind: 'line', valueIds: ['v1'], text: 'x' } as never] })
+    )
+    expect(result.success).toBe(false)
+  })
 })
 
 describe('parseInlineMarkup', () => {
@@ -237,6 +251,77 @@ describe('findNarrativeVerificationFailures', () => {
     const doc = validDoc({ sourceRefs: [{ id: 's1', articleUrl: 'https://hallucinated.cz/x' }] })
     const failures = findNarrativeVerificationFailures(doc, CONTEXT)
     expect(failures.some((f) => f.includes('https://hallucinated.cz/x'))).toBe(true)
+  })
+
+  it('does not flag a chart block whose valueIds all resolve to declared valueRefs', () => {
+    const doc = validDoc({
+      blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v1', 'v2'], text: 'Srovnání' }],
+      valueRefs: [
+        { id: 'v1', text: '12 mrtvých', sourceIds: ['s1'] },
+        { id: 'v2', text: '15 mrtvých', sourceIds: ['s1'] },
+      ],
+    })
+    expect(findNarrativeVerificationFailures(doc, CONTEXT)).toEqual([])
+  })
+
+  it('flags a chart block citing a valueId that is not declared in valueRefs', () => {
+    const doc = validDoc({
+      blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v-missing'], text: 'Srovnání' }],
+    })
+    const failures = findNarrativeVerificationFailures(doc, CONTEXT)
+    expect(failures.some((f) => f.includes('v-missing'))).toBe(true)
+  })
+
+  it('flags a chart block with fewer than two distinct valueIds', () => {
+    const doc = validDoc({
+      blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v1'], text: 'Srovnání' }],
+      valueRefs: [{ id: 'v1', text: '12 mrtvých', sourceIds: ['s1'] }],
+    })
+    const failures = findNarrativeVerificationFailures(doc, CONTEXT)
+    expect(failures.some((f) => f.includes('at least two distinct'))).toBe(true)
+  })
+
+  it('flags a chart block whose valueIds is the same id repeated', () => {
+    const doc = validDoc({
+      blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v1', 'v1'], text: 'Srovnání' }],
+      valueRefs: [{ id: 'v1', text: '12 mrtvých', sourceIds: ['s1'] }],
+    })
+    const failures = findNarrativeVerificationFailures(doc, CONTEXT)
+    expect(failures.some((f) => f.includes('at least two distinct'))).toBe(true)
+  })
+
+  it('flags a chart block whose valueIds mix different units', () => {
+    const doc = validDoc({
+      blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v1', 'v2'], text: 'Srovnání' }],
+      valueRefs: [
+        { id: 'v1', text: '12 mrtvých', sourceIds: ['s1'] },
+        { id: 'v2', text: '500 milionů korun', sourceIds: ['s1'] },
+      ],
+    })
+    const failures = findNarrativeVerificationFailures(doc, CONTEXT)
+    expect(failures.some((f) => f.includes('mismatched units'))).toBe(true)
+  })
+
+  it('does not flag a chart block whose valueIds share the same unit', () => {
+    const doc = validDoc({
+      blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v1', 'v2'], text: 'Srovnání' }],
+      valueRefs: [
+        { id: 'v1', text: '241 miliard korun', sourceIds: ['s1'] },
+        { id: 'v2', text: '200 miliard korun', sourceIds: ['s1'] },
+      ],
+    })
+    expect(findNarrativeVerificationFailures(doc, CONTEXT)).toEqual([])
+  })
+
+  it('does not flag a chart block whose valueIds are both unparseable (both null unit)', () => {
+    const doc = validDoc({
+      blocks: [{ type: 'chart', kind: 'bar', valueIds: ['v1', 'v2'], text: 'Srovnání' }],
+      valueRefs: [
+        { id: 'v1', text: 'hodně mrtvých', sourceIds: ['s1'] },
+        { id: 'v2', text: 'málo mrtvých', sourceIds: ['s1'] },
+      ],
+    })
+    expect(findNarrativeVerificationFailures(doc, CONTEXT)).toEqual([])
   })
 
   it('flags leftover raw markup from an unclosed inline tag', () => {
@@ -438,5 +523,23 @@ describe('buildNarrativeDocument', () => {
   it('carries assertions through unchanged', () => {
     const result = buildNarrativeDocument(validDoc(), BUILD_CONTEXT)
     expect(result.assertions).toEqual(validDoc().assertions)
+  })
+
+  it('builds a chart block, parsing its caption text and carrying kind/valueIds through', () => {
+    const doc = validDoc({
+      blocks: [
+        { type: 'chart', kind: 'bar', valueIds: ['v1', 'v2'], text: 'Podle <nt:e e1>Petra Fialy</nt:e>' },
+      ],
+    })
+    const result = buildNarrativeDocument(doc, BUILD_CONTEXT)
+    expect(result.blocks[0]).toEqual({
+      type: 'chart',
+      kind: 'bar',
+      valueIds: ['v1', 'v2'],
+      caption: [
+        { type: 'text', text: 'Podle ' },
+        { type: 'entity', entityId: 'e1', text: 'Petra Fialy' },
+      ],
+    })
   })
 })

@@ -637,6 +637,24 @@ export type NarrativeBlock =
   | { type: 'paragraph'; children: NarrativeInline[] }
   | { type: 'quote'; sourceId: string; children: NarrativeInline[] }
   | { type: 'list'; style: 'ordered' | 'bullet'; items: { children: NarrativeInline[] }[] }
+  | NarrativeChartBlock
+
+/** A chart comparing multiple already-declared `NarrativeValueRef`s (ticket 66/73's hybrid
+ *  mechanism) — the LLM decides whether/where to place one and authors `caption`, but never
+ *  invents the numbers: `valueIds` are references into this document's own `valueRefs`, each with
+ *  its own `normalizedValue` already computed deterministically (ADR 0014). A single
+ *  `NarrativeValueRef` only ever carries one canonical figure (its `sourceIds` are corroborating
+ *  sources for that *same* number, not differing reports), so a chart worth showing needs two or
+ *  more distinct `valueIds` — e.g. the two conflicting figures of a `contradiction` assertion —
+ *  never just one ref's own source list. Only `kind: 'bar'` has a real producer as of ticket 73;
+ *  `'line'`/`'scatter'`/`'pie'` exist so ticket 72's claim-tracking-over-time consumer (and any
+ *  later chart consumer) doesn't require another union change. */
+export type NarrativeChartBlock = {
+  type: 'chart'
+  kind: 'bar' | 'line' | 'scatter' | 'pie'
+  valueIds: string[]
+  caption: NarrativeInline[]
+}
 
 /** A link from one passage of the Narrative back to a single, specific item of the
  *  already-computed Analysis Dimensions — `dimensionItemId` is a DimensionItem/ContradictionItem

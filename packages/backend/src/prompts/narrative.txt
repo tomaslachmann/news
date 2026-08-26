@@ -23,6 +23,7 @@ An ordered array of structural units making up the article. Each block is one of
 - `{ "type": "paragraph", "text": "..." }`
 - `{ "type": "quote", "sourceId": "s1", "text": "..." }` — the text must be an exact verbatim quotation from the one named source's fullText. A quote block always names exactly one sourceId — never use a quote block for something two sources both reported in their own words; that's a paragraph plus an `agreement` assertion instead.
 - `{ "type": "list", "style": "ordered" | "bullet", "items": [{ "text": "..." }] }`
+- `{ "type": "chart", "kind": "bar", "valueIds": ["v1", "v2"], "text": "..." }` — use this only when two or more sources reported genuinely different figures for the same underlying claim (typically a `contradiction`), and declare a separate `valueRefs` entry per distinct figure so the chart has something real to compare. `valueIds` must name at least two distinct `valueRefs`, and every one of them must be the same kind of figure (e.g. never mix a death toll with a currency amount — a chart only compares figures of the same unit). Never use a chart for a figure every source agrees on — that's a plain paragraph citing the one shared `valueRefs` entry instead. `text` is a short Czech caption for the chart, not a full sentence, and may use the same inline reference tags as any other block.
 
 Every block's `text` (and every list item's `text`) is plain Czech prose that may contain inline reference tags:
 
@@ -55,7 +56,7 @@ Top-level declarations for every id referenced by an inline tag above:
 
 - `entityRefs`: `{ "id": "e1", "entityKey": "..." }` — `entityKey` must be one of the `key` values from the entities list you were given. Only tag an entity that's in that list.
 - `sourceRefs`: `{ "id": "s1", "articleUrl": "..." }` — `articleUrl` must be one of the source articleUrls you were given.
-- `valueRefs`: `{ "id": "v1", "text": "241 miliard korun", "sourceIds": ["s1"] }` — `text` is the figure exactly as it should read in prose (you do not compute a normalized number or unit; that is done separately). `sourceIds` names which of your declared `sourceRefs` reported this figure.
+- `valueRefs`: `{ "id": "v1", "text": "241 miliard korun", "sourceIds": ["s1"] }` — `text` is the figure exactly as it should read in prose (you do not compute a normalized number or unit; that is done separately). `sourceIds` names which of your declared `sourceRefs` reported this exact figure — if two sources disagree on the number, that is two separate `valueRefs` entries (one per distinct figure), never one entry with a `text` averaged or chosen between them.
 
 Return only the JSON object. No explanation outside the JSON.
 

@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { indexNarrativeRefs, resolveSourceRefs, type NarrativeRefIndex } from '@/lib/narrativeRefs'
+import { buildBarChartData } from '@/lib/narrativeChart'
 import type {
   NarrativeBlock,
   NarrativeDocument,
@@ -140,6 +142,39 @@ function QuoteBlock({
   )
 }
 
+/** A chart comparing multiple already-declared `NarrativeValueRef`s (ticket 66/73's hybrid
+ *  mechanism) — only `kind: 'bar'` has a real producer as of ticket 73; `'line'`/`'scatter'`/
+ *  `'pie'` render nothing yet (no consumer populates them until ticket 72's claim-tracking lands).
+ *  Renders nothing at all when fewer than two data points resolve — a "chart" of zero or one bar
+ *  compares nothing, so it's not worth showing (verification guarantees every `valueId` resolves,
+ *  but not that its text was parseable into a plottable number). */
+function ChartBlock({
+  block,
+  refs,
+}: {
+  block: Extract<NarrativeBlock, { type: 'chart' }>
+  refs: NarrativeRefIndex
+}) {
+  if (block.kind !== 'bar') return null
+
+  const data = buildBarChartData(block.valueIds, refs)
+  if (data.length < 2) return null
+
+  return (
+    <figure className="nchart">
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="label" />
+          <YAxis />
+          <Bar dataKey="value" fill="var(--accent)" />
+        </BarChart>
+      </ResponsiveContainer>
+      <figcaption className="nchart__cap">{renderInline(block.caption, refs)}</figcaption>
+    </figure>
+  )
+}
+
 /** The Cross-Source Narrative (ADR 0012 / ADR 0034), rendered as continuous prose from its
  *  structured `NarrativeDocument.blocks` — replaces ticket 20's segment-based rendering (ticket
  *  48). Entity/source/value inline runs resolve against the document's own top-level ref
@@ -175,9 +210,14 @@ export function NarrativeArticle({
               </List>
             )
           }
+          case 'chart':
+            return <ChartBlock key={i} block={block} refs={refs} />
           case 'paragraph':
-          default:
             return <p key={i}>{renderInline(block.children, refs)}</p>
+          default: {
+            const exhaustive: never = block
+            throw new Error(`Unhandled NarrativeBlock type: ${JSON.stringify(exhaustive)}`)
+          }
         }
       })}
     </div>
