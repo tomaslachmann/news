@@ -12,7 +12,7 @@ and real nav links.
 ticket 79 — works with whatever categorization coverage exists at the time, real data only, same
 never-fabricate posture every other page in this codebase already takes.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Decide the rubric list against the real enum: `chromeNav.ts`'s current 7 labels don't match
       `ArticleCategory` 1:1 (no `ENERGY` value exists — ticket 77's Answer dropped it; `Regiony`
