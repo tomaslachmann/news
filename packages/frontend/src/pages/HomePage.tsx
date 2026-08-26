@@ -94,15 +94,18 @@ function StoryFigure({
   )
 }
 
-/** Main-column section header ("Ve středu pozornosti", "Další zprávy dne") — e.css's `.sec`. */
+/** Main-column section header ("Ve středu pozornosti", "Další zprávy dne") — e.css's `.sec`.
+ *  `linkText` always points at `/history` (ticket 61's own demo-data cleanup): the reference
+ *  mockup's own trailing link was a `#`-placeholder, and `/history` — the reader-facing "Články"
+ *  archive — is the one real destination that already exists for "see more than what's on this
+ *  homepage." Not filtered to "today only," since HistoryPage has no date filter; the label still
+ *  reads honestly as "go see more," not as a promise of a same-day-only view. */
 function Sec({ title, linkText }: { title: string; linkText: string }) {
   return (
     <div className="sec">
       <h2>{title}</h2>
       <span className="rule" aria-hidden="true" />
-      <a href="#" onClick={(e) => e.preventDefault()}>
-        {linkText}
-      </a>
+      <Link to="/history">{linkText}</Link>
     </div>
   )
 }
@@ -222,6 +225,9 @@ function StoryListSection({ stories }: { stories: HomepageArticleItem[] }) {
   )
 }
 
+/** "Entity dne" rail (ticket 59). `přehled →` points at `/search` — the reader-facing entity
+ *  search page (ticket 43/`SearchPage.tsx`) is the one real "browse entities" destination that
+ *  already exists; not a dedicated "today's entities" view, since no such page exists. */
 function EntsPanel() {
   const { data: entities = [], isLoading, isError } = useHomepageEntityStats()
   const mentions = entities.map((e) => e.recentEventCount)
@@ -234,9 +240,7 @@ function EntsPanel() {
         noBorder
         trailing={
           <span>
-            <a href="#" onClick={(e) => e.preventDefault()}>
-              přehled →
-            </a>
+            <Link to="/search">přehled →</Link>
           </span>
         }
       />
