@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError } from '../errors.js'
 import * as threadDetailRepo from '../repositories/threadDetail.js'
 import * as threadRepo from '../repositories/thread.js'
 import * as entityRepo from '../repositories/entity.js'
+import * as claimSeriesRepo from '../repositories/claimSeries.js'
 import { toThreadDetail } from '../mappers/threadDetail.js'
 import { toHomepageThreadItem } from '../mappers/homepageStats.js'
 import { toEntityMentionItem } from '../mappers/analysis.js'
@@ -20,10 +21,13 @@ export async function getThreadDetail(slug: string): Promise<ThreadDetail> {
     throw new NotFoundError('Vlákno nenalezeno')
   }
 
-  const entityMentions = await entityRepo.findEntityMentionsForStories(thread.members.map((m) => m.storyId))
+  const [entityMentions, claimSeries] = await Promise.all([
+    entityRepo.findEntityMentionsForStories(thread.members.map((m) => m.storyId)),
+    claimSeriesRepo.findClaimSeriesForThread(thread.id),
+  ])
   const entities = dedupeEntities(entityMentions.map(toEntityMentionItem))
 
-  return toThreadDetail(thread, entities)
+  return toThreadDetail(thread, entities, claimSeries)
 }
 
 function dedupeEntities<T extends { key: string }>(items: T[]): T[] {

@@ -14,7 +14,11 @@ vi.mock('../services/wikimediaImageClient.js', () => ({
   searchWikimediaImageByQuery: mockSearchWikimediaImageByQuery,
 }))
 
+vi.mock('./enqueue.js')
+
 import { runNarrativeJob, buildNarrativeSources } from './narrativeJob.js'
+import { enqueueJob } from './enqueue.js'
+import { JobName } from './jobDefinitions.js'
 
 const DIMENSIONS = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
 
@@ -93,12 +97,14 @@ describe('runNarrativeJob', () => {
     markNarrativeGenerationFailedSafe: vi.fn(),
     findNarrativeImageForSynthesisResult: vi.fn().mockResolvedValue(null),
     createNarrativeImage: vi.fn(),
+    findThreadIdForStory: vi.fn().mockResolvedValue(null),
   }
 
   beforeEach(() => {
     mockSearchWikimediaImageByQuery.mockResolvedValue(null)
     baseDeps.findEntityMentionsForStory.mockResolvedValue([])
     baseDeps.findNarrativeImageForSynthesisResult.mockResolvedValue(null)
+    baseDeps.findThreadIdForStory.mockResolvedValue(null)
   })
 
   it('logs and returns without generating when the Analysis no longer exists', async () => {
@@ -168,6 +174,46 @@ describe('runNarrativeJob', () => {
       undefined
     )
     expect(baseDeps.updateSynthesisResultNarrative).toHaveBeenCalledWith('a1', DOCUMENT)
+    expect(baseDeps.markNarrativeGenerationFailedSafe).not.toHaveBeenCalled()
+  })
+
+  it('enqueues thread.trackClaimSeries when this Story already belongs to a Thread', async () => {
+    const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
+    mockRunNarrativePass.mockResolvedValue(DOCUMENT)
+    const findThreadIdForStory = vi.fn().mockResolvedValue('t1')
+
+    await runNarrativeJob(
+      { analysisId: 'a1' },
+      { ...baseDeps, findAnalysisWithDetails, findThreadIdForStory }
+    )
+
+    expect(findThreadIdForStory).toHaveBeenCalledWith('s1')
+    expect(enqueueJob).toHaveBeenCalledWith(JobName.ThreadTrackClaimSeries, { threadId: 't1' })
+  })
+
+  it('does not enqueue thread.trackClaimSeries when this Story belongs to no Thread', async () => {
+    const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
+    mockRunNarrativePass.mockResolvedValue(DOCUMENT)
+
+    await runNarrativeJob({ analysisId: 'a1' }, { ...baseDeps, findAnalysisWithDetails })
+
+    expect(enqueueJob).not.toHaveBeenCalled()
+  })
+
+  it('logs, but does not throw or fail the job, when enqueueing thread.trackClaimSeries fails', async () => {
+    const findAnalysisWithDetails = vi.fn().mockResolvedValue(analysis())
+    mockRunNarrativePass.mockResolvedValue(DOCUMENT)
+    const findThreadIdForStory = vi.fn().mockResolvedValue('t1')
+    vi.mocked(enqueueJob).mockRejectedValue(new Error('queue down'))
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+
+    await runNarrativeJob(
+      { analysisId: 'a1' },
+      { ...baseDeps, findAnalysisWithDetails, findThreadIdForStory },
+      log as never
+    )
+
+    expect(log.error).toHaveBeenCalled()
     expect(baseDeps.markNarrativeGenerationFailedSafe).not.toHaveBeenCalled()
   })
 

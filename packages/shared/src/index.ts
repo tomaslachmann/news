@@ -556,12 +556,34 @@ export interface ThreadOpenQuestionItem {
   detail: string
 }
 
+/** One point of a `ClaimSeries` (ticket 72/75) — a single member Analysis's own reported figure
+ *  for a numeric claim tracked across the Thread's days. `value`/`unit`/`sourceIds` are the same
+ *  deterministically-parsed fields `NarrativeValueRef` already carries (never LLM-computed); `date`
+ *  is that member's own `eventTime`, what a trend chart plots against. */
+export interface ClaimSeriesPoint {
+  date: string
+  value: number
+  unit: string | null
+  sourceIds: string[]
+}
+
+/** One numeric claim tracked across two or more of a Thread's member Analyses over time (ticket
+ *  72/75) — membership decided by an LLM judging entity-co-occurrence candidates, never
+ *  mechanically (ticket 72's Answer). `points` is ordered oldest-first, ready for ticket 76's
+ *  `kind: 'line'` chart to plot directly. A series with only one point is a normal, expected state
+ *  (most tracked values never recur in a later member) — not filtered out here; deciding what
+ *  counts as "worth showing as a trend" is ticket 76's frontend's call, not this type's. */
+export interface ClaimSeriesItem {
+  id: string
+  points: ClaimSeriesPoint[]
+}
+
 /** The dedicated Thread page's full read model (ticket 68 / ADR 0037) — `GET /api/thread/:slug`.
  *  `averageAgreementPercentage`/`contradictionCount` are real aggregates over every visible
  *  member's own already-computed `sourceOverlap`/`contradiction` dimension, not new synthesis.
- *  Has no chart field — ticket 66 (chart `NarrativeBlock`) never gained a Thread-side
- *  `NarrativeDocument` to embed one in (ticket 73's Implementation notes); the trend chart isn't
- *  part of this page at all until a future ticket gives Thread its own Narrative. */
+ *  Has no chart *block* field — ticket 66 (chart `NarrativeBlock`) never gained a Thread-side
+ *  `NarrativeDocument` to embed one in (ticket 73's Implementation notes); `claimSeries` is the
+ *  raw tracked data a future ticket would need to actually render one here. */
 export interface ThreadDetail {
   title: string
   slug: string
@@ -575,6 +597,7 @@ export interface ThreadDetail {
   timeline: ThreadTimelineItem[]
   articles: ThreadArticleRow[]
   sources: ThreadSourceRow[]
+  claimSeries: ClaimSeriesItem[]
   entities: EntityMentionItem[]
   openQuestions: ThreadOpenQuestionItem[]
 }

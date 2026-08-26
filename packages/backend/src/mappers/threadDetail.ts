@@ -1,5 +1,6 @@
 import type {
   AnalysisDimensions,
+  ClaimSeriesItem,
   EntityMentionItem,
   ThreadArticleRow,
   ThreadArticleTag,
@@ -10,6 +11,7 @@ import type {
   ThreadTimelineItem,
 } from '@news-triangulator/shared'
 import type { ThreadDetailRow, ThreadStatus } from '../repositories/threadDetail.js'
+import type { ClaimSeriesItemRow } from '../repositories/claimSeries.js'
 import { resolveDisplayTitle } from './analysis.js'
 import { mergeAgreementCategory } from '../services/synthesisPass.js'
 import { interpretSourceOverlap } from '../services/sourceOverlap.js'
@@ -50,11 +52,28 @@ function toThreadOpenQuestions(raw: unknown): ThreadOpenQuestionItem[] {
   }))
 }
 
-/** The dedicated Thread page's read model (ticket 68 / ADR 0037). `entities` is passed in
- *  separately (not part of `ThreadDetailRow`) — it's a union across every member's own Story,
- *  fetched via the existing `findEntityMentionsForStory` per-Story call, not a new query this
- *  mapper owns. */
-export function toThreadDetail(thread: ThreadDetailRow, entities: EntityMentionItem[]): ThreadDetail {
+function toClaimSeriesItem(row: ClaimSeriesItemRow): ClaimSeriesItem {
+  return {
+    id: row.id,
+    points: row.points.map((p) => ({
+      date: p.eventTime.toISOString(),
+      value: p.normalizedValue,
+      unit: p.unit,
+      sourceIds: p.sourceIds,
+    })),
+  }
+}
+
+/** The dedicated Thread page's read model (ticket 68 / ADR 0037). `entities`/`claimSeries` are
+ *  passed in separately (not part of `ThreadDetailRow`) — `entities` is a union across every
+ *  member's own Story (`findEntityMentionsForStory`), `claimSeries` is ticket 75's own
+ *  `findClaimSeriesForThread` query — neither is naturally part of the Thread/member join
+ *  `findThreadDetailBySlug` already does. */
+export function toThreadDetail(
+  thread: ThreadDetailRow,
+  entities: EntityMentionItem[],
+  claimSeries: ClaimSeriesItemRow[]
+): ThreadDetail {
   const timeline: ThreadTimelineItem[] = []
   // Keyed by articleUrl, not pushed straight to an array: the same real article can legitimately
   // be attached as Coverage to two different Thread members (Coverage uniqueness is only
@@ -138,6 +157,7 @@ export function toThreadDetail(thread: ThreadDetailRow, entities: EntityMentionI
     articles: Array.from(articlesByUrl.values()),
     sources,
     entities,
+    claimSeries: claimSeries.map(toClaimSeriesItem),
     openQuestions: toThreadOpenQuestions(thread.openQuestions),
   }
 }

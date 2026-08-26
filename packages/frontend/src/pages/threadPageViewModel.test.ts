@@ -18,6 +18,7 @@ function makeThread(overrides: Partial<ThreadDetail> = {}): ThreadDetail {
     sources: [],
     entities: [],
     openQuestions: [],
+    claimSeries: [],
     ...overrides,
   }
 }
