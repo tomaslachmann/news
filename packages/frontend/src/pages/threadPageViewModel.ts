@@ -1,4 +1,4 @@
-import type { ThreadDetail, ThreadTimelineItem } from '@/services/thread'
+import type { ClaimSeriesItem, ThreadDetail, ThreadTimelineItem } from '@/services/thread'
 import { formatDate } from '@/lib/formatDate'
 
 export interface ThreadStat {
@@ -30,4 +30,14 @@ export function buildThreadStats(thread: ThreadDetail): ThreadStat[] {
  *  `oldestFirst: true` keeps that order, `false` (the default view) reverses to newest-first. */
 export function orderTimeline(items: ThreadTimelineItem[], oldestFirst: boolean): ThreadTimelineItem[] {
   return oldestFirst ? items : [...items].reverse()
+}
+
+/** Ticket 76's "worth showing as a trend" threshold — a 1- or 2-point series is just a couple of
+ *  numbers, not a trend a chart earns its place for. `ThreadDetail.claimSeries` (ticket 75) is
+ *  deliberately unfiltered at the API layer (which series are "worth showing" is a presentation
+ *  decision, not a data-completeness one), so this filter lives here instead. */
+export const MIN_POINTS_FOR_TREND = 3
+
+export function trendWorthyClaimSeries(claimSeries: ClaimSeriesItem[]): ClaimSeriesItem[] {
+  return claimSeries.filter((series) => series.points.length >= MIN_POINTS_FOR_TREND)
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { Line, LineChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Gauge } from '@/components/Gauge'
 import { formatDate } from '@/lib/formatDate'
 import { articlePath } from '@/lib/analysisRoutes'
@@ -8,6 +9,7 @@ import { useThreadDetail } from '@/services/thread/hooks'
 import { MIN_SOURCES_FOR_GAUGE, ThreadNotFoundError } from '@/services/thread'
 import type {
   AgreementCategory,
+  ClaimSeriesItem,
   EntityMentionItem,
   ThreadArticleRow,
   ThreadArticleTag,
@@ -18,10 +20,11 @@ import type {
 } from '@/services/thread'
 import NotFoundPage from './NotFoundPage'
 import { ErrorState } from './AnalysisPage'
-import { buildThreadStats, orderTimeline } from './threadPageViewModel'
+import { buildThreadStats, orderTimeline, trendWorthyClaimSeries } from './threadPageViewModel'
 import './AnalysisPage.css'
 import './HomePage.css'
 import './ThreadPage.css'
+import '@/components/NarrativeArticle.css'
 
 const AGREEMENT_CATEGORY_LABEL: Record<AgreementCategory, string> = {
   CONFIRMED: 'potvrzeno napříč zdroji',
@@ -148,6 +151,49 @@ function ThreadTimeline({ items }: { items: ThreadTimelineItem[] }) {
           </div>
         ))}
       </div>
+    </section>
+  )
+}
+
+/** One tracked numeric claim's day-over-day trend (ticket 72/75/76) — a purely mechanical chart
+ *  over already-verified, deterministically-parsed values (`ClaimSeriesPoint.value`), never an
+ *  LLM-authored `chart` `NarrativeBlock` (ticket 73's mechanism): the Thread page has no generated
+ *  Narrative of its own to place one in (see ticket 73's Implementation notes). Only rendered for a
+ *  series `trendWorthyClaimSeries` judges long enough to be a trend, not just a couple of numbers. */
+function ThreadTrendChart({ series }: { series: ClaimSeriesItem }) {
+  const data = series.points.map((p) => ({ date: formatDate(p.date), value: p.value }))
+  const unit = series.points.find((p) => p.unit)?.unit
+
+  return (
+    <figure className="nchart">
+      <ResponsiveContainer width="100%" height={240}>
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="date" />
+          <YAxis />
+          <Line type="monotone" dataKey="value" stroke="var(--accent)" dot />
+        </LineChart>
+      </ResponsiveContainer>
+      {unit && <figcaption className="nchart__cap">{unit}</figcaption>}
+    </figure>
+  )
+}
+
+function ThreadTrendCharts({ claimSeries }: { claimSeries: ClaimSeriesItem[] }) {
+  const worthy = trendWorthyClaimSeries(claimSeries)
+  if (worthy.length === 0) return null
+
+  return (
+    <section aria-labelledby="tTrendT">
+      <div className="sechead">
+        <h2 className="sechead__t" id="tTrendT">
+          Vývoj hodnoty v čase
+        </h2>
+        <span className="sechead__rule" />
+      </div>
+      {worthy.map((series) => (
+        <ThreadTrendChart key={series.id} series={series} />
+      ))}
     </section>
   )
 }
@@ -324,6 +370,7 @@ function CompleteThread({ thread }: { thread: ThreadDetail }) {
 
       <main className="u-wrap layout">
         <div className="artbody">
+          <ThreadTrendCharts claimSeries={thread.claimSeries} />
           <ThreadTimeline items={thread.timeline} />
           <ThreadArticlesTable rows={thread.articles} />
         </div>

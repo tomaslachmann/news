@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildThreadStats, orderTimeline } from './threadPageViewModel'
-import type { ThreadDetail, ThreadTimelineItem } from '@/services/thread'
+import { buildThreadStats, orderTimeline, trendWorthyClaimSeries } from './threadPageViewModel'
+import type { ClaimSeriesItem, ThreadDetail, ThreadTimelineItem } from '@/services/thread'
 
 function makeThread(overrides: Partial<ThreadDetail> = {}): ThreadDetail {
   return {
@@ -76,5 +76,43 @@ describe('orderTimeline', () => {
     orderTimeline(items, false)
 
     expect(items).toEqual(original)
+  })
+})
+
+function makeSeries(id: string, pointCount: number): ClaimSeriesItem {
+  return {
+    id,
+    points: Array.from({ length: pointCount }, (_, i) => ({
+      date: `2026-08-${String(13 + i).padStart(2, '0')}T00:00:00Z`,
+      value: 52 - i,
+      unit: 'CZK',
+      sourceIds: ['s1'],
+    })),
+  }
+}
+
+describe('trendWorthyClaimSeries', () => {
+  it('excludes a series with fewer than 3 points', () => {
+    expect(trendWorthyClaimSeries([makeSeries('s1', 1), makeSeries('s2', 2)])).toEqual([])
+  })
+
+  it('includes a series with exactly 3 points (the boundary)', () => {
+    const series = makeSeries('s1', 3)
+    expect(trendWorthyClaimSeries([series])).toEqual([series])
+  })
+
+  it('includes a series with more than 3 points', () => {
+    const series = makeSeries('s1', 5)
+    expect(trendWorthyClaimSeries([series])).toEqual([series])
+  })
+
+  it('keeps only the worthy series out of a mixed list', () => {
+    const worthy = makeSeries('worthy', 4)
+    const unworthy = makeSeries('unworthy', 2)
+    expect(trendWorthyClaimSeries([unworthy, worthy]).map((s) => s.id)).toEqual(['worthy'])
+  })
+
+  it('returns an empty array for an empty input', () => {
+    expect(trendWorthyClaimSeries([])).toEqual([])
   })
 })
