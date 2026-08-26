@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import type { FastifyBaseLogger } from 'fastify'
 import * as analysisRepo from '../repositories/analysis.js'
 import * as coverageRepo from '../repositories/coverage.js'
 import * as pendingAdditionRepo from '../repositories/pendingAddition.js'
@@ -584,6 +585,28 @@ describe('approveDraft', () => {
       undefined
     )
     expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c2'])
+  })
+
+  it('logs a title-less exclusion distinctly from a failed-verification one, not as one misleading bucket (P1-12)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const rejected = makeCoverage('c1', 'Unrelated trending item')
+    const titleless = makeTitlelessCoverage('c2')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([rejected, titleless])
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([])
+    const log = { warn: vi.fn(), error: vi.fn() } as unknown as FastifyBaseLogger
+
+    await approveDraft('a1', ACTOR_ID, log)
+
+    expect(coverageRepo.excludeCoverageIds).toHaveBeenCalledWith(['c1', 'c2'])
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ excludedCount: 1 }),
+      expect.stringContaining('failed or errored during same-story verification')
+    )
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ excludedCount: 1 }),
+      expect.stringContaining('never sent to verification')
+    )
+    expect(log.warn).toHaveBeenCalledTimes(2)
   })
 
   it('does not resurrect a Draft that was concurrently rejected while verification was in flight', async () => {

@@ -257,18 +257,34 @@ export async function approveDraft(
     log
   )
 
-  // Excludes only the specific ids that failed — not "keep just these" — so Coverage attached by
-  // a concurrent Ingestion poll during this (LLM-backed, now multi-second) verification pass is
-  // never touched, verified or not.
+  // Excludes only the specific ids that failed or were never sent to verification — not "keep
+  // just these" — so Coverage attached by a concurrent Ingestion poll during this (LLM-backed,
+  // now multi-second) verification pass is never touched, verified or not.
+  //
+  // Kept as two separate buckets (not one combined "failed" set) because they're different
+  // findings: unverifiableIds never underwent verification at all (no title to check against the
+  // anchor headline) and aren't evidence of anything the LLM rejected — collapsing them into
+  // "failed verification" mischaracterizes them. See docs audit finding P1-12.
   const verifiedIds = new Set(verified.map((c) => c.id))
-  const failedIds = coverages.filter((c) => !verifiedIds.has(c.id)).map((c) => c.id)
-  if (failedIds.length > 0) {
+  const failedVerificationIds = verifiable.filter((c) => !verifiedIds.has(c.id)).map((c) => c.id)
+  const unverifiableIds = coverages.filter((c) => c.title === null).map((c) => c.id)
+  if (failedVerificationIds.length > 0) {
     log?.warn(
-      { analysisId, excludedCount: failedIds.length, totalCount: coverages.length },
+      { analysisId, excludedCount: failedVerificationIds.length, totalCount: coverages.length },
       'Pre-Extraction quality gate excluded Coverage that failed or errored during same-story ' +
         'verification (see individual verifySameStory log entries to tell the two apart)'
     )
-    await coverageRepo.excludeCoverageIds(failedIds)
+  }
+  if (unverifiableIds.length > 0) {
+    log?.warn(
+      { analysisId, excludedCount: unverifiableIds.length, totalCount: coverages.length },
+      'Pre-Extraction quality gate excluded Coverage with no title — never sent to verification, ' +
+        'not evidence it failed'
+    )
+  }
+  const excludedIds = [...failedVerificationIds, ...unverifiableIds]
+  if (excludedIds.length > 0) {
+    await coverageRepo.excludeCoverageIds(excludedIds)
   }
 
   // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during
