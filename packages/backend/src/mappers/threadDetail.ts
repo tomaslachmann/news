@@ -41,7 +41,12 @@ function tagsForArticleUrl(articleUrl: string, dimensions: AnalysisDimensions): 
  *  mapper owns. */
 export function toThreadDetail(thread: ThreadDetailRow, entities: EntityMentionItem[]): ThreadDetail {
   const timeline: ThreadTimelineItem[] = []
-  const articles: ThreadArticleRow[] = []
+  // Keyed by articleUrl, not pushed straight to an array: the same real article can legitimately
+  // be attached as Coverage to two different Thread members (Coverage uniqueness is only
+  // per-Analysis, and Ingestion's URL dedup is a recency window, not permanent) — deduping here
+  // merges any tags found under either member's dimensions rather than showing the same article
+  // twice with a duplicate `articleUrl` key.
+  const articlesByUrl = new Map<string, ThreadArticleRow>()
   const sourceCoverageCounts = new Map<string, number>()
   let agreementPercentageSum = 0
   let agreementPercentageCount = 0
@@ -73,12 +78,18 @@ export function toThreadDetail(thread: ThreadDetailRow, entities: EntityMentionI
     })
 
     for (const coverage of member.coverages) {
-      articles.push({
+      const newTags = tagsForArticleUrl(coverage.articleUrl, dimensions)
+      const existing = articlesByUrl.get(coverage.articleUrl)
+      if (existing) {
+        existing.tags = Array.from(new Set([...existing.tags, ...newTags]))
+        continue
+      }
+      articlesByUrl.set(coverage.articleUrl, {
         outlet: coverage.sourceName,
         publishedAt: coverage.createdAt.toISOString(),
         title: coverage.title ?? undefined,
         articleUrl: coverage.articleUrl,
-        tags: tagsForArticleUrl(coverage.articleUrl, dimensions),
+        tags: newTags,
       })
       sourceCoverageCounts.set(coverage.sourceName, (sourceCoverageCounts.get(coverage.sourceName) ?? 0) + 1)
     }
@@ -88,19 +99,28 @@ export function toThreadDetail(thread: ThreadDetailRow, entities: EntityMentionI
     .map(([outlet, coverageCount]) => ({ outlet, coverageCount }))
     .sort((a, b) => b.coverageCount - a.coverageCount)
 
+  // The visible (COMPLETE) members' own span, not the raw Thread row's `firstEventAt`/
+  // `lastEventAt` — those cover every graph member including any still-DRAFT/PENDING one that
+  // never made it into `members` below, which would leak that a newer, unpublished development
+  // exists (exactly what MIN_VISIBLE_MEMBERS/the COMPLETE filter is careful never to do). Safe to
+  // index into `thread.members[0]`/`[length - 1]` for the span: it's already ordered oldest-first
+  // (`position asc`, ticket 16/17's eventTime-derived ordering) by the repository query.
+  const firstMember = thread.members[0]
+  const lastMember = thread.members[thread.members.length - 1]
+
   return {
     title: thread.title,
     slug: thread.slug,
     status: THREAD_STATUS_MAP[thread.status],
-    firstEventAt: thread.firstEventAt.toISOString(),
-    lastEventAt: thread.lastEventAt.toISOString(),
+    firstEventAt: (firstMember?.eventTime ?? thread.firstEventAt).toISOString(),
+    lastEventAt: (lastMember?.eventTime ?? thread.lastEventAt).toISOString(),
     memberCount: thread.members.length,
     sourceCount: sourceCoverageCounts.size,
     averageAgreementPercentage:
       agreementPercentageCount > 0 ? Math.round(agreementPercentageSum / agreementPercentageCount) : null,
     contradictionCount,
     timeline,
-    articles,
+    articles: Array.from(articlesByUrl.values()),
     sources,
     entities,
   }
