@@ -9,6 +9,7 @@ import { registerEntityWikidataRoutes } from './routes/entityWikidata.js'
 import { registerEntitiesRoutes } from './routes/entities.js'
 import { registerHomepageStatsRoutes } from './routes/homepageStats.js'
 import { registerThreadRoutes } from './routes/thread.js'
+import { registerCategoryRoutes } from './routes/category.js'
 import { seedAdminUser } from './seed.js'
 import { getQueueClient } from './jobs/queueClient.js'
 import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
@@ -53,6 +54,7 @@ const start = async () => {
     registerEntitiesRoutes(server)
     registerHomepageStatsRoutes(server)
     registerThreadRoutes(server)
+    registerCategoryRoutes(server)
 
     await seedAdminUser()
 

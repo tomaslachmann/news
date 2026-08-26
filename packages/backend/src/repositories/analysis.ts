@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import type {
   Analysis,
   AnalysisStatus,
+  ArticleCategory,
   Story,
   SynthesisResult,
   SynthesisAgreementCategory,
@@ -275,6 +276,49 @@ export async function findAnalysesPage(
   })
 
   return rows.map(toAnalysisListRow)
+}
+
+/** COMPLETE Analyses whose Story-level derived category (ticket 78, ticket 80) matches
+ *  `category` — the mode of the Story's (OK, non-excluded) Coverages' `primaryCategory`, tied
+ *  broken by the earliest-attached Coverage. That's exactly what `resolveStoryPrimaryCategory`
+ *  (mappers/coverage.ts) computes for an already-loaded Story, but the filtering/pagination here
+ *  needs to happen at the DB level, so the same rule is expressed as a per-row `LATERAL`-style
+ *  subquery instead — kept in sync with `resolveStoryPrimaryCategory` by hand, same convention as
+ *  this file's own `findDraftsPage` raw-SQL `HAVING` clause (ticket 49). Only the matching page of
+ *  ids is found this way; the actual `AnalysisListRow` shape is then fetched through the same
+ *  `ANALYSIS_LIST_ROW_INCLUDE`/`toAnalysisListRow` pairing `findAnalysesPage` uses, re-sorted back
+ *  into the id order the raw query determined (Prisma's `id: { in }` doesn't preserve it) — so a
+ *  category-browse row looks and behaves exactly like an `/articles`/`/history` row. */
+export async function findAnalysesByCategoryPage(
+  category: ArticleCategory,
+  cursor: Cursor | undefined,
+  limit: number
+): Promise<AnalysisListRow[]> {
+  const idRows = await prisma.$queryRaw<{ id: string; createdAt: Date }[]>`
+    SELECT a.id, a."createdAt"
+    FROM "Analysis" a
+    WHERE a.status = 'COMPLETE'
+      ${keysetSqlWhere(cursor)}
+      AND (
+        SELECT c."primaryCategory"
+        FROM "Coverage" c
+        WHERE c."analysisId" = a.id AND c.status = 'OK' AND c.excluded = false
+          AND c."primaryCategory" IS NOT NULL
+        GROUP BY c."primaryCategory"
+        ORDER BY count(*) DESC, min(c."createdAt") ASC
+        LIMIT 1
+      ) = ${category}::"ArticleCategory"
+    ORDER BY a."createdAt" DESC, a.id DESC
+    LIMIT ${limit + 1}
+  `
+  if (idRows.length === 0) return []
+
+  const rows = await prisma.analysis.findMany({
+    where: { id: { in: idRows.map((r) => r.id) } },
+    include: ANALYSIS_LIST_ROW_INCLUDE,
+  })
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  return idRows.map((idRow) => toAnalysisListRow(byId.get(idRow.id)!))
 }
 
 export interface DraftListRow {
