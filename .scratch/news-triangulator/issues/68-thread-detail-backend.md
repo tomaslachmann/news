@@ -9,7 +9,7 @@ unknown slug or a Thread whose *visible* member count has dropped below 2 — sa
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `packages/backend/src/repositories/threadDetail.ts` (new, read-model repository per ADR
       0037): `findThreadDetailBySlug(slug)` — the Thread row plus every COMPLETE member's Analysis
