@@ -218,4 +218,70 @@ describe('toThreadDetail', () => {
 
     expect(toThreadDetail(thread(), entities).entities).toEqual(entities)
   })
+
+  it('derives firstEventAt/lastEventAt from the visible (COMPLETE) members, never the raw Thread row span', () => {
+    // The raw Thread span (08-13 to 08-18) covers a 3rd, still-DRAFT member that never made it
+    // into `members` — using it would leak that a newer, unpublished development exists.
+    const result = toThreadDetail(
+      thread({
+        firstEventAt: new Date('2026-08-13T00:00:00Z'),
+        lastEventAt: new Date('2026-08-18T00:00:00Z'),
+        members: [
+          member({ analysisId: 'a1', eventTime: new Date('2026-08-14T00:00:00Z') }),
+          member({ analysisId: 'a2', eventTime: new Date('2026-08-15T00:00:00Z') }),
+        ],
+      }),
+      []
+    )
+
+    expect(result.firstEventAt).toBe('2026-08-14T00:00:00.000Z')
+    expect(result.lastEventAt).toBe('2026-08-15T00:00:00.000Z')
+  })
+
+  it('dedupes a Coverage attached to more than one Thread member by articleUrl, merging tags instead of duplicating the row', () => {
+    const sharedUrl = 'https://example.cz/reprinted-elsewhere'
+    const result = toThreadDetail(
+      thread({
+        members: [
+          member({
+            analysisId: 'a1',
+            coverages: [coverage({ articleUrl: sharedUrl, sourceName: 'ČTK' })],
+            dimensions: {
+              agreement: [
+                {
+                  id: 'd1',
+                  prose: 'p',
+                  attributions: [{ outlet: 'ČTK', czechQuote: 'q', articleUrl: sharedUrl }],
+                },
+              ],
+              contradiction: [],
+              uniqueReporting: [],
+              framing: [],
+            },
+          }),
+          member({
+            analysisId: 'a2',
+            coverages: [coverage({ articleUrl: sharedUrl, sourceName: 'ČTK' })],
+            dimensions: {
+              agreement: [],
+              contradiction: [],
+              uniqueReporting: [
+                {
+                  id: 'd2',
+                  prose: 'p',
+                  attributions: [{ outlet: 'ČTK', czechQuote: 'q', articleUrl: sharedUrl }],
+                },
+              ],
+              framing: [],
+            },
+          }),
+        ],
+      }),
+      []
+    )
+
+    expect(result.articles).toHaveLength(1)
+    expect(result.articles[0]?.tags.sort()).toEqual(['agrees', 'unique'])
+    expect(result.sources).toEqual([{ outlet: 'ČTK', coverageCount: 1 }])
+  })
 })
