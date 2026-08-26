@@ -18,7 +18,7 @@ used `?c=zpravy`) — the exact set of category values wasn't confirmed in ticke
 
 **Blocked by:** 78 (needs `SourceFeed.category` to exist on the schema).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Confirm iDnes's actual `?c=` category value set (ticket 77's research didn't get this far —
       `servis.idnes.cz`/`www.idnes.cz` didn't load for that research pass; try again, or find their
