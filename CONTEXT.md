@@ -32,6 +32,9 @@ One RSS feed URL belonging to a Source — replaces the old hardcoded feed-URL c
 ## Coverage
 A single article from one Source about a Story. The unit of input to the Analysis pipeline.
 
+## Category
+A Coverage's rubric — `ArticleCategory`, a fixed 13-value enum (`DOMESTIC`, `WORLD`, `ECONOMY`, `POLITICS`, `SPORT`, `CULTURE`, `SCIENCE_TECH`, `CRIME`, `LIFESTYLE`, `COMMENTARY`, `HEALTH`, `REGIONAL`, `OTHER`) that every per-source raw category signal (an RSS `<category>` tag, a short internal code) maps onto (ticket 78, ticket 77's grilling). Lives on `Coverage.primaryCategory`, one per Coverage, resolved by a hardcoded per-source mapping table (`articleCategoryMapping.ts`) at ingestion time — categorization is a per-source judgment the same way `sourceOverlap`/attributions already are, so different sources' Coverage of the same Story can (and do) disagree. A Story/Analysis's own "primary category" is never a persisted column: it's the mode of its Coverages' `primaryCategory` values, computed at read time, tied broken by the earliest-attached Coverage (`resolveStoryPrimaryCategory`, `mappers/coverage.ts`). Nullable with no backfill (ADR 0021) — a Coverage from before this field existed, or from a source/raw-tag combination with no mapping table entry, stays `null` rather than a guessed default; a Story where every Coverage is uncategorized likewise resolves to `null`, not `OTHER`. `SourceFeed.category` is a separate, still-unused field (ticket 79) for a feed URL itself being scoped to one rubric, distinct from a per-item inline signal.
+
 ## Extraction
 Pass 1 of the Analysis pipeline. One LLM call per Coverage that produces a structured set of Claims — factual, attributed, and interpretive — plus Framing Signals.
 

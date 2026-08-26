@@ -21,6 +21,7 @@ function feedWith(overrides: Partial<{ url: string; parserKind: string }> = {}) 
     source: SOURCE,
     url: 'https://idnes.cz/rss',
     parserKind: 'rss2',
+    category: null,
     createdAt: new Date(),
     ...overrides,
   }
@@ -52,6 +53,35 @@ describe('queryRssFeeds', () => {
       },
     ])
     expect(mockParseURL).toHaveBeenCalledWith('https://idnes.cz/rss')
+  })
+
+  it("captures an item's raw <category> value(s) as rawCategories, in feed order", async () => {
+    vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith()])
+    mockParseURL.mockResolvedValue({
+      items: [
+        {
+          title: 'Headline',
+          link: 'https://idnes.cz/a1',
+          pubDate: '2026-01-01',
+          categories: ['Domácí', 'Krimi'],
+        },
+      ],
+    })
+
+    const result = await queryRssFeeds()
+
+    expect(result[0].rawCategories).toEqual(['Domácí', 'Krimi'])
+  })
+
+  it('leaves rawCategories undefined for an item with no <category> tag at all', async () => {
+    vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith()])
+    mockParseURL.mockResolvedValue({
+      items: [{ title: 'Headline', link: 'https://idnes.cz/a1', pubDate: '2026-01-01' }],
+    })
+
+    const result = await queryRssFeeds()
+
+    expect(result[0].rawCategories).toBeUndefined()
   })
 
   it('logs a warning and skips a feed with an unrecognized parserKind, without throwing', async () => {

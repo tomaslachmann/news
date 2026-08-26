@@ -60,6 +60,7 @@ const BASE_COVERAGE = {
   extractedText: 'text',
   status: 'OK' as const,
   excluded: false,
+  primaryCategory: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),
 }
 

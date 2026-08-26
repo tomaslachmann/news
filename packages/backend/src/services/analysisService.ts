@@ -16,6 +16,7 @@ import { settleWithConcurrency } from './concurrency.js'
 import { extractKeywords } from './keywordExtractor.js'
 import { discoverCoverage } from './discovery.js'
 import { resolveSourceByUrl } from './sourceResolver.js'
+import { resolvePrimaryCategory } from './articleCategoryMapping.js'
 import { verifyCandidatesAgainstAnchor, verifySameStoryLogged } from './storyVerification.js'
 import { generateEmbedding, type EmbeddingResult } from './embeddingClient.js'
 import {
@@ -274,6 +275,7 @@ export async function discoverSources(
       articleUrl: c.url,
       publishedAt: c.publishedAt,
       status: 'PENDING' as const,
+      primaryCategory: resolvePrimaryCategory(c.sourceId, c.rawCategories),
     })),
     MAX_COVERAGES_PER_ANALYSIS
   )

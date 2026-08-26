@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import type { PendingAddition, PendingAdditionStatus, AnalysisStatus } from '@prisma/client'
+import type { ArticleCategory, PendingAddition, PendingAdditionStatus, AnalysisStatus } from '@prisma/client'
 import { prisma } from '../db.js'
 import type { Cursor } from '../pagination.js'
 
@@ -11,6 +11,9 @@ export interface NewPendingAddition {
   title?: string
   articleUrl: string
   publishedAt?: string
+  /** Resolved via resolvePrimaryCategory (articleCategoryMapping.ts) at flag time -- copied
+   *  verbatim onto the Coverage approvePendingAddition later creates (ticket 78, code review). */
+  primaryCategory?: ArticleCategory | null
 }
 
 export async function createPendingAddition(data: NewPendingAddition): Promise<PendingAddition> {
