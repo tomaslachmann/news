@@ -5,6 +5,7 @@ import type {
   HomepageMinuteItem,
   HomepageMostReadItem,
   HomepageSummaryStats,
+  HomepageThreadItem,
 } from '@news-triangulator/shared'
 import {
   toHomepageContradictionItem,
@@ -12,6 +13,7 @@ import {
   toHomepageMinuteItem,
   toHomepageMostReadItem,
   toHomepageSummaryStats,
+  toHomepageThreadItem,
 } from '../mappers/homepageStats.js'
 import * as homepageStatsRepo from '../repositories/homepageStats.js'
 
@@ -22,6 +24,7 @@ export const HOMEPAGE_MINUTE_LIMIT = 9
 export const HOMEPAGE_CONTRADICTION_LIMIT = 4
 export const HOMEPAGE_MOST_READ_WINDOW_HOURS = 24
 export const HOMEPAGE_MOST_READ_LIMIT = 5
+export const HOMEPAGE_RECENT_THREADS_LIMIT = 3
 
 const HOUR_MS = 60 * 60 * 1000
 const HOMEPAGE_STATS_TIME_ZONE = 'Europe/Prague'
@@ -138,6 +141,16 @@ export async function getHomepageMostRead(now = new Date()): Promise<HomepageMos
     limit: HOMEPAGE_MOST_READ_LIMIT,
   })
   return rows.map(toHomepageMostReadItem)
+}
+
+/** Ticket 70's homepage highlight — the `HOMEPAGE_RECENT_THREADS_LIMIT` most recently-updated
+ *  Threads a reader can actually navigate into (>= 2 visible members). No design precedent for
+ *  this section existed (ticket 65's grilling session checked — the reference design's own
+ *  homepage template has nothing thread-related), so the limit is chosen to match this session's
+ *  other compact homepage rails rather than ported from anywhere. */
+export async function getHomepageRecentThreads(): Promise<HomepageThreadItem[]> {
+  const rows = await homepageStatsRepo.findHomepageRecentThreadRows(HOMEPAGE_RECENT_THREADS_LIMIT)
+  return rows.map(toHomepageThreadItem)
 }
 
 function contradictionSourceCount(item: ContradictionItem): number {

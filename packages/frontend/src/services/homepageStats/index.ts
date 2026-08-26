@@ -6,6 +6,7 @@ import type {
   HomepageMinuteItem,
   HomepageMostReadItem,
   HomepageSummaryStats,
+  HomepageThreadItem,
 } from '@news-triangulator/shared'
 
 export type {
@@ -16,6 +17,7 @@ export type {
   HomepageMinuteItem,
   HomepageMostReadItem,
   HomepageSummaryStats,
+  HomepageThreadItem,
 }
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
@@ -69,4 +71,12 @@ export async function fetchHomepageMostRead(): Promise<HomepageMostReadItem[]> {
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst nejčtenější')
 
   return res.json() as Promise<HomepageMostReadItem[]>
+}
+
+export async function fetchHomepageRecentThreads(): Promise<HomepageThreadItem[]> {
+  const res = await fetch('/api/homepage/threads', { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst vlákna')
+
+  return res.json() as Promise<HomepageThreadItem[]>
 }

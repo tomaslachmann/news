@@ -8,9 +8,12 @@ import {
   useHomepageEntityStats,
   useHomepageMinuteFeed,
   useHomepageMostRead,
+  useHomepageRecentThreads,
   useHomepageSummaryStats,
 } from '@/services/homepageStats/hooks'
 import { articlePath } from '@/lib/analysisRoutes'
+import { threadPath } from '@/lib/threadRoutes'
+import { formatDate } from '@/lib/formatDate'
 import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
 import {
   entityTrendClass,
@@ -388,6 +391,39 @@ function MostReadSection() {
   )
 }
 
+/** "Recently updated Threads" highlight (ticket 70) — no design precedent for this section
+ *  (ticket 65's grilling session checked the reference design's own homepage template, which has
+ *  nothing thread-related on it), modeled on this session's other compact homepage rails
+ *  (`MostReadSection` above). Real data only: an empty rail (no Thread currently has 2 visible
+ *  members) is shown as such, not hidden or backfilled. */
+function RecentThreadsSection() {
+  const { data: items = [], isLoading, isError } = useHomepageRecentThreads()
+
+  return (
+    <section>
+      <BHead title="Vlákna" trailing={<span>aktualizováno</span>} />
+      {isLoading ? (
+        <p className="legend">Načítání vláken…</p>
+      ) : isError ? (
+        <p className="legend">Nepodařilo se načíst vlákna.</p>
+      ) : items.length === 0 ? (
+        <p className="legend">Zatím žádné vlákno s alespoň dvěma navazujícími zprávami.</p>
+      ) : (
+        items.map((t) => (
+          <Link className="minute" to={threadPath(t.slug)} key={t.slug}>
+            <span>
+              <span className="minute__x hl">{t.title}</span>
+              <span className="minute__s">
+                {formatCzechCount(t.memberCount, 'zpráva', 'zprávy', 'zpráv')} · {formatDate(t.lastEventAt)}
+              </span>
+            </span>
+          </Link>
+        ))
+      )}
+    </section>
+  )
+}
+
 function LegendSection() {
   return (
     <section>
@@ -496,6 +532,7 @@ export default function HomePage() {
             <MinuteFeedSection />
             <ConflictsSection />
             <MostReadSection />
+            <RecentThreadsSection />
             <LegendSection />
           </aside>
         </div>
