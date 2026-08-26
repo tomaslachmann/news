@@ -11,8 +11,10 @@ export interface NewPendingAddition {
   title?: string
   articleUrl: string
   publishedAt?: string
-  /** Resolved via resolvePrimaryCategory (articleCategoryMapping.ts) at flag time -- copied
-   *  verbatim onto the Coverage approvePendingAddition later creates (ticket 78, code review). */
+  /** Resolved via resolveCategoryForCandidate (articleCategoryMapping.ts) at flag time --
+   *  feed-implied (ticket 79) or per-item mapping-table lookup (ticket 78), same precedence as
+   *  NewCoverage.primaryCategory. Copied verbatim onto the Coverage approvePendingAddition later
+   *  creates (ticket 78, code review). */
   primaryCategory?: ArticleCategory | null
 }
 
