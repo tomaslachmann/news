@@ -39,6 +39,10 @@ export interface ThreadDetailRow {
   status: ThreadStatus
   firstEventAt: Date
   lastEventAt: Date
+  /** Ticket 67/74's open-questions synthesis, raw — see `mappers/threadDetail.ts` for the cast
+   *  into `ThreadOpenQuestionItem[]`. `[]` (never null) until `thread.synthesizeOpenQuestions` has
+   *  run at least once for this Thread — see `Thread.openQuestions`'s own schema default. */
+  openQuestions: unknown
   members: ThreadDetailMemberRow[]
 }
 
@@ -119,6 +123,7 @@ export async function findThreadDetailBySlug(slug: string): Promise<ThreadDetail
     status: thread.status,
     firstEventAt: thread.firstEventAt,
     lastEventAt: thread.lastEventAt,
+    openQuestions: thread.openQuestions,
     members,
   }
 }

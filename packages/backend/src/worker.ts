@@ -4,6 +4,7 @@ import { JobName } from './jobs/jobDefinitions.js'
 import { runEntityRelationJob } from './jobs/entityRelationJob.js'
 import { runNarrativeJob } from './jobs/narrativeJob.js'
 import { runThreadRecomputeJob } from './jobs/threadRecomputeJob.js'
+import { runThreadOpenQuestionsJob } from './jobs/threadOpenQuestionsJob.js'
 import { runEntityImageEnrichJob } from './jobs/entityImageEnrichJob.js'
 import { runHomepageEntityStatsJob } from './jobs/homepageEntityStatsJob.js'
 import { makeConsoleLogger } from './jobs/consoleLogger.js'
@@ -78,6 +79,16 @@ const start = async () => {
           workerLog
         )
       ),
+      registerJobWorker(JobName.ThreadSynthesizeOpenQuestions, (payload) =>
+        runThreadOpenQuestionsJob(
+          payload,
+          {
+            findVisibleMembersForOpenQuestions: threadRepo.findVisibleMembersForOpenQuestions,
+            updateThreadOpenQuestions: threadRepo.updateThreadOpenQuestions,
+          },
+          workerLog
+        )
+      ),
       registerJobWorker(JobName.EntityImageEnrich, (payload) =>
         runEntityImageEnrichJob(
           payload,
@@ -94,8 +105,9 @@ const start = async () => {
       ),
     ])
     console.log(
-      'Worker started; entity.extract, narrative.generate, thread.recompute, entity.image.enrich, ' +
-        'and homepage.entity-stats.refresh handlers registered.'
+      'Worker started; entity.extract, narrative.generate, thread.recompute, ' +
+        'thread.synthesizeOpenQuestions, entity.image.enrich, and homepage.entity-stats.refresh ' +
+        'handlers registered.'
     )
   } catch (err) {
     console.error(err)

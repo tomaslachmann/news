@@ -18,6 +18,7 @@ export type LlmCallSite =
   | 'entityExtraction'
   | 'storyRelation'
   | 'threadTitle'
+  | 'threadOpenQuestions'
 
 /** Shared by `callJsonModel`/`callStructuredModel` below — both send one chat completion and log
  *  it via `recordLlmCallSafe`, differing only in `response_format`. */

@@ -6,6 +6,7 @@ export const JobName = {
   EntityRelation: 'entity.extract',
   Narrative: 'narrative.generate',
   ThreadRecompute: 'thread.recompute',
+  ThreadSynthesizeOpenQuestions: 'thread.synthesizeOpenQuestions',
   EntityImageEnrich: 'entity.image.enrich',
   HomepageEntityStatsRefresh: 'homepage.entity-stats.refresh',
 } as const
@@ -34,6 +35,10 @@ export interface JobPayload {
   // component from this one Story and finds-or-creates the Thread itself (see ticket 17's
   // Answer, docs/audit.md §8.6/§9.8).
   [JobName.ThreadRecompute]: { seedStoryId: string }
+  // Ticket 67/74 — a real Thread id (not a seedStoryId): unlike thread.recompute, this only ever
+  // runs once a Thread already exists (enqueued right after thread.recompute's own upsert
+  // succeeds — see threadRecomputeJob.ts), so there's no find-or-create ambiguity to resolve.
+  [JobName.ThreadSynthesizeOpenQuestions]: { threadId: string }
   // Ticket 41 / ADR 0034 — enqueued only after the Admin's wikidataId-link transaction commits,
   // never from inside it, so a slow/failing Wikimedia call can't hold up or roll back the link.
   // The handler re-reads the Entity's current wikidataId by this id (retry-safe, same
@@ -79,6 +84,9 @@ export const JOB_RETRY_POLICY: Record<JobNameValue, QueueOptions> = {
   [JobName.EntityRelation]: LLM_JOB_RETRY_POLICY,
   [JobName.Narrative]: LLM_JOB_RETRY_POLICY,
   [JobName.ThreadRecompute]: THREAD_RECOMPUTE_RETRY_POLICY,
+  // A real LLM call (ticket 67's Answer: separate from thread.recompute specifically so this can
+  // have its own LLM-flakiness-tuned policy, not thread.recompute's tight DB-only one).
+  [JobName.ThreadSynthesizeOpenQuestions]: LLM_JOB_RETRY_POLICY,
   [JobName.EntityImageEnrich]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
   [JobName.HomepageEntityStatsRefresh]: DB_DERIVED_READ_MODEL_RETRY_POLICY,
 }

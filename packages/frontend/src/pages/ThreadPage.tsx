@@ -12,6 +12,7 @@ import type {
   ThreadArticleRow,
   ThreadArticleTag,
   ThreadDetail,
+  ThreadOpenQuestionItem,
   ThreadSourceRow,
   ThreadTimelineItem,
 } from '@/services/thread'
@@ -254,30 +255,33 @@ function ThreadEntitiesRail({ entities }: { entities: EntityMentionItem[] }) {
   )
 }
 
-/** Placeholder content, not computed from real data — ticket 67 (thread-level open-questions
- *  synthesis) is unresolved, and ticket 65's grilling session decided this rail still ships now
- *  rather than being dropped, since there are no real readers of this deployment yet. Must never
- *  be mistaken for a real finding — every line here says so explicitly. */
-function ThreadOpenQuestionsRail() {
+/** Real synthesis (ticket 67/74) — an LLM pass judging, across every Thread member, which
+ *  tensions are still genuinely unresolved. `[]` renders an honest "nothing open" state, the same
+ *  whether the synthesis hasn't run yet or ran and found nothing — see `ThreadOpenQuestionItem`'s
+ *  own doc comment (packages/shared). */
+function ThreadOpenQuestionsRail({ openQuestions }: { openQuestions: ThreadOpenQuestionItem[] }) {
   return (
     <section aria-labelledby="tOpenT">
       <div className="railhead">
         <h2 className="railhead__t" id="tOpenT">
           Otevřené otázky
         </h2>
-        <span className="railhead__x">brzy</span>
+        <span className="railhead__x">{openQuestions.length}</span>
       </div>
-      <ul className="qa">
-        <li>
-          <p className="qa__q">
-            <span>Tato sekce zatím nezobrazuje skutečná zjištění.</span>
-          </p>
-          <p className="qa__d">
-            Syntéza otevřených otázek napříč vláknem ještě není postavena (ticket 67) — zde bude, jakmile bude
-            hotová.
-          </p>
-        </li>
-      </ul>
+      {openQuestions.length === 0 ? (
+        <p className="note">Napříč vláknem zatím nezůstává nic otevřeného.</p>
+      ) : (
+        <ul className="qa">
+          {openQuestions.map((q, i) => (
+            <li key={i}>
+              <p className="qa__q">
+                <span>{q.question}</span>
+              </p>
+              <p className="qa__d">{q.detail}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
@@ -325,7 +329,7 @@ function CompleteThread({ thread }: { thread: ThreadDetail }) {
         </div>
 
         <aside className="layout__rail">
-          <ThreadOpenQuestionsRail />
+          <ThreadOpenQuestionsRail openQuestions={thread.openQuestions} />
           <ThreadSourcesRail sources={thread.sources} />
           <ThreadEntitiesRail entities={thread.entities} />
           <ThreadExplainerBox />

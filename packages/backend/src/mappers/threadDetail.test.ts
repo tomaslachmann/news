@@ -38,6 +38,7 @@ function thread(overrides: Partial<ThreadDetailRow> = {}): ThreadDetailRow {
     status: 'ACTIVE',
     firstEventAt: new Date('2026-08-13T00:00:00Z'),
     lastEventAt: new Date('2026-08-18T00:00:00Z'),
+    openQuestions: [],
     members: [member()],
     ...overrides,
   }
@@ -217,6 +218,29 @@ describe('toThreadDetail', () => {
     const entities = [{ key: 'e1', canonicalName: 'Entity One', type: 'PERSON' as const }]
 
     expect(toThreadDetail(thread(), entities).entities).toEqual(entities)
+  })
+
+  it('maps openQuestions to just question/detail, stripping the relatedItems traceability citation', () => {
+    const result = toThreadDetail(
+      thread({
+        openQuestions: [
+          {
+            question: 'Byl počet obětí definitivně potvrzen?',
+            detail: 'Zůstává nejasné.',
+            relatedItems: [{ analysisId: 'a1', dimensionItemId: 'd1' }],
+          },
+        ],
+      }),
+      []
+    )
+
+    expect(result.openQuestions).toEqual([
+      { question: 'Byl počet obětí definitivně potvrzen?', detail: 'Zůstává nejasné.' },
+    ])
+  })
+
+  it('reports an empty openQuestions array as-is, not as a placeholder', () => {
+    expect(toThreadDetail(thread({ openQuestions: [] }), []).openQuestions).toEqual([])
   })
 
   it('derives firstEventAt/lastEventAt from the visible (COMPLETE) members, never the raw Thread row span', () => {

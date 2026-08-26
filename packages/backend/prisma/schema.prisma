@@ -424,6 +424,14 @@ model Thread {
   status       ThreadStatus   @default(ACTIVE)
   memberCount  Int            @default(0)
   members      ThreadMember[]
+  /// Ticket 67/74's open-questions synthesis: `{ question, detail, relatedItems: {
+  /// analysisId, dimensionItemId }[] }[]`, verified (each relatedItems entry must resolve to a
+  /// real dimension item on a real, currently-visible member) and re-synthesized on every member
+  /// addition by its own background job (`thread.synthesizeOpenQuestions`), never inline with
+  /// `thread.recompute` itself. `[]`, not nullable — "never run yet" and "ran, found nothing
+  /// genuinely open" both render identically (an empty rail), so there's no third state worth a
+  /// nullable column for.
+  openQuestions Json @default("[]")
 
   /// "All ACTIVE Threads, most recently active first" — no reader surface queries this yet
   /// (ticket 17's Answer, Q5); declared because ADR 0029's accepted schema already specifies it.

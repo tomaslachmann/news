@@ -32,6 +32,7 @@ function makeThread(members: ReturnType<typeof makeMember>[]) {
     status: 'ACTIVE' as const,
     firstEventAt: new Date('2026-08-13T00:00:00Z'),
     lastEventAt: new Date('2026-08-18T00:00:00Z'),
+    openQuestions: [],
     members,
   }
 }

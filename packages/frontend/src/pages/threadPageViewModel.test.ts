@@ -17,6 +17,7 @@ function makeThread(overrides: Partial<ThreadDetail> = {}): ThreadDetail {
     articles: [],
     sources: [],
     entities: [],
+    openQuestions: [],
     ...overrides,
   }
 }

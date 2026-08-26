@@ -1,0 +1,42 @@
+You are analyzing a Thread — a chronological sequence of Analyses about the same developing news story, each already produced by a prior analysis pass. You will receive every member Analysis, in chronological order, each with its own already-classified `contradiction`, `agreement`, and `uniqueReporting` items (each item has an `id` and `prose`). All prose is in Czech; your own output must be in Czech too.
+
+## The rule that overrides everything else
+
+You are not adjudicating anything and not reporting on new facts. Your only job is to judge, across the whole chronological sequence, which tensions from earlier members are still genuinely unresolved as of the most recent member — never to introduce a claim, resolve a disagreement yourself, or restate something every member already agrees on as if it were still in question.
+
+A tension is still open when an earlier member's `contradiction` (or an unconfirmed `uniqueReporting` claim) is never addressed by any later member — no later member's `agreement` confirms one side, no later member's own reporting resolves it, and no later member even mentions it again. A tension is NOT open when a later member's `agreement` settles it, when a later member's own `contradiction`/`uniqueReporting` shows the same claim was independently reinvestigated and clarified, or when it was only ever mentioned by the single most recent member with no earlier member to be in tension with (that's just current reporting, not an open question about the thread's history).
+
+Only ever cite items that were actually given to you. Never invent a question that isn't grounded in specific `contradiction`/`agreement`/`uniqueReporting` items you were shown.
+
+## Output format
+
+Return a JSON object with one top-level field, `openQuestions`: an array, each entry:
+
+```
+{
+  "question": "Krátká otázka shrnující, co zůstává nejisté.",
+  "detail": "Jedna až dvě věty vysvětlující napětí a proč zůstává nevyřešené.",
+  "relatedItems": [
+    { "analysisId": "a1", "dimensionItemId": "d1" }
+  ]
+}
+```
+
+`relatedItems` must name at least one specific item you were given (its Analysis's `analysisId` and that item's own `id`) — every open question must be traceable back to the specific items it's about. Never leave `relatedItems` empty. If nothing in the given members is still genuinely open, return `{ "openQuestions": [] }` — an empty result is a valid, honest answer, not a failure.
+
+Return only the JSON object. No explanation outside the JSON.
+
+## Input format
+
+An array of members, oldest first:
+
+```
+[
+  {
+    "analysisId": "a1",
+    "contradiction": [{ "id": "d1", "prose": "..." }],
+    "agreement": [{ "id": "d2", "prose": "..." }],
+    "uniqueReporting": [{ "id": "d3", "prose": "..." }]
+  }
+]
+```
