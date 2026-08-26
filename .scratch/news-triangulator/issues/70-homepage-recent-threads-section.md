@@ -10,7 +10,7 @@ compact homepage rails (ticket 61's "Nejčtenější").
 **Blocked by:** 68 (reuses its visible-member-count gate; does not need its route/mapper, this is
 a new, smaller query).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `packages/backend/src/repositories/homepageStats.ts` (or a new `homepageThreads.ts` read-model
       repository, per ADR 0037 — same call as ticket 62's `homepageArticles.ts` precedent):
