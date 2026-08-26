@@ -71,3 +71,14 @@ the same row — fixed to `?? undefined`, matching `CoverageInfo.title`'s existi
 `findEntityMentionsForStory` DB round trip per Thread member (up to 50, `findFollowUpComponent`'s
 own safeguard bound) — added a batched `findEntityMentionsForStories(storyIds[])` to
 `repositories/entity.ts` and switched to it, one query instead of N.
+
+**Second `/code-review` round (during ticket 69), 2 more findings, both fixed:** (1) `firstEventAt`/
+`lastEventAt` used the raw `Thread` row's span (covering every graph member) instead of the
+visible (COMPLETE) members' own span — a still-DRAFT/PENDING member excluded from `members` could
+still push `lastEventAt` forward, leaking that a newer, unpublished development exists. Fixed to
+derive from `thread.members[0]`/`[length - 1]`'s own `eventTime` (safe to index: already ordered
+oldest-first by the repository's `position asc` query). (2) The same Coverage `articleUrl` can
+legitimately appear under two different Thread members (Coverage uniqueness is per-Analysis only,
+not thread-wide) — `articles`/`sources` now dedupe by `articleUrl`, merging tags from whichever
+member(s) cite it, instead of a duplicate row (and duplicate React key on the frontend) plus an
+inflated per-source count.
