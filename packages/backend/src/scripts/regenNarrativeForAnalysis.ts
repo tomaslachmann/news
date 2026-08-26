@@ -10,6 +10,7 @@ import * as analysisRepo from '../repositories/analysis.js'
 import * as entityRepo from '../repositories/entity.js'
 import * as narrativeImageRepo from '../repositories/narrativeImage.js'
 import * as synthesisResultRepo from '../repositories/synthesisResult.js'
+import * as threadRepo from '../repositories/thread.js'
 import { runNarrativeJob } from '../jobs/narrativeJob.js'
 import { makeConsoleLogger } from '../jobs/consoleLogger.js'
 
@@ -33,6 +34,7 @@ async function main() {
       markNarrativeGenerationFailedSafe: synthesisResultRepo.markNarrativeGenerationFailedSafe,
       findNarrativeImageForSynthesisResult: narrativeImageRepo.findNarrativeImageForSynthesisResult,
       createNarrativeImage: narrativeImageRepo.createNarrativeImage,
+      findThreadIdForStory: threadRepo.findThreadIdForStory,
     },
     makeConsoleLogger()
   )

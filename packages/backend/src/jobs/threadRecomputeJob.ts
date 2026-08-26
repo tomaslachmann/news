@@ -183,5 +183,16 @@ export async function runThreadRecomputeJob(
         'Failed to enqueue thread.synthesizeOpenQuestions after thread.recompute upsert'
       )
     }
+    // thread.trackClaimSeries (ticket 72/75): same chaining reasoning as
+    // thread.synthesizeOpenQuestions above, plus its own second trigger point
+    // (narrativeJob.ts) — see claimSeriesJob.ts's doc comment for why one job needs both.
+    try {
+      await enqueueJob(JobName.ThreadTrackClaimSeries, { threadId: thread.id })
+    } catch (err) {
+      log?.error(
+        { seedStoryId: payload.seedStoryId, threadId: thread.id, err },
+        'Failed to enqueue thread.trackClaimSeries after thread.recompute upsert'
+      )
+    }
   }
 }

@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as threadDetailRepo from '../repositories/threadDetail.js'
 import * as threadRepo from '../repositories/thread.js'
 import * as entityRepo from '../repositories/entity.js'
+import * as claimSeriesRepo from '../repositories/claimSeries.js'
 import { getThreadDetail, getThreadsPage } from './threadDetailService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/threadDetail.js')
 vi.mock('../repositories/thread.js')
 vi.mock('../repositories/entity.js')
+vi.mock('../repositories/claimSeries.js')
 
 const DIMENSIONS = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
 
@@ -27,6 +29,7 @@ function makeMember(analysisId: string, storyId: string) {
 
 function makeThread(members: ReturnType<typeof makeMember>[]) {
   return {
+    id: 'thread1',
     title: 'Vícedílná kauza',
     slug: 'vicedilna-kauza',
     status: 'ACTIVE' as const,
@@ -61,10 +64,12 @@ describe('getThreadDetail', () => {
       { key: 'e1', canonicalName: 'Entity One', type: 'PERSON', imageUrl: null },
       { key: 'e2', canonicalName: 'Entity Two', type: 'PLACE', imageUrl: null },
     ])
+    vi.mocked(claimSeriesRepo.findClaimSeriesForThread).mockResolvedValue([])
 
     const result = await getThreadDetail('vicedilna-kauza')
 
     expect(entityRepo.findEntityMentionsForStories).toHaveBeenCalledWith(['s1', 's2'])
+    expect(claimSeriesRepo.findClaimSeriesForThread).toHaveBeenCalledWith('thread1')
     expect(result.entities).toEqual([
       { key: 'e1', canonicalName: 'Entity One', type: 'PERSON' },
       { key: 'e2', canonicalName: 'Entity Two', type: 'PLACE' },

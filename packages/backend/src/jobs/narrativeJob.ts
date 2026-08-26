@@ -12,6 +12,7 @@ import type { AnalysisWithDetails } from '../repositories/analysis.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
 import type { NewNarrativeImage } from '../repositories/narrativeImage.js'
 import { ExternalServiceError } from '../errors.js'
+import { enqueueJob } from './enqueue.js'
 import { JobName, type JobPayload } from './jobDefinitions.js'
 
 export interface NarrativeJobDeps {
@@ -23,6 +24,9 @@ export interface NarrativeJobDeps {
   markNarrativeGenerationFailedSafe: (analysisId: string) => Promise<void>
   findNarrativeImageForSynthesisResult: (synthesisResultId: string) => Promise<{ id: string } | null>
   createNarrativeImage: (input: NewNarrativeImage) => Promise<void>
+  /** Ticket 72/75's second `thread.trackClaimSeries` trigger point — see this job's own doc
+   *  comment (near the enqueue call below) for why. */
+  findThreadIdForStory: (storyId: string) => Promise<string | null>
 }
 
 /** Ticket 51: best-effort illustrative lead image selection, run once right after the
@@ -200,4 +204,20 @@ export async function runNarrativeJob(
     deps,
     log
   )
+
+  // thread.trackClaimSeries (ticket 72/75): this Narrative may be the one `thread.recompute`'s own
+  // chained enqueue ran too early for (narrative.generate and thread.recompute are fully decoupled
+  // background jobs — ADR 0028 — with no ordering guarantee between them). Only fires when this
+  // Story already belongs to a Thread; most Analyses never do. Best-effort, same posture as the
+  // lead-image step above: a missing/failed enqueue here must not fail an already-successful
+  // narrative.generate run.
+  try {
+    const threadId = await deps.findThreadIdForStory(analysis.storyId)
+    if (threadId) await enqueueJob(JobName.ThreadTrackClaimSeries, { threadId })
+  } catch (err) {
+    log?.error(
+      { ...logContext, err },
+      'Failed to enqueue thread.trackClaimSeries after narrative.generate completion'
+    )
+  }
 }

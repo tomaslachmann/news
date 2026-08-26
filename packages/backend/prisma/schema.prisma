@@ -186,8 +186,8 @@ model Story {
 /// name can collide — an accepted, documented v1 limitation, unchanged by moving this out of
 /// per-Story JSON into a shared table.
 model Entity {
-  id            String                 @id @default(cuid())
-  key           String                 @unique
+  id            String                   @id @default(cuid())
+  key           String                   @unique
   type          EntityType
   canonicalName String
   /// Ticket 41 — nullable, no default, no backfill (ADR 0021's established no-backfill
@@ -201,19 +201,19 @@ model Entity {
   /// correct — see ADR 0024). Powers IDF weighting in storyRelationScoring.ts (fixes P1-9: plain
   /// Jaccard is the wrong metric for this project's asymmetric entity-set sizes between the
   /// Ingestion and human-seeded extraction paths).
-  storyCount    Int                    @default(0)
+  storyCount    Int                      @default(0)
   storyEntities StoryEntity[]
-  relationsFrom StoryEntityRelation[]  @relation("EntityRelationFrom")
-  relationsTo   StoryEntityRelation[]  @relation("EntityRelationTo")
+  relationsFrom StoryEntityRelation[]    @relation("EntityRelationFrom")
+  relationsTo   StoryEntityRelation[]    @relation("EntityRelationTo")
   /// Ticket 40 — every EntityAlias confirmed INTO this entity (this entity is the survivor).
-  aliases       EntityAlias[]          @relation("EntityAliasSurvivor")
+  aliases       EntityAlias[]            @relation("EntityAliasSurvivor")
   /// Ticket 40 — set only if this entity was itself merged away into another. At most one, not
   /// zero-or-many: `EntityAlias.mergedFromEntityId` is `@unique` because a merged-away entity is
   /// never re-selected as a merge target again (mergeEntities flattens any alias that already
   /// pointed at it onto the new survivor directly — see that function's own comment).
-  mergedInto    EntityAlias?           @relation("EntityAliasMergedFrom")
-  rejectionsA   EntityAliasRejection[] @relation("EntityAliasRejectionA")
-  rejectionsB   EntityAliasRejection[] @relation("EntityAliasRejectionB")
+  mergedInto    EntityAlias?             @relation("EntityAliasMergedFrom")
+  rejectionsA   EntityAliasRejection[]   @relation("EntityAliasRejectionA")
+  rejectionsB   EntityAliasRejection[]   @relation("EntityAliasRejectionB")
   /// Ticket 41 — zero or one in v1 (Wikimedia is the only provider), fetched automatically by
   /// `entity.image.enrich` once `wikidataId` is linked. No `isPrimary` field yet (ADR 0034): with
   /// one provider there's nothing to prioritize among.
@@ -349,10 +349,10 @@ model EntityImage {
 /// Latest/previous 24h homepage entity rail, precomputed by the async statistics worker so
 /// unauthenticated homepage reads never run a cross-table aggregate.
 model HomepageEntityStatSnapshot {
-  id          String   @id @default(cuid())
+  id          String                   @id @default(cuid())
   windowStart DateTime
   windowEnd   DateTime
-  computedAt  DateTime @default(now())
+  computedAt  DateTime                 @default(now())
   items       HomepageEntityStatItem[]
 
   @@index([computedAt])
@@ -412,18 +412,18 @@ model StoryRelation {
 /// list can't ("a detention, then an official's statement, then the other side's response," each
 /// otherwise looking like its own unrelated Story).
 model Thread {
-  id           String         @id @default(cuid())
+  id            String         @id @default(cuid())
   /// Generated once, at Thread creation, from Agreement across every member — never regenerated
   /// as new members join (see threadTitlePass.ts / ticket 17's Answer).
-  title        String
+  title         String
   /// Not yet linked from any route in this ticket (see ticket 17's Answer, Q3/Q5) — declared to
   /// match ADR 0029's already-accepted schema, ready for a future dedicated Thread page.
-  slug         String         @unique
-  firstEventAt DateTime
-  lastEventAt  DateTime
-  status       ThreadStatus   @default(ACTIVE)
-  memberCount  Int            @default(0)
-  members      ThreadMember[]
+  slug          String         @unique
+  firstEventAt  DateTime
+  lastEventAt   DateTime
+  status        ThreadStatus   @default(ACTIVE)
+  memberCount   Int            @default(0)
+  members       ThreadMember[]
   /// Ticket 67/74's open-questions synthesis: `{ question, detail, relatedItems: {
   /// analysisId, dimensionItemId }[] }[]`, verified (each relatedItems entry must resolve to a
   /// real dimension item on a real, currently-visible member) and re-synthesized on every member
@@ -431,11 +431,68 @@ model Thread {
   /// `thread.recompute` itself. `[]`, not nullable — "never run yet" and "ran, found nothing
   /// genuinely open" both render identically (an empty rail), so there's no third state worth a
   /// nullable column for.
-  openQuestions Json @default("[]")
+  openQuestions Json           @default("[]")
+  claimSeries   ClaimSeries[]
 
   /// "All ACTIVE Threads, most recently active first" — no reader surface queries this yet
   /// (ticket 17's Answer, Q5); declared because ADR 0029's accepted schema already specifies it.
   @@index([status, lastEventAt])
+}
+
+/// Ticket 72/75 — one numeric claim tracked across a Thread's multiple member Analyses over time
+/// (e.g. a budget figure narrowing from 52bn to 18bn across six days). Membership is decided by
+/// `claimSeriesPass.ts`'s LLM judgment among entity-co-occurrence candidates, never mechanically —
+/// see ticket 72's Answer. A series with only one member is a normal, expected state (most tracked
+/// values never recur in a later member) — ticket 76's frontend decides what counts as "worth
+/// showing as a trend," not this model.
+model ClaimSeries {
+  id        String              @id @default(cuid())
+  threadId  String
+  thread    Thread              @relation(fields: [threadId], references: [id])
+  createdAt DateTime            @default(now())
+  members   ClaimSeriesMember[]
+
+  @@index([threadId])
+}
+
+/// One point in a `ClaimSeries` — one member Analysis's own `NarrativeValueRef`, denormalized
+/// (`normalizedValue`/`unit`/`sourceIds`/`entityKeys`) at write time from that Analysis's already-
+/// generated `SynthesisResult.narrative` (ADR 0034), so reading a series back (ticket 75's API,
+/// ticket 76's chart) or candidate-narrowing a future member (`claimSeriesPass.ts`) never needs to
+/// re-parse a Narrative document's JSON. `valueRefId` is not a database foreign key — it's an id
+/// inside that Analysis's own `NarrativeDocument.valueRefs`, meaningful only paired with
+/// `analysisId`, same "bare string reference into JSON" convention `NarrativeAssertion
+/// .dimensionItemId` already uses elsewhere in this codebase.
+model ClaimSeriesMember {
+  id              String      @id @default(cuid())
+  seriesId        String
+  series          ClaimSeries @relation(fields: [seriesId], references: [id])
+  analysisId      String
+  analysis        Analysis    @relation(fields: [analysisId], references: [id])
+  valueRefId      String
+  /// The Analysis's own `eventTime` (falling back to `createdAt`, ticket 16 convention) — what a
+  /// day-over-day trend chart plots against, not `createdAt` (when this row was written).
+  eventTime       DateTime
+  /// `NarrativeValueRef.text` verbatim (e.g. "52 miliard Kč") — denormalized alongside
+  /// `normalizedValue`/`unit` for the same reason: a chart caption or an LLM candidate-linking
+  /// prompt (`claimSeriesLinkingPass.ts`) wants the original prose, not just the parsed number.
+  text            String
+  /// Never null in practice — `findTrackableValues` (claimSeriesMatching.ts) only ever surfaces a
+  /// value for tracking once its `NarrativeValueRef.normalizedValue` has already parsed
+  /// successfully; an unparseable figure never reaches this table at all.
+  normalizedValue Float
+  unit            String?
+  sourceIds       String[]
+  /// The entity keys this value co-occurred with (via `NarrativeAssertion.entityRefs ∩
+  /// valueRefs`), denormalized so a later member's candidate-narrowing query is a plain array
+  /// overlap, never a re-parse of this member's own Narrative document.
+  entityKeys      String[]
+  createdAt       DateTime    @default(now())
+
+  /// A member Analysis contributes at most one point per series — `claimSeriesPass.ts` decides
+  /// which single series (if any) each of its trackable values joins, never the same series twice.
+  @@unique([seriesId, analysisId])
+  @@index([seriesId])
 }
 
 model ThreadMember {
@@ -455,17 +512,18 @@ model ThreadMember {
 }
 
 model Analysis {
-  id               String            @id @default(cuid())
-  storyId          String            @unique
-  story            Story             @relation(fields: [storyId], references: [id])
-  seedUrl          String
-  seedHeadline     String
-  status           AnalysisStatus    @default(PENDING)
-  createdAt        DateTime          @default(now())
-  coverages        Coverage[]
-  synthesisResult  SynthesisResult?
-  pendingAdditions PendingAddition[]
-  views            AnalysisView[]
+  id                 String              @id @default(cuid())
+  storyId            String              @unique
+  story              Story               @relation(fields: [storyId], references: [id])
+  seedUrl            String
+  seedHeadline       String
+  status             AnalysisStatus      @default(PENDING)
+  createdAt          DateTime            @default(now())
+  coverages          Coverage[]
+  synthesisResult    SynthesisResult?
+  pendingAdditions   PendingAddition[]
+  views              AnalysisView[]
+  claimSeriesMembers ClaimSeriesMember[]
 
   /// The reader listing (status COMPLETE) and the Draft review queue (status DRAFT) both filter
   /// by status and sort by createdAt desc.

@@ -34,6 +34,7 @@ export interface ThreadDetailMemberRow {
 }
 
 export interface ThreadDetailRow {
+  id: string
   title: string
   slug: string
   status: ThreadStatus
@@ -118,6 +119,7 @@ export async function findThreadDetailBySlug(slug: string): Promise<ThreadDetail
   }
 
   return {
+    id: thread.id,
     title: thread.title,
     slug: thread.slug,
     status: thread.status,

@@ -203,6 +203,15 @@ export async function upsertThreadFromComponent(
   })
 }
 
+/** The bare `threadId` a Story belongs to, if any — a lighter lookup than `findThreadForStory`
+ *  (which also loads every member) for callers that only need to know *whether* and *where* to
+ *  chain a Thread-scoped job (ticket 72/75's `narrativeJob.ts` trigger — see `claimSeriesJob.ts`'s
+ *  own doc comment for why). */
+export async function findThreadIdForStory(storyId: string): Promise<string | null> {
+  const member = await prisma.threadMember.findUnique({ where: { storyId }, select: { threadId: true } })
+  return member?.threadId ?? null
+}
+
 export interface ThreadMemberForReader {
   analysisId: string
   seedHeadline: string

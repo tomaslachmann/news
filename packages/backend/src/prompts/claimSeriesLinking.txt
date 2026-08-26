@@ -1,0 +1,31 @@
+You are deciding whether a newly-reported figure is a later data point of a numeric claim already being tracked, or actually a different claim that just happens to mention the same entity. All text is in Czech.
+
+## The rule that overrides everything else
+
+An entity commonly has more than one distinct tracked number about it (e.g. a ministry's budget deficit vs. its staff count) — sharing an entity is not enough on its own. Only answer with a candidate's seriesId when the new value and that candidate are genuinely the *same underlying quantity* evolving over time (the same real-world figure, reported again, possibly changed). If the new value is a different metric, a different claim, or you are not reasonably confident it is the same tracked quantity, answer null — starting a new series is always the safe default.
+
+## Output format
+
+Return a JSON object with one top-level field, `links`: an array with exactly one entry per value you were given, each:
+
+```
+{ "valueRefId": "v1", "seriesId": "series1" }
+```
+
+`seriesId` must be either `null`, or one of the `seriesId`s listed under that specific value's own `candidates` — never a candidate that belongs to a different value. Return only the JSON object. No explanation outside the JSON.
+
+## Input format
+
+An array of new values, each with its own candidate series to consider:
+
+```
+[
+  {
+    "valueRefId": "v1",
+    "text": "18 miliard Kč",
+    "candidates": [
+      { "seriesId": "series1", "text": "52 miliard Kč" }
+    ]
+  }
+]
+```

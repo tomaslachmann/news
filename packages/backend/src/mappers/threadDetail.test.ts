@@ -33,6 +33,7 @@ function member(overrides: Partial<ThreadDetailMemberRow> = {}): ThreadDetailMem
 
 function thread(overrides: Partial<ThreadDetailRow> = {}): ThreadDetailRow {
   return {
+    id: 'thread1',
     title: 'Vícedílná kauza',
     slug: 'vicedilna-kauza',
     status: 'ACTIVE',
@@ -65,6 +66,7 @@ describe('toThreadDetail', () => {
           }),
         ],
       }),
+      [],
       []
     )
 
@@ -75,6 +77,7 @@ describe('toThreadDetail', () => {
   it('tags a Coverage row with no dimension match as an empty (honest) tag list, not an error', () => {
     const result = toThreadDetail(
       thread({ members: [member({ coverages: [coverage({ articleUrl: 'https://example.cz/untagged' })] })] }),
+      [],
       []
     )
 
@@ -113,6 +116,7 @@ describe('toThreadDetail', () => {
           }),
         ],
       }),
+      [],
       []
     )
 
@@ -143,6 +147,7 @@ describe('toThreadDetail', () => {
           }),
         ],
       }),
+      [],
       []
     )
 
@@ -158,6 +163,7 @@ describe('toThreadDetail', () => {
           member({ analysisId: 'a3', sourceOverlapPercentage: null }),
         ],
       }),
+      [],
       []
     )
 
@@ -165,7 +171,7 @@ describe('toThreadDetail', () => {
   })
 
   it('reports averageAgreementPercentage as null, not 0 or NaN, when no member has one', () => {
-    const result = toThreadDetail(thread({ members: [member({ sourceOverlapPercentage: null })] }), [])
+    const result = toThreadDetail(thread({ members: [member({ sourceOverlapPercentage: null })] }), [], [])
 
     expect(result.averageAgreementPercentage).toBeNull()
   })
@@ -184,6 +190,7 @@ describe('toThreadDetail', () => {
           member({ analysisId: 'a2', dimensions: oneContradiction }),
         ],
       }),
+      [],
       []
     )
 
@@ -203,6 +210,7 @@ describe('toThreadDetail', () => {
           }),
         ],
       }),
+      [],
       []
     )
 
@@ -210,14 +218,14 @@ describe('toThreadDetail', () => {
   })
 
   it('maps Thread status to its lowercase label', () => {
-    expect(toThreadDetail(thread({ status: 'DORMANT' }), []).status).toBe('dormant')
-    expect(toThreadDetail(thread({ status: 'CLOSED' }), []).status).toBe('closed')
+    expect(toThreadDetail(thread({ status: 'DORMANT' }), [], []).status).toBe('dormant')
+    expect(toThreadDetail(thread({ status: 'CLOSED' }), [], []).status).toBe('closed')
   })
 
   it('carries the passed-in entities through unchanged', () => {
     const entities = [{ key: 'e1', canonicalName: 'Entity One', type: 'PERSON' as const }]
 
-    expect(toThreadDetail(thread(), entities).entities).toEqual(entities)
+    expect(toThreadDetail(thread(), entities, []).entities).toEqual(entities)
   })
 
   it('maps openQuestions to just question/detail, stripping the relatedItems traceability citation', () => {
@@ -231,6 +239,7 @@ describe('toThreadDetail', () => {
           },
         ],
       }),
+      [],
       []
     )
 
@@ -240,7 +249,45 @@ describe('toThreadDetail', () => {
   })
 
   it('reports an empty openQuestions array as-is, not as a placeholder', () => {
-    expect(toThreadDetail(thread({ openQuestions: [] }), []).openQuestions).toEqual([])
+    expect(toThreadDetail(thread({ openQuestions: [] }), [], []).openQuestions).toEqual([])
+  })
+
+  it('maps claimSeries points, formatting eventTime as an ISO date string', () => {
+    const claimSeries = [
+      {
+        id: 'series1',
+        points: [
+          {
+            eventTime: new Date('2026-08-13T00:00:00Z'),
+            normalizedValue: 52e9,
+            unit: 'CZK',
+            sourceIds: ['s1'],
+          },
+          {
+            eventTime: new Date('2026-08-20T00:00:00Z'),
+            normalizedValue: 18e9,
+            unit: 'CZK',
+            sourceIds: ['s2'],
+          },
+        ],
+      },
+    ]
+
+    const result = toThreadDetail(thread(), [], claimSeries)
+
+    expect(result.claimSeries).toEqual([
+      {
+        id: 'series1',
+        points: [
+          { date: '2026-08-13T00:00:00.000Z', value: 52e9, unit: 'CZK', sourceIds: ['s1'] },
+          { date: '2026-08-20T00:00:00.000Z', value: 18e9, unit: 'CZK', sourceIds: ['s2'] },
+        ],
+      },
+    ])
+  })
+
+  it('reports an empty claimSeries array as-is when the Thread has no tracked claims', () => {
+    expect(toThreadDetail(thread(), [], []).claimSeries).toEqual([])
   })
 
   it('derives firstEventAt/lastEventAt from the visible (COMPLETE) members, never the raw Thread row span', () => {
@@ -255,6 +302,7 @@ describe('toThreadDetail', () => {
           member({ analysisId: 'a2', eventTime: new Date('2026-08-15T00:00:00Z') }),
         ],
       }),
+      [],
       []
     )
 
@@ -301,6 +349,7 @@ describe('toThreadDetail', () => {
           }),
         ],
       }),
+      [],
       []
     )
 

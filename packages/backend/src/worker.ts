@@ -5,6 +5,7 @@ import { runEntityRelationJob } from './jobs/entityRelationJob.js'
 import { runNarrativeJob } from './jobs/narrativeJob.js'
 import { runThreadRecomputeJob } from './jobs/threadRecomputeJob.js'
 import { runThreadOpenQuestionsJob } from './jobs/threadOpenQuestionsJob.js'
+import { runClaimSeriesJob } from './jobs/claimSeriesJob.js'
 import { runEntityImageEnrichJob } from './jobs/entityImageEnrichJob.js'
 import { runHomepageEntityStatsJob } from './jobs/homepageEntityStatsJob.js'
 import { makeConsoleLogger } from './jobs/consoleLogger.js'
@@ -18,6 +19,7 @@ import * as narrativeImageRepo from './repositories/narrativeImage.js'
 import * as storyRelationRepo from './repositories/storyRelation.js'
 import * as synthesisResultRepo from './repositories/synthesisResult.js'
 import * as threadRepo from './repositories/thread.js'
+import * as claimSeriesRepo from './repositories/claimSeries.js'
 
 const workerLog = makeConsoleLogger()
 
@@ -63,6 +65,7 @@ const start = async () => {
             markNarrativeGenerationFailedSafe: synthesisResultRepo.markNarrativeGenerationFailedSafe,
             findNarrativeImageForSynthesisResult: narrativeImageRepo.findNarrativeImageForSynthesisResult,
             createNarrativeImage: narrativeImageRepo.createNarrativeImage,
+            findThreadIdForStory: threadRepo.findThreadIdForStory,
           },
           workerLog
         )
@@ -89,6 +92,18 @@ const start = async () => {
           workerLog
         )
       ),
+      registerJobWorker(JobName.ThreadTrackClaimSeries, (payload) =>
+        runClaimSeriesJob(
+          payload,
+          {
+            findVisibleMembersForClaimTracking: claimSeriesRepo.findVisibleMembersForClaimTracking,
+            findProcessedAnalysisIdsForThread: claimSeriesRepo.findProcessedAnalysisIdsForThread,
+            findLatestSeriesMembersForThread: claimSeriesRepo.findLatestSeriesMembersForThread,
+            addClaimSeriesMember: claimSeriesRepo.addClaimSeriesMember,
+          },
+          workerLog
+        )
+      ),
       registerJobWorker(JobName.EntityImageEnrich, (payload) =>
         runEntityImageEnrichJob(
           payload,
@@ -106,8 +121,8 @@ const start = async () => {
     ])
     console.log(
       'Worker started; entity.extract, narrative.generate, thread.recompute, ' +
-        'thread.synthesizeOpenQuestions, entity.image.enrich, and homepage.entity-stats.refresh ' +
-        'handlers registered.'
+        'thread.synthesizeOpenQuestions, thread.trackClaimSeries, entity.image.enrich, and ' +
+        'homepage.entity-stats.refresh handlers registered.'
     )
   } catch (err) {
     console.error(err)
