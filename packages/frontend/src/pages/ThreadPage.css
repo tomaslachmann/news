@@ -1,0 +1,147 @@
+/* Ticket 69 — the dedicated Thread page. Reuses AnalysisPage.css (.crumbs/.arthead/.sechead/
+ * .railhead/.ents/.erow/.box) and HomePage.css (.daystats/.stat) rather than duplicating them —
+ * same cross-page CSS reuse ArticlePage.tsx already established for AnalysisPage.css. The three
+ * blocks below (.tl chronology, .qa open questions, .artable all-articles table) are new to this
+ * page and don't exist anywhere else yet, ported from the reference design's ds/components.css. */
+
+/* No .tl__day grouping — this Thread's chronology is member-granularity (typically a handful of
+ * entries), not the reference design's dozens of per-outlet events, so day headers would add
+ * structure without benefit. `.tl__i`'s own dot-and-line marks still apply per entry. */
+.tl {
+  --tl-x: 4.5rem;
+}
+.tl__i {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: var(--sp-6);
+  padding: var(--sp-4) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.tl__i::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: var(--tl-x);
+  inline-size: var(--bw-hair);
+  background: var(--line);
+}
+.tl__i::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--tl-x) - 3px);
+  top: calc(var(--sp-4) + 0.2rem);
+  inline-size: 7px;
+  block-size: 7px;
+  background: var(--paper);
+  border: var(--bw-rule) solid var(--ink);
+}
+.tl__t {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.15rem;
+}
+.tl__h {
+  font-size: var(--text-h4);
+}
+.tl__w {
+  margin-top: var(--sp-2);
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  max-width: var(--measure);
+}
+.tl__b {
+  margin-top: var(--sp-2);
+}
+.tl__order {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.qa {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.qa li {
+  padding: var(--sp-3) 0;
+  border-top: var(--bw-hair) solid var(--line-2);
+}
+.qa li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.qa__q {
+  display: grid;
+  grid-template-columns: 0.9rem minmax(0, 1fr);
+  gap: 0.4rem;
+  font-size: var(--text-small);
+  line-height: 1.4;
+}
+.qa__q::before {
+  content: '?';
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+.qa__d {
+  margin-top: 0.2rem;
+  padding-left: 1.3rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.artable {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+.artable th {
+  text-align: left;
+  padding: 0 var(--sp-4) var(--sp-2) 0;
+  border-bottom: var(--bw-hair) solid var(--line-strong);
+  font-family: var(--font-sans);
+  font-optical-sizing: none;
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.artable td {
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  vertical-align: baseline;
+}
+.artable tr:hover td {
+  background: color-mix(in oklab, var(--surface-2) 70%, transparent);
+}
+.artable__who {
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.artable__d {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.artable__t {
+  font-size: var(--text-small);
+  line-height: 1.4;
+}
+.artable__m {
+  white-space: nowrap;
+}
+.artable th:last-child,
+.artable td:last-child {
+  padding-right: 0;
+  text-align: right;
+}
