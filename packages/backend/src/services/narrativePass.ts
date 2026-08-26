@@ -85,8 +85,10 @@ function buildRepairPrompt(originalUserContent: string, previous: unknown, failu
     'Return a corrected JSON document in the exact same schema, fixing every flagged issue: every ' +
       '<nt:e>/<nt:v>/<nt:s> tag id used inline must be declared in entityRefs/valueRefs/sourceRefs, ' +
       'every quote block must name a declared sourceId and its text must be a real verbatim quote ' +
-      "from that source's fullText, and every assertion's dimensionItemId must be one of the ids " +
-      'actually present in the cited dimension.',
+      "from that source's fullText, every assertion's dimensionItemId must be one of the ids " +
+      "actually present in the cited dimension, and every chart block's valueIds must name at " +
+      'least two distinct declared valueRefs whose figures share the same unit (never mix, e.g., a ' +
+      'death toll with a currency amount).',
     '',
     'Previous output:',
     JSON.stringify(previous),
