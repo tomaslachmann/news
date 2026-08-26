@@ -27,14 +27,27 @@ function XIcon({ size }: { size: number }) {
   )
 }
 
+function InstagramIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.366.062 2.633.334 3.608 1.308.974.974 1.246 2.241 1.308 3.608.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.062 1.366-.334 2.633-1.308 3.608-.974.974-2.242 1.246-3.608 1.308-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.366-.062-2.633-.334-3.608-1.308-.974-.974-1.246-2.241-1.308-3.608-.058-1.266-.07-1.646-.07-4.85s.012-3.584.07-4.85c.062-1.366.334-2.633 1.308-3.608.974-.974 2.241-1.246 3.608-1.308 1.266-.058 1.646-.07 4.85-.07zM12 0C8.741 0 8.332.014 7.052.072 5.775.13 4.602.396 3.635 1.363c-.967.967-1.233 2.14-1.291 3.417C2.286 6.06 2.272 6.47 2.272 12s.014 5.94.072 7.22c.058 1.277.324 2.45 1.291 3.417.967.967 2.14 1.233 3.417 1.291 1.28.058 1.689.072 7.22.072s5.94-.014 7.22-.072c1.277-.058 2.45-.324 3.417-1.291.967-.967 1.233-2.14 1.291-3.417.058-1.28.072-1.689.072-7.22s-.014-5.94-.072-7.22c-.058-1.277-.324-2.45-1.291-3.417-.967-.967-2.14-1.233-3.417-1.291C15.94.014 15.531 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+    </svg>
+  )
+}
+
 function ShareIconButton({
   label,
   href,
+  newTab = true,
   onClick,
   children,
 }: {
   label: string
   href?: string
+  /** False for the `mailto:` channel — unlike the social ones, a `mailto:` link never renders
+   *  anything, so `target="_blank"` just leaves a stray empty tab behind after the OS mail client
+   *  opens (code review, ticket 81). */
+  newTab?: boolean
   onClick?: () => void
   children: React.ReactNode
 }) {
@@ -42,8 +55,7 @@ function ShareIconButton({
     <a
       className="btn btn--ghost sharebar__btn"
       href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       aria-label={label}
     >
       {children}
@@ -60,6 +72,17 @@ function ShareIconButton({
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   )
+}
+
+/** Instagram has no share-intent URL of its own (unlike Facebook/X/WhatsApp) — it's never exposed
+ *  a `https://instagram.com/share?...`-style link a third-party site can navigate to, only
+ *  Stories' own in-app link sticker. The real way a web page reaches Instagram is the OS-level
+ *  share sheet (`navigator.share`, the Web Share API): on a phone with the Instagram app
+ *  installed, Instagram Stories/Direct is one of the destinations that sheet offers. Feature-
+ *  detected — unsupported browsers (most desktop ones) just don't get this button, never a dead
+ *  one (user request, ticket 81). */
+function supportsNativeShare(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 }
 
 /** Icon-only share row for the Article page (ticket 81) — Facebook/X/WhatsApp/e-mail are plain
@@ -85,8 +108,26 @@ export function ShareBar({ title, url }: { title: string; url: string }) {
     }
   }
 
+  async function handleNativeShare() {
+    try {
+      await navigator.share({ title, url })
+    } catch (err) {
+      // AbortError: the reader closed the OS share sheet without picking anything -- routine, not
+      // a failure to surface.
+      if (err instanceof Error && err.name === 'AbortError') return
+    }
+  }
+
   return (
     <div className="sharebar" role="group" aria-label="Sdílet článek">
+      {supportsNativeShare() && (
+        <ShareIconButton
+          label="Sdílet přes systémovou nabídku (Instagram a další aplikace)"
+          onClick={() => void handleNativeShare()}
+        >
+          <InstagramIcon size={16} />
+        </ShareIconButton>
+      )}
       <ShareIconButton label="Sdílet na Facebooku" href={links.facebook}>
         <FacebookIcon size={16} />
       </ShareIconButton>
@@ -96,7 +137,7 @@ export function ShareBar({ title, url }: { title: string; url: string }) {
       <ShareIconButton label="Sdílet na WhatsAppu" href={links.whatsapp}>
         <MessageCircle size={16} aria-hidden="true" />
       </ShareIconButton>
-      <ShareIconButton label="Sdílet e-mailem" href={links.email}>
+      <ShareIconButton label="Sdílet e-mailem" href={links.email} newTab={false}>
         <Mail size={16} aria-hidden="true" />
       </ShareIconButton>
       <ShareIconButton

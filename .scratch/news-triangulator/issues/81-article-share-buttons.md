@@ -50,3 +50,19 @@ what was actually possible instead: Vite transforms `ArticlePage.tsx`/`ShareBar.
 compile/import errors, `tsc --noEmit` is clean, and every share URL's exact encoding (Czech
 diacritics, spaces, `&`, `?`/`=` in the target URL) is verified against Node's own
 `encodeURIComponent` in `shareLinks.test.ts`, not hand-computed.
+
+**Code review found the `mailto:` button used `target="_blank"` like the social channels** — a
+`mailto:` link never renders anything, so that left a stray empty tab behind after the OS mail
+client opened. Fixed: `ShareIconButton` now takes a `newTab` prop (default `true`), and the e-mail
+button passes `newTab={false}`.
+
+**User follow-up: Instagram was missing, "the most-used platform."** Confirmed (web search,
+2026-08-26) Instagram has never exposed a share-intent URL a third-party site can link to — no
+`https://instagram.com/share?...` scheme exists, unlike Facebook/X/WhatsApp; only Stories' own
+in-app link sticker. A fabricated "Instagram share link" would just be a dead button. The real,
+honest path to Instagram from a web page is the OS-level share sheet (`navigator.share`, the Web
+Share API) — on a phone with Instagram installed, Instagram Stories/Direct is one of the
+destinations that sheet offers. Added as a feature-detected leading button
+(`supportsNativeShare()`): present only in browsers that implement `navigator.share` (mobile
+Safari/Chrome, some desktop browsers), absent everywhere else rather than rendering a button that
+would throw.
