@@ -66,3 +66,21 @@ destinations that sheet offers. Added as a feature-detected leading button
 (`supportsNativeShare()`): present only in browsers that implement `navigator.share` (mobile
 Safari/Chrome, some desktop browsers), absent everywhere else rather than rendering a button that
 would throw.
+
+**Second code-review round** (after the mailto/Instagram round above) found four things:
+reset `copied` when the Article changes — real bug, fixed. First attempt (a `useEffect` calling
+`setCopied(false)` keyed on `url`) tripped this repo's own `react-hooks/set-state-in-effect` lint
+rule; switched to React's actually-recommended fix for "reset all state when a prop changes" —
+`<ShareBar key={analysis.id} .../>` in `ArticlePage.tsx`, so React remounts `ShareBar` fresh (no
+effect needed) whenever the Article does, instead of reusing the same instance the way it does
+today (`ArticlePage.tsx` reuses one instance across an in-place Article-to-Article navigation, so
+a pending "Odkaz zkopírován" confirmation and its timer could otherwise leak from the previous
+Article onto the next one); the three brand-icon components
+were near-duplicates of the same SVG shell — fixed, collapsed into one `BrandIcon({ size, path })`
+plus three path constants; the native-share catch's non-`AbortError` branch was an undocumented
+silent swallow — fixed, added the same rationale the sibling clipboard handler already states.
+The fourth (the leading button shows the Instagram glyph but actually opens the generic OS share
+sheet, not Instagram specifically) is a deliberate, already-disclosed tradeoff — the reviewer's own
+framing was "mitigates but doesn't eliminate," not a functional bug — kept as-is: the icon is what
+visibly answers the user's "Instagram is missing" ask, and the tooltip/aria-label already states
+plainly that it opens the system share menu.
