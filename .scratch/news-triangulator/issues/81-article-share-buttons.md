@@ -11,7 +11,7 @@ Mail/MessageCircle/Copy/Check icons — no new dependency required.
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `lib/shareLinks.ts`: pure function(s) building each channel's share-intent URL from a title +
       absolute URL (Facebook, X/Twitter, WhatsApp, e-mail `mailto:`) — properly URL-encoded. No
