@@ -206,6 +206,7 @@ export interface ThreadMemberForReader {
 
 export interface ThreadForReader {
   title: string
+  slug: string
   memberCount: number
   members: ThreadMemberForReader[]
 }
@@ -245,7 +246,7 @@ export async function findThreadForStory(storyId: string): Promise<ThreadForRead
     })
   }
 
-  return { title: thread.title, memberCount: thread.memberCount, members }
+  return { title: thread.title, slug: thread.slug, memberCount: thread.memberCount, members }
 }
 
 /** Sets a Thread's status directly — real code never does this (no `DORMANT → CLOSED` admin

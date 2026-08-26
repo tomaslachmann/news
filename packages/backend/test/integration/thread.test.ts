@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { createAnalysis, completeAnalysisWithSynthesis, disconnect } from '../../src/repositories/analysis.js'
+import { createCoverages } from '../../src/repositories/coverage.js'
 import { createStoryRelation } from '../../src/repositories/storyRelation.js'
 import {
   findFollowUpComponent,
@@ -9,6 +10,7 @@ import {
   findThreadForStory,
   setThreadStatusForTesting,
 } from '../../src/repositories/thread.js'
+import { findThreadDetailBySlug } from '../../src/repositories/threadDetail.js'
 
 async function follow(
   fromStoryId: string,
@@ -404,6 +406,82 @@ describe('Thread repository against a real Postgres instance', () => {
           position: 1,
         },
       ])
+    })
+  })
+
+  describe('findThreadDetailBySlug', () => {
+    it('returns null for an unknown slug', async () => {
+      expect(await findThreadDetailBySlug('no-such-thread')).toBeNull()
+    })
+
+    it('returns the Thread with only its COMPLETE members and their real Coverage rows', async () => {
+      const a = await createAnalysis({
+        seedUrl: 'https://example.cz/thread-detail-a',
+        seedHeadline: 'Seed A',
+      })
+      const b = await createAnalysis({
+        seedUrl: 'https://example.cz/thread-detail-b',
+        seedHeadline: 'Seed B',
+      })
+      await createCoverages([
+        {
+          analysisId: a.id,
+          sourceId: 'src-idnes',
+          articleUrl: 'https://idnes.cz/thread-detail-a',
+          title: 'iDnes headline',
+          status: 'OK',
+        },
+      ])
+      await completeAnalysisWithSynthesis(
+        a.id,
+        {
+          agreement: [
+            {
+              prose: 'Shoda',
+              attributions: [
+                { outlet: 'iDnes', czechQuote: 'q', articleUrl: 'https://idnes.cz/thread-detail-a' },
+              ],
+            },
+          ],
+          contradiction: [],
+          uniqueReporting: [],
+          framing: [],
+        },
+        { headline: 'Generated A', sourceOverlapPercentage: 80, agreementCategory: 'CONFIRMED' }
+      )
+      // b stays PENDING (no completeAnalysisWithSynthesis call) — must not appear in the result.
+      // Recent, not a fixed historical date — a lastEventAt more than 30 days in the past would
+      // compute as DORMANT (see upsertThreadFromComponent's own DORMANT test above).
+      const span = { firstEventAt: new Date(Date.now() - 60 * 60 * 1000), lastEventAt: new Date() }
+      await upsertThreadFromComponent(
+        [
+          { storyId: a.storyId, position: 0, role: 'ORIGIN' },
+          { storyId: b.storyId, position: 1, role: 'DEVELOPMENT' },
+        ],
+        span,
+        { title: 'Detail case', slug: `detail-case-${a.storyId}` }
+      )
+
+      const result = await findThreadDetailBySlug(`detail-case-${a.storyId}`)
+
+      expect(result?.title).toBe('Detail case')
+      expect(result?.status).toBe('ACTIVE')
+      expect(result?.firstEventAt).toEqual(span.firstEventAt)
+      expect(result?.lastEventAt).toEqual(span.lastEventAt)
+      expect(result?.members).toHaveLength(1)
+      const member = result?.members[0]
+      expect(member?.analysisId).toBe(a.id)
+      expect(member?.headline).toBe('Generated A')
+      expect(member?.agreementCategory).toBe('CONFIRMED')
+      expect(member?.sourceOverlapPercentage).toBe(80)
+      expect(member?.coverages).toHaveLength(1)
+      const coverage = member?.coverages[0]
+      expect(coverage?.articleUrl).toBe('https://idnes.cz/thread-detail-a')
+      expect(coverage?.title).toBe('iDnes headline')
+      expect(coverage?.sourceName).toBe('iDnes')
+      expect(coverage?.status).toBe('OK')
+      expect(coverage?.createdAt).toBeInstanceOf(Date)
+      expect(coverage?.extractionResult).toBeNull()
     })
   })
 })

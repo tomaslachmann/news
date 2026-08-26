@@ -17,5 +17,5 @@ export function toThreadSummary(currentAnalysisId: string, thread: ThreadForRead
       isCurrent: m.analysisId === currentAnalysisId,
     }))
 
-  return { title: thread.title, memberCount: members.length, members }
+  return { title: thread.title, slug: thread.slug, memberCount: members.length, members }
 }

@@ -483,11 +483,76 @@ export interface ThreadMemberItem {
 /** The multi-stage arc (`Thread`) this Analysis's Story belongs to, if any — most Analyses never
  *  accumulate a FOLLOW_UP chain, so this is absent far more often than present. A materialized,
  *  periodically-recomputed view over `StoryRelation`'s `FOLLOW_UP` edges (ADR 0029, ticket 17),
- *  not a live query — see `thread.recompute`. */
+ *  not a live query — see `thread.recompute`. `slug` (ticket 68) links to the dedicated
+ *  `/thread/:slug` page — this inline surface stays as-is otherwise. */
 export interface ThreadSummaryItem {
   title: string
+  slug: string
   memberCount: number
   members: ThreadMemberItem[]
+}
+
+export type ThreadStatusLabel = 'active' | 'dormant' | 'closed'
+
+/** Chronology entry on the dedicated Thread page (ticket 68/69) — Thread-member (Story/Analysis)
+ *  granularity, real fields only. No "what changed" narrative and no breakthrough/correction
+ *  marks (ticket 65's grilling session — nothing in this codebase classifies a member that way).
+ *  `agreementCategory` and `sourceOverlap` are the same real, already-computed per-Analysis
+ *  fields `AnalysisDetail` exposes elsewhere, not new numbers invented for this page. */
+export interface ThreadTimelineItem {
+  analysisId: string
+  title: string
+  eventTime: string
+  sourceCount: number
+  sourceOverlap?: SourceOverlapInfo
+  agreementCategory: AgreementCategory
+}
+
+/** What a single Coverage row was actually cited for, derived by matching its `articleUrl`
+ *  against every dimension item's `Attribution.articleUrl` on its own Analysis — never a
+ *  fabricated percentage (ticket 65's grilling session rejected the reference design's per-row
+ *  "Shoda %", which has no real per-outlet backing). A Coverage can carry more than one tag (cited
+ *  under both `agreement` and `framing`, say) or none at all — "not singled out in any dimension
+ *  item" is a real, honest state, not an error. */
+export type ThreadArticleTag = 'agrees' | 'contradicts' | 'unique'
+
+/** One row of the "all articles in this thread" table (ticket 68/69) — individual-outlet-article
+ *  granularity, unlike `ThreadTimelineItem`'s per-member granularity above. */
+export interface ThreadArticleRow {
+  outlet: string
+  publishedAt: string
+  /** Absent, never fabricated from the outlet name, when this Coverage's own title extraction
+   *  failed or wasn't attempted — same convention `CoverageInfo.title` already follows. */
+  title?: string
+  articleUrl: string
+  tags: ThreadArticleTag[]
+}
+
+export interface ThreadSourceRow {
+  outlet: string
+  coverageCount: number
+}
+
+/** The dedicated Thread page's full read model (ticket 68 / ADR 0037) — `GET /api/thread/:slug`.
+ *  `averageAgreementPercentage`/`contradictionCount` are real aggregates over every visible
+ *  member's own already-computed `sourceOverlap`/`contradiction` dimension, not new synthesis.
+ *  Has no `openQuestions`/chart fields — ticket 67 (open-questions synthesis) and ticket 66 (chart
+ *  `NarrativeBlock`) are unresolved; the open-questions rail ships as frontend-only placeholder
+ *  content until 67 lands, and the trend chart isn't part of this page at all until 66 does. */
+export interface ThreadDetail {
+  title: string
+  slug: string
+  status: ThreadStatusLabel
+  firstEventAt: string
+  lastEventAt: string
+  memberCount: number
+  sourceCount: number
+  averageAgreementPercentage: number | null
+  contradictionCount: number
+  timeline: ThreadTimelineItem[]
+  articles: ThreadArticleRow[]
+  sources: ThreadSourceRow[]
+  entities: EntityMentionItem[]
 }
 
 export interface AnalysisDetail {
