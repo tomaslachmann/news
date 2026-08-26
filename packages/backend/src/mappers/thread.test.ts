@@ -4,6 +4,7 @@ import type { ThreadForReader } from '../repositories/thread.js'
 
 const THREAD: ThreadForReader = {
   title: 'Vícedílná kauza',
+  slug: 'vicedilna-kauza',
   memberCount: 3,
   members: [
     { analysisId: 'a1', seedHeadline: 'Seed 1', headline: 'Generated 1', status: 'COMPLETE', position: 0 },
@@ -53,5 +54,11 @@ describe('toThreadSummary', () => {
     const result = toThreadSummary('a1', THREAD)
 
     expect(result.title).toBe('Vícedílná kauza')
+  })
+
+  it('carries the Thread slug through unchanged', () => {
+    const result = toThreadSummary('a1', THREAD)
+
+    expect(result.slug).toBe('vicedilna-kauza')
   })
 })

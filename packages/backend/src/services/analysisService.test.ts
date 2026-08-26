@@ -1006,6 +1006,7 @@ describe('getAnalysisDetail', () => {
     })
     vi.mocked(threadRepo.findThreadForStory).mockResolvedValue({
       title: 'Vícedílná kauza',
+      slug: 'vicedilna-kauza',
       memberCount: 2,
       members: [
         { analysisId: 'a1', seedHeadline: 'Headline', headline: null, status: 'COMPLETE', position: 0 },
@@ -1024,6 +1025,7 @@ describe('getAnalysisDetail', () => {
     expect(threadRepo.findThreadForStory).toHaveBeenCalledWith('s1')
     expect(result.thread).toEqual({
       title: 'Vícedílná kauza',
+      slug: 'vicedilna-kauza',
       memberCount: 2,
       members: [
         { analysisId: 'a1', title: 'Headline', isCurrent: true },
@@ -1045,6 +1047,7 @@ describe('getAnalysisDetail', () => {
     })
     vi.mocked(threadRepo.findThreadForStory).mockResolvedValue({
       title: 'Vícedílná kauza',
+      slug: 'vicedilna-kauza',
       memberCount: 2,
       members: [
         { analysisId: 'a1', seedHeadline: 'Headline', headline: null, status: 'COMPLETE', position: 0 },

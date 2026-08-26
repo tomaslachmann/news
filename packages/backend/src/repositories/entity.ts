@@ -337,6 +337,35 @@ export async function findEntityMentionsForStory(storyId: string): Promise<Entit
   }))
 }
 
+/** The batched sibling of `findEntityMentionsForStory` — one Thread's several member Stories
+ *  (ticket 68) in a single query instead of N round trips, one per member. Rows are returned in
+ *  no particular per-Story grouping (the caller, `threadDetailService.ts`, dedupes by entity key
+ *  across the whole Thread anyway); ordered by salience descending same as the single-Story
+ *  version, so a caller that doesn't dedupe still sees the most central entities first. */
+export async function findEntityMentionsForStories(storyIds: string[]): Promise<EntityMentionRow[]> {
+  if (storyIds.length === 0) return []
+  const rows = await prisma.storyEntity.findMany({
+    where: { storyId: { in: storyIds } },
+    select: {
+      entity: {
+        select: {
+          key: true,
+          canonicalName: true,
+          type: true,
+          images: { select: { imageUrl: true }, take: 1 },
+        },
+      },
+    },
+    orderBy: { salience: 'desc' },
+  })
+  return rows.map((r) => ({
+    key: r.entity.key,
+    canonicalName: r.entity.canonicalName,
+    type: r.entity.type,
+    imageUrl: r.entity.images[0]?.imageUrl ?? null,
+  }))
+}
+
 export interface EntitySearchRow {
   key: string
   canonicalName: string
