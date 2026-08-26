@@ -318,7 +318,14 @@ export async function findAnalysesByCategoryPage(
     include: ANALYSIS_LIST_ROW_INCLUDE,
   })
   const byId = new Map(rows.map((r) => [r.id, r]))
-  return idRows.map((idRow) => toAnalysisListRow(byId.get(idRow.id)!))
+  // Same defensive gap-tolerance as homepageStats.ts's own raw-SQL-ids-then-findMany pattern
+  // (findHomepageMostReadRows) — a freak state where the second query is missing an id the first
+  // one found (e.g. a concurrent delete between the two queries) degrades to skipping that one
+  // row, never a 500 on this public endpoint.
+  return idRows
+    .map((idRow) => byId.get(idRow.id))
+    .filter((row): row is NonNullable<typeof row> => row !== undefined)
+    .map(toAnalysisListRow)
 }
 
 export interface DraftListRow {

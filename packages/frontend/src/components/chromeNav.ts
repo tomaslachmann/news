@@ -26,8 +26,6 @@ export function getPrimaryNavItems(isAdmin: boolean, compact = false): PrimaryNa
   const items: PrimaryNavItem[] = [
     ...rubrics,
     { label: isAdmin ? 'Historie' : 'Články', to: '/history' },
-    // A real, working link (ticket 71) — unlike the topic rubrics above, which have no real
-    // category data behind them and are `to: '#'` placeholders.
     { label: 'Vlákna', to: '/threads' },
     { label: 'Hledat', to: '/search' },
   ]
