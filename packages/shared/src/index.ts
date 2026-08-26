@@ -412,6 +412,18 @@ export interface HomepageMostReadItem {
   viewCount: number
 }
 
+/** Homepage "recently updated Threads" row (ticket 70) — real data only (ticket 65's grilling
+ *  session): the most recently-updated Threads with at least 2 currently-visible (COMPLETE)
+ *  members, same visibility gate `ThreadDetail`/`ThreadSummaryItem` already apply elsewhere.
+ *  `memberCount` is that visible count, not the Thread's raw total, same "never report a bigger
+ *  number than what's actually reachable" convention `toThreadSummary` established. */
+export interface HomepageThreadItem {
+  slug: string
+  title: string
+  memberCount: number
+  lastEventAt: string
+}
+
 /** One Event (Story) that mentions this entity — `analysisId` is what an entity page links to
  *  (ticket 43), same id every other reader-facing surface navigates Articles by. */
 export interface EntityEventItem {

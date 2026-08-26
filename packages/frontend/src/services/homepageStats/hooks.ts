@@ -5,6 +5,7 @@ import {
   fetchHomepageEntityStats,
   fetchHomepageMinuteFeed,
   fetchHomepageMostRead,
+  fetchHomepageRecentThreads,
   fetchHomepageSummaryStats,
 } from './index'
 
@@ -50,5 +51,12 @@ export function useHomepageMostRead() {
   return useQuery({
     queryKey: ['homepageStats', 'mostRead'],
     queryFn: fetchHomepageMostRead,
+  })
+}
+
+export function useHomepageRecentThreads() {
+  return useQuery({
+    queryKey: ['homepageStats', 'recentThreads'],
+    queryFn: fetchHomepageRecentThreads,
   })
 }

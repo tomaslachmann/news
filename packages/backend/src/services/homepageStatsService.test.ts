@@ -6,6 +6,7 @@ import {
   getHomepageEntityStatsWindow,
   getHomepageMinuteFeed,
   getHomepageMostRead,
+  getHomepageRecentThreads,
   getHomepageSummaryStats,
   getHomepageTodayStatsWindow,
   HOMEPAGE_CONTRADICTION_LIMIT,
@@ -13,6 +14,7 @@ import {
   HOMEPAGE_MINUTE_LIMIT,
   HOMEPAGE_MOST_READ_LIMIT,
   HOMEPAGE_MOST_READ_WINDOW_HOURS,
+  HOMEPAGE_RECENT_THREADS_LIMIT,
   refreshHomepageEntityStats,
 } from './homepageStatsService.js'
 
@@ -202,6 +204,32 @@ describe('getHomepageMostRead', () => {
     vi.mocked(homepageStatsRepo.findHomepageMostReadRows).mockResolvedValue([])
 
     await expect(getHomepageMostRead(new Date())).resolves.toEqual([])
+  })
+})
+
+describe('getHomepageRecentThreads', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('returns the most recently-updated visible Threads in rail shape, limited', async () => {
+    vi.mocked(homepageStatsRepo.findHomepageRecentThreadRows).mockResolvedValue([
+      {
+        slug: 'kauza-x',
+        title: 'Kauza X',
+        visibleMemberCount: 3,
+        lastVisibleEventAt: new Date('2026-08-26T12:00:00Z'),
+      },
+    ])
+
+    await expect(getHomepageRecentThreads()).resolves.toEqual([
+      { slug: 'kauza-x', title: 'Kauza X', memberCount: 3, lastEventAt: '2026-08-26T12:00:00.000Z' },
+    ])
+    expect(homepageStatsRepo.findHomepageRecentThreadRows).toHaveBeenCalledWith(HOMEPAGE_RECENT_THREADS_LIMIT)
+  })
+
+  it('returns an empty rail when no Thread currently has 2 visible members', async () => {
+    vi.mocked(homepageStatsRepo.findHomepageRecentThreadRows).mockResolvedValue([])
+
+    await expect(getHomepageRecentThreads()).resolves.toEqual([])
   })
 })
 
