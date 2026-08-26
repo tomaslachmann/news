@@ -10,7 +10,7 @@ column ready for ticket 79's feed-implied categorization. Covers the sources wit
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `packages/backend/prisma/schema.prisma`: new `ArticleCategory` enum — `DOMESTIC`, `WORLD`,
       `ECONOMY`, `POLITICS`, `SPORT`, `CULTURE`, `SCIENCE_TECH`, `CRIME`, `LIFESTYLE`, `COMMENTARY`,
