@@ -2,7 +2,7 @@
 
 **Type:** grilling
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to resolve:** `docs/user-comments.md` item 12: "chybí kategorizace" (missing categorization).
 Already flagged and explicitly deferred twice before — ticket 56's homepage audit ("there is
@@ -65,4 +65,60 @@ Not yet decided:
 
 ## Answer
 
-*Not yet run.*
+**Grilling session held 2026-08-27.**
+
+Surveyed real RSS feed structure before the session (see also `docs/user-comments.md` item 12,
+tickets 56/58's prior deferrals): the 13 already-configured `SourceFeed`s split into two real
+categorization mechanisms — iRozhlas (and iDnes, per its documented `?c=` parameter scheme) expose
+genuine per-category RSS feed URLs, while their *currently-configured* feeds carry zero inline
+signal at all (both were widened to all-articles feeds by
+`20260820133322_add_feed_parser_kind_and_source_fixes`); Novinky, Aktuálně, ČT24, and Seznam Zprávy
+tag every item inline with a real category value; Deník N multi-tags each item, mixing real rubrics
+with story-specific topic tags undifferentiated; České noviny uses terse internal short codes.
+Nothing in this codebase reads any of this today.
+
+Decisions reached with the user:
+
+- **Granularity: per-`Coverage`, `Story`/`Analysis` derive an aggregate.** `Coverage.primaryCategory`
+  (nullable `ArticleCategory`) is the real, per-source data — categorization is a per-source
+  judgment the same way `sourceOverlap`/attributions already are, and sources genuinely disagree.
+  `Story`/`Analysis`'s own "primary category" is computed at read time from its Coverages, never a
+  persisted column — matches this codebase's existing "derive on read" convention, and avoids a
+  stale-aggregate problem.
+- **Canonical enum: `ArticleCategory`** — `DOMESTIC`, `WORLD`, `ECONOMY`, `POLITICS`, `SPORT`,
+  `CULTURE`, `SCIENCE_TECH`, `CRIME`, `LIFESTYLE`, `COMMENTARY`, `HEALTH`, `REGIONAL`, `OTHER`.
+  `chromeNav.ts`'s "Energetika" placeholder is dropped — no real outlet evidence for it anywhere in
+  this research pass, and inventing a category the data doesn't back is exactly what tickets 56/58
+  already warned against for this feature.
+- **One `primaryCategory` per `Coverage`, not an array.** When a source hands us several raw tags
+  (Deník N), the first one that maps onto the canonical enum wins; unmapped/topic-only tags (e.g.
+  "Ruská válka na Ukrajině") are ignored for this purpose — a reader-facing "browse by rubric" nav
+  wants one bucket per article, and an array only reopens the rubric-vs-topic-tag ambiguity the raw
+  feeds can't answer cleanly anyway.
+- **Mapping: hardcoded per-source TS lookup table**, not admin-editable — matches how `Source`/
+  `SourceFeed` rows themselves are already raw-SQL-seeded, code-defined config. 13 sources with a
+  handful of raw values each is small and stable enough that a DB-backed mapping would be new
+  admin-UI scope nothing else here needs.
+- **No backfill.** Existing Coverage/Story rows stay uncategorized going forward — this codebase's
+  established convention (ADR 0021), consistent with how e.g. ticket 51's lead-image backfill was
+  handled.
+- **Story aggregate rule: mode of its Coverages' categories**, tie-broken by the earliest-attached
+  Coverage's category.
+- **`SourceFeed.category` (nullable `ArticleCategory`) added to the schema now, feed-URL research
+  deferred.** iRozhlas's/iDnes's actual per-category/`?c=` feed URLs are real, per-source legwork
+  that shouldn't block shipping the core enum/model/mapping mechanism — split into ticket 79.
+- **`chromeNav.ts` wiring and a real `/category/:slug` browse page: split off entirely**, mirroring
+  ticket 65's own grilling → 68-71 fan-out. This session settles the data model and ingestion
+  mapping only.
+
+Follow-up tickets filed from this session:
+
+- **78 — Article categorization backend.** `ArticleCategory` enum, `Coverage.primaryCategory` +
+  `SourceFeed.category` columns, per-source raw-tag mapping table, `rss.ts` extended to read
+  `<category>`, Story/Analysis read-time aggregate. Covers the sources with real inline-tag signal
+  today (Novinky, Aktuálně, ČT24, Seznam Zprávy, Deník N, České noviny).
+- **79 — Per-category `SourceFeed` configuration for iRozhlas/iDnes.** Research and add the real
+  per-section/`?c=` feed URLs for the two sources whose currently-configured feeds carry no inline
+  signal at all. Blocked by 78 (needs `SourceFeed.category` to exist).
+- **80 — Wire `chromeNav` rubrics to a real `/category/:slug` browse page.** Replace the dead
+  `to: '#'` placeholders once real category data exists. Blocked by 78.
