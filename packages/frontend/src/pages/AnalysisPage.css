@@ -42,6 +42,19 @@
   max-width: var(--measure-head);
 }
 
+/* Share row (ticket 81) — sole consumer today, so it stays here rather than
+   ds/components.css, matching this file's own "extract once a class is about to be duplicated a
+   third time" convention (see components.css's file header). */
+.sharebar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+.sharebar .sharebar__btn {
+  padding: 0.4rem;
+}
+
 .artbody > * + * {
   margin-top: var(--sp-5);
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Gauge } from '@/components/Gauge'
+import { ShareBar } from '@/components/ShareBar'
 import { NarrativeArticle } from '@/components/NarrativeArticle'
 import { SumBox, CompareList } from '@/components/AnalysisDimensionSections'
 import {
@@ -208,6 +209,12 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
           <header className="arthead">
             <h1 className="arthead__h">{analysis.title}</h1>
             <AnalysisByline analysis={analysis} dimensions={dimensions} />
+            {/* Keyed by id: ArticlePage.tsx reuses one component instance across an in-place
+                navigation between two Articles (see the effect below), so without a key the
+                "copied" confirmation and its pending timer would leak from the previous Article
+                onto the next one (code review, ticket 81) — React's own recommended fix for
+                "reset all state when this changes" is a key, not an effect. */}
+            <ShareBar key={analysis.id} title={analysis.title} url={window.location.href} />
           </header>
 
           {totalItems > 0 && <SumBox dimensions={dimensions} />}
