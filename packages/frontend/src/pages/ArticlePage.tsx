@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Gauge } from '@/components/Gauge'
+import { ShareBar } from '@/components/ShareBar'
 import { NarrativeArticle } from '@/components/NarrativeArticle'
 import { SumBox, CompareList } from '@/components/AnalysisDimensionSections'
 import {
@@ -208,6 +209,7 @@ function CompleteAnalysis({ analysis }: { analysis: AnalysisDetail }) {
           <header className="arthead">
             <h1 className="arthead__h">{analysis.title}</h1>
             <AnalysisByline analysis={analysis} dimensions={dimensions} />
+            <ShareBar title={analysis.title} url={window.location.href} />
           </header>
 
           {totalItems > 0 && <SumBox dimensions={dimensions} />}
