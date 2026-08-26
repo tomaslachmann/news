@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchThreadDetail } from './index'
+import { usePaginatedQuery } from '../pagination'
+import { fetchThreadDetail, fetchThreadsPage } from './index'
 
 export function useThreadDetail(slug: string | undefined) {
   return useQuery({
@@ -7,4 +8,8 @@ export function useThreadDetail(slug: string | undefined) {
     queryFn: () => fetchThreadDetail(slug!),
     enabled: !!slug,
   })
+}
+
+export function useThreadsList() {
+  return usePaginatedQuery(['threads'], fetchThreadsPage)
 }

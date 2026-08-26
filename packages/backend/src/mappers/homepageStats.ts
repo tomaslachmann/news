@@ -11,9 +11,9 @@ import type {
   HomepageEntityStatStoredRow,
   HomepageMinuteRow,
   HomepageMostReadRow,
-  HomepageRecentThreadRow,
   HomepageSummaryStatsRow,
 } from '../repositories/homepageStats.js'
+import type { VisibleThreadRankRow } from '../repositories/thread.js'
 import { resolveDisplayTitle } from './analysis.js'
 
 export function toHomepageEntityStatItem(row: HomepageEntityStatStoredRow): HomepageEntityStatItem {
@@ -61,7 +61,7 @@ export function toHomepageMostReadItem(row: HomepageMostReadRow): HomepageMostRe
   }
 }
 
-export function toHomepageThreadItem(row: HomepageRecentThreadRow): HomepageThreadItem {
+export function toHomepageThreadItem(row: VisibleThreadRankRow): HomepageThreadItem {
   return {
     slug: row.slug,
     title: row.title,

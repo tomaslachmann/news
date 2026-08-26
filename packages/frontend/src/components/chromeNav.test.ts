@@ -12,6 +12,7 @@ describe('getPrimaryNavItems', () => {
       { label: 'Sport', to: '#' },
       { label: 'Kultura', to: '#' },
       { label: 'Články', to: '/history' },
+      { label: 'Vlákna', to: '/threads' },
       { label: 'Hledat', to: '/search' },
     ])
   })
@@ -26,6 +27,7 @@ describe('getPrimaryNavItems', () => {
       { label: 'Sport', to: '#' },
       { label: 'Kultura', to: '#' },
       { label: 'Historie', to: '/history' },
+      { label: 'Vlákna', to: '/threads' },
       { label: 'Hledat', to: '/search' },
       { label: 'Admin', to: ADMIN_HOME_PATH },
     ])
@@ -39,6 +41,7 @@ describe('getPrimaryNavItems', () => {
       { label: 'Energetika', to: '#' },
       { label: 'Regiony', to: '#' },
       { label: 'Historie', to: '/history' },
+      { label: 'Vlákna', to: '/threads' },
       { label: 'Hledat', to: '/search' },
       { label: 'Admin', to: ADMIN_HOME_PATH },
     ])

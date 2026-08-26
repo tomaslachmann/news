@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import type { AnalysisDimensions } from '@news-triangulator/shared'
 import { prisma } from '../db.js'
+import { findVisibleThreadsRanked, type VisibleThreadRankRow } from './thread.js'
 
 type HomepageStatsDbClient = Pick<Prisma.TransactionClient, '$queryRaw' | 'homepageEntityStatSnapshot'>
 
@@ -234,79 +235,13 @@ export async function findHomepageMostReadRows(input: {
     .filter((row): row is HomepageMostReadRow => row !== null)
 }
 
-export interface HomepageRecentThreadRow {
-  slug: string
-  title: string
-  visibleMemberCount: number
-  /** The latest `eventTime` (falling back to `createdAt`, ticket 16 convention) among only the
-   *  currently-visible (COMPLETE) members — never the raw `Thread.lastEventAt`, which reflects
-   *  the newest member regardless of status and can point at one a reader can never see. */
-  lastVisibleEventAt: Date
-}
-
-export interface RawThreadForRanking {
-  slug: string
-  title: string
-  members: { story: { eventTime: Date | null; createdAt: Date; analysis: { status: string } | null } }[]
-}
-
-/** The filter/sort/limit half of `findHomepageRecentThreadRows`, pulled out as a pure function so
- *  it's directly unit-testable (code review caught three separate bugs here — a fixed over-fetch
- *  multiplier that could silently drop a valid Thread, a missing tiebreak, and using the raw
- *  `Thread.lastEventAt` instead of only-visible-members' own span — all three easier to verify
- *  against fixtures than against a mocked Prisma call). Visibility (>= 2 currently-COMPLETE
- *  members) and "recently updated" both depend on each member's own Analysis status, several
- *  joins deep, so neither can be pushed into the SQL `where`/`orderBy` — this assumes the caller
- *  already fetched every Thread unbounded (small table in practice, see the exported function's
- *  own docstring). */
-export function rankVisibleThreads(threads: RawThreadForRanking[], limit: number): HomepageRecentThreadRow[] {
-  return (
-    threads
-      .map((t) => {
-        const visibleEventTimes = t.members
-          .filter((m) => m.story.analysis?.status === 'COMPLETE')
-          .map((m) => m.story.eventTime ?? m.story.createdAt)
-        return {
-          slug: t.slug,
-          title: t.title,
-          visibleMemberCount: visibleEventTimes.length,
-          lastVisibleEventAt: new Date(Math.max(...visibleEventTimes.map((d) => d.getTime()), 0)),
-        }
-      })
-      .filter((t) => t.visibleMemberCount >= 2)
-      // Deterministic secondary tiebreak on slug — same "two rows can share the same timestamp"
-      // reasoning every sibling query in this file already guards against (see
-      // findHomepageMostReadRows's own comment).
-      .sort(
-        (a, b) =>
-          b.lastVisibleEventAt.getTime() - a.lastVisibleEventAt.getTime() || a.slug.localeCompare(b.slug)
-      )
-      .slice(0, limit)
-  )
-}
-
-/** Homepage "recently updated Threads" rail (ticket 70 / ADR 0037) — most recently-updated
- *  Threads with at least 2 currently-visible (COMPLETE) members, same gate `toThreadSummary`/
- *  `threadDetailService.ts` already apply elsewhere. Fetches every Thread unbounded (no `take`):
- *  visibility can't be pushed into the SQL `where`, and a real deployment's Thread table is rare
- *  (only actual FOLLOW_UP chains materialize one) — same "small enough to scan outright" judgment
- *  `findEntityMentionsForStory` already makes for its own unbounded read. A fixed take-then-filter
- *  multiplier was tried and rejected here (code review) — it can silently drop a genuinely-visible
- *  Thread that just happens to sort past the cutoff. */
-export async function findHomepageRecentThreadRows(limit: number): Promise<HomepageRecentThreadRow[]> {
-  const threads = await prisma.thread.findMany({
-    select: {
-      slug: true,
-      title: true,
-      members: {
-        select: {
-          story: { select: { eventTime: true, createdAt: true, analysis: { select: { status: true } } } },
-        },
-      },
-    },
-  })
-
-  return rankVisibleThreads(threads, limit)
+/** Ticket 70's homepage "recently updated Threads" rail — the top `limit` of every currently-
+ *  visible (>= 2 COMPLETE members) Thread, ranked by `findVisibleThreadsRanked`
+ *  (`repositories/thread.ts`, shared with ticket 71's `/api/threads` browse-all listing). Kept as
+ *  a thin wrapper here (not just inlined at the one call site) so this file's own doc/import
+ *  pattern for "one function per homepage rail" stays consistent with its siblings. */
+export async function findHomepageRecentThreadRows(limit: number): Promise<VisibleThreadRankRow[]> {
+  return (await findVisibleThreadsRanked()).slice(0, limit)
 }
 
 export async function computeHomepageEntityStats({
