@@ -1,6 +1,8 @@
 import type {
   AgreementCategory,
   EntityMentionItem,
+  HomepageThreadItem,
+  Page,
   ThreadArticleRow,
   ThreadArticleTag,
   ThreadDetail,
@@ -9,11 +11,13 @@ import type {
   ThreadTimelineItem,
 } from '@news-triangulator/shared'
 import { MIN_SOURCES_FOR_GAUGE } from '@news-triangulator/shared'
+import { cursorQueryParam } from '../pagination'
 
 export { MIN_SOURCES_FOR_GAUGE }
 export type {
   AgreementCategory,
   EntityMentionItem,
+  HomepageThreadItem,
   ThreadArticleRow,
   ThreadArticleTag,
   ThreadDetail,
@@ -40,4 +44,14 @@ export async function fetchThreadDetail(slug: string): Promise<ThreadDetail> {
   if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst vlákno')
 
   return res.json() as Promise<ThreadDetail>
+}
+
+/** `/threads` browse-all listing (ticket 71) — same row shape as ticket 70's homepage teaser
+ *  (`HomepageThreadItem`), just paginated. */
+export async function fetchThreadsPage(cursor?: string): Promise<Page<HomepageThreadItem>> {
+  const res = await fetch(`/api/threads${cursorQueryParam(cursor)}`, { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se načíst vlákna')
+
+  return res.json() as Promise<Page<HomepageThreadItem>>
 }

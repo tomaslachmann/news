@@ -256,3 +256,79 @@ export async function findThreadForStory(storyId: string): Promise<ThreadForRead
 export async function setThreadStatusForTesting(threadId: string, status: Thread['status']): Promise<void> {
   await prisma.thread.update({ where: { id: threadId }, data: { status } })
 }
+
+export interface VisibleThreadRankRow {
+  slug: string
+  title: string
+  visibleMemberCount: number
+  /** The latest `eventTime` (falling back to `createdAt`, ticket 16 convention) among only the
+   *  currently-visible (COMPLETE) members — never the raw `Thread.lastEventAt`, which reflects
+   *  the newest member regardless of status and can point at one a reader can never see. */
+  lastVisibleEventAt: Date
+}
+
+export interface RawThreadForRanking {
+  slug: string
+  title: string
+  members: { story: { eventTime: Date | null; createdAt: Date; analysis: { status: string } | null } }[]
+}
+
+/** The filter/sort half of `findVisibleThreadsRanked`, pulled out as a pure function so it's
+ *  directly unit-testable (ticket 70's code review caught three separate bugs here — a fixed
+ *  over-fetch multiplier that could silently drop a valid Thread, a missing tiebreak, and using
+ *  the raw `Thread.lastEventAt` instead of only-visible-members' own span — all three easier to
+ *  verify against fixtures than against a mocked Prisma call). Visibility (>= 2 currently-
+ *  COMPLETE members) and "recently updated" both depend on each member's own Analysis status,
+ *  several joins deep, so neither can be pushed into the SQL `where`/`orderBy` — this assumes the
+ *  caller already fetched every Thread unbounded (small table in practice, see
+ *  `findVisibleThreadsRanked`'s own docstring). Returns the full ranked list, unsliced — ticket 70
+ *  (homepage rail) and ticket 71 (`/api/threads` browse-all listing) each take what they need from
+ *  the front. */
+export function rankVisibleThreads(threads: RawThreadForRanking[]): VisibleThreadRankRow[] {
+  return (
+    threads
+      .map((t) => {
+        const visibleEventTimes = t.members
+          .filter((m) => m.story.analysis?.status === 'COMPLETE')
+          .map((m) => m.story.eventTime ?? m.story.createdAt)
+        return {
+          slug: t.slug,
+          title: t.title,
+          visibleMemberCount: visibleEventTimes.length,
+          lastVisibleEventAt: new Date(Math.max(...visibleEventTimes.map((d) => d.getTime()), 0)),
+        }
+      })
+      .filter((t) => t.visibleMemberCount >= 2)
+      // Deterministic secondary tiebreak on slug — same "two rows can share the same timestamp"
+      // reasoning homepageStats.ts's own sibling queries already guard against (see
+      // findHomepageMostReadRows's own comment there).
+      .sort(
+        (a, b) =>
+          b.lastVisibleEventAt.getTime() - a.lastVisibleEventAt.getTime() || a.slug.localeCompare(b.slug)
+      )
+  )
+}
+
+/** Every Thread with at least 2 currently-visible (COMPLETE) members, ranked most-recently-
+ *  updated first — shared by ticket 70's homepage rail and ticket 71's `/api/threads` browse-all
+ *  listing. Fetches every Thread unbounded (no `take`): visibility can't be pushed into the SQL
+ *  `where`, and a real deployment's Thread table is rare (only actual FOLLOW_UP chains materialize
+ *  one) — same "small enough to scan outright" judgment `findEntityMentionsForStory` already makes
+ *  for its own unbounded read. A fixed take-then-filter multiplier was tried and rejected here
+ *  (ticket 70's code review) — it can silently drop a genuinely-visible Thread that just happens
+ *  to sort past the cutoff. */
+export async function findVisibleThreadsRanked(): Promise<VisibleThreadRankRow[]> {
+  const threads = await prisma.thread.findMany({
+    select: {
+      slug: true,
+      title: true,
+      members: {
+        select: {
+          story: { select: { eventTime: true, createdAt: true, analysis: { select: { status: true } } } },
+        },
+      },
+    },
+  })
+
+  return rankVisibleThreads(threads)
+}

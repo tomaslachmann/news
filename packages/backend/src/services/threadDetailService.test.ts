@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as threadDetailRepo from '../repositories/threadDetail.js'
+import * as threadRepo from '../repositories/thread.js'
 import * as entityRepo from '../repositories/entity.js'
-import { getThreadDetail } from './threadDetailService.js'
-import { NotFoundError } from '../errors.js'
+import { getThreadDetail, getThreadsPage } from './threadDetailService.js'
+import { NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/threadDetail.js')
+vi.mock('../repositories/thread.js')
 vi.mock('../repositories/entity.js')
 
 const DIMENSIONS = { agreement: [], contradiction: [], uniqueReporting: [], framing: [] }
@@ -67,5 +69,57 @@ describe('getThreadDetail', () => {
       { key: 'e2', canonicalName: 'Entity Two', type: 'PLACE' },
     ])
     expect(result.slug).toBe('vicedilna-kauza')
+  })
+})
+
+function makeRankedThread(slug: string, lastVisibleEventAt: string) {
+  return {
+    slug,
+    title: `Title ${slug}`,
+    visibleMemberCount: 2,
+    lastVisibleEventAt: new Date(lastVisibleEventAt),
+  }
+}
+
+describe('getThreadsPage', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('returns the first page, unencoded cursor, when none is given', async () => {
+    vi.mocked(threadRepo.findVisibleThreadsRanked).mockResolvedValue([
+      makeRankedThread('t1', '2026-08-03T00:00:00Z'),
+      makeRankedThread('t2', '2026-08-02T00:00:00Z'),
+    ])
+
+    const result = await getThreadsPage(undefined, 1)
+
+    expect(result.items).toEqual([
+      { slug: 't1', title: 'Title t1', memberCount: 2, lastEventAt: '2026-08-03T00:00:00.000Z' },
+    ])
+    expect(result.nextCursor).not.toBeNull()
+  })
+
+  it('resumes from a previously-issued cursor and returns null nextCursor on the last page', async () => {
+    vi.mocked(threadRepo.findVisibleThreadsRanked).mockResolvedValue([
+      makeRankedThread('t1', '2026-08-03T00:00:00Z'),
+      makeRankedThread('t2', '2026-08-02T00:00:00Z'),
+    ])
+
+    const first = await getThreadsPage(undefined, 1)
+    const second = await getThreadsPage(first.nextCursor ?? undefined, 1)
+
+    expect(second.items.map((i) => i.slug)).toEqual(['t2'])
+    expect(second.nextCursor).toBeNull()
+  })
+
+  it('rejects a malformed cursor rather than silently defaulting to the first page', async () => {
+    await expect(getThreadsPage('not-a-real-cursor!!', 10)).rejects.toThrow(ValidationError)
+  })
+
+  it('returns an empty page with no items and no nextCursor when no Thread is currently visible', async () => {
+    vi.mocked(threadRepo.findVisibleThreadsRanked).mockResolvedValue([])
+
+    const result = await getThreadsPage(undefined, 10)
+
+    expect(result).toEqual({ items: [], nextCursor: null })
   })
 })
