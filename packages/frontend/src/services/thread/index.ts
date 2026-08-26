@@ -1,5 +1,7 @@
 import type {
   AgreementCategory,
+  ClaimSeriesItem,
+  ClaimSeriesPoint,
   EntityMentionItem,
   HomepageThreadItem,
   Page,
@@ -17,6 +19,8 @@ import { cursorQueryParam } from '../pagination'
 export { MIN_SOURCES_FOR_GAUGE }
 export type {
   AgreementCategory,
+  ClaimSeriesItem,
+  ClaimSeriesPoint,
   EntityMentionItem,
   HomepageThreadItem,
   ThreadArticleRow,
