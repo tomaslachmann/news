@@ -19,6 +19,7 @@ import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
 import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
 import { articlePath } from '@/lib/analysisRoutes'
+import { threadPath } from '@/lib/threadRoutes'
 import NotFoundPage from './NotFoundPage'
 import { ErrorState } from './AnalysisPage'
 import './AnalysisPage.css'
@@ -93,17 +94,18 @@ function SourceList({ coverages }: { coverages: CoverageInfo[] }) {
 }
 
 /** ticket 17: a longer-running storyline this Article is part of. The reference's own
- *  .threadband is a single teaser band linking out to a thread.html detail page we don't have
- *  (no /thread route exists yet) — used here instead as the row style for every real member of
- *  the thread, each linking to its own /article/:id (ticket 52), since that's the real destination
- *  we do have. The current Article appears in the list too, non-linked, so a reader always sees
- *  where "here" sits in the arc. */
+ *  .threadband is a single teaser band linking out to a thread.html detail page — ticket 68/69
+ *  built that real destination (`/thread/:slug`), so the heading below links there now; each
+ *  member row still links to its own /article/:id (ticket 52) directly. The current Article
+ *  appears in the list too, non-linked, so a reader always sees where "here" sits in the arc. */
 function ThreadSection({ thread }: { thread: ThreadSummaryItem | undefined }) {
   if (!thread) return null
   return (
     <section>
       <div className="sechead">
-        <h2 className="sechead__t">Součást vlákna: {thread.title}</h2>
+        <h2 className="sechead__t">
+          Součást vlákna: <Link to={threadPath(thread.slug)}>{thread.title}</Link>
+        </h2>
         <span className="sechead__rule" />
       </div>
       {thread.members.map((member) =>
