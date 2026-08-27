@@ -93,7 +93,7 @@ not just a 200 status):
 
 **Blocked by:** 78, 79 (both already done — this ticket only uses their existing two mechanisms).
 
-**Status:** in review
+**Status:** done review
 
 - [x] `services/rss.ts`: add `customFields: { item: [['szn:sections', 'sznSections']] }` to the
       `rss-parser` config; when building `rawCategories`, fall back to `item.sznSections?.value`
