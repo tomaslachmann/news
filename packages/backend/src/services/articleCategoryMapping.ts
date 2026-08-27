@@ -67,6 +67,49 @@ const CESKE_NOVINY_MAP: Record<string, ArticleCategory> = {
   s: 'SPORT',
 }
 
+/// Deník tags every item inline with a real `<category>` (ticket 84, live-verified 2026-08-27) --
+/// mostly clean rubric names, plus a handful of single-occurrence noise ("Autotesty",
+/// "Automagazín", "Zahrada" -- no clean rubric fit) left unmapped.
+const DENIK_MAP: Record<string, ArticleCategory> = {
+  Evropa: 'WORLD',
+  Svět: 'WORLD',
+  Česko: 'DOMESTIC',
+  Regiony: 'REGIONAL',
+  Kultura: 'CULTURE',
+  'Ostatní fotbal': 'SPORT',
+  'Ostatní sporty': 'SPORT',
+  Tenis: 'SPORT',
+  Fotbal: 'SPORT',
+  Ekonomika: 'ECONOMY',
+  Podnikání: 'ECONOMY',
+  Nehody: 'CRIME',
+}
+
+/// Echo24 tags inline too, but mixed with syndication/format noise that isn't a rubric at all
+/// ("Homepage", "Krátké zprávy", "Bing cz", "iPrima", "Seznam cz", "Panorama", "Videoupoutávky",
+/// "Týdeník" -- ticket 84, live-verified 2026-08-27) -- left unmapped, same "topic/format tag,
+/// not a rubric" treatment ticket 78's Deník N table already established.
+const ECHO24_MAP: Record<string, ArticleCategory> = {
+  Svět: 'WORLD',
+  Domov: 'DOMESTIC',
+  Ekonomika: 'ECONOMY',
+}
+
+/// CNN Prima NEWS tags inline: real rubrics plus per-country/format topic tags ("Itálie",
+/// "Německo", "Ukrajina", "Počasí", "Lidé", "360°" -- ticket 84, live-verified 2026-08-27) left
+/// unmapped, same treatment as Deník N's own topic tags (ticket 78).
+const CNN_PRIMA_MAP: Record<string, ArticleCategory> = {
+  Zahraničí: 'WORLD',
+  Politika: 'POLITICS',
+  Krimi: 'CRIME',
+  Nehody: 'CRIME',
+  Ekonomika: 'ECONOMY',
+  'Zprávy z regionů': 'REGIONAL',
+  'Jihomoravský kraj': 'REGIONAL',
+  'Olomoucký kraj': 'REGIONAL',
+  Názory: 'COMMENTARY',
+}
+
 const SOURCE_CATEGORY_MAPS: Record<string, Record<string, ArticleCategory>> = {
   'src-novinky': STANDARD_CZECH_RUBRIC_MAP,
   'src-aktualne': STANDARD_CZECH_RUBRIC_MAP,
@@ -74,6 +117,9 @@ const SOURCE_CATEGORY_MAPS: Record<string, Record<string, ArticleCategory>> = {
   'src-seznamzpravy': STANDARD_CZECH_RUBRIC_MAP,
   'src-denikn': DENIK_N_MAP,
   'src-ceskenoviny': CESKE_NOVINY_MAP,
+  'src-denik': DENIK_MAP,
+  'src-echo24': ECHO24_MAP,
+  'src-cnnprima': CNN_PRIMA_MAP,
 }
 
 /** Resolves a Coverage's `primaryCategory` from its source's own raw category signal: the first
