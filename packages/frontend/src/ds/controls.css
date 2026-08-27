@@ -52,6 +52,13 @@
   text-transform: uppercase;
   padding: 0.3rem 0.55rem;
 }
+/* Square icon-only variant (tickets 81/82's ShareBar/FollowThreadButton) — always paired with
+   `.btn.btn--ghost` (`class="btn btn--ghost icon-btn"`), never bare; three classes together
+   guarantees this beats plain `.btn.btn--ghost`'s own `padding-inline` regardless of file/module
+   load order, same defensive-qualification reasoning as `.btn.btn--primary` above. */
+.btn.btn--ghost.icon-btn {
+  padding: 0.4rem;
+}
 .btn[disabled] {
   color: var(--ink-4);
   border-color: var(--line-2);

@@ -212,6 +212,25 @@ export async function findThreadIdForStory(storyId: string): Promise<string | nu
   return member?.threadId ?? null
 }
 
+/** Bare `id`/`title` for a Thread by its reader-facing `slug` (ticket 82) — the follow/unfollow
+ *  routes only need enough to validate the slug is real and to build the push notification's own
+ *  title later; `findThreadDetailBySlug` (threadDetail.ts) is the much heavier full-page query,
+ *  wasteful for this. */
+export async function findThreadIdAndTitleBySlug(
+  slug: string
+): Promise<{ id: string; title: string } | null> {
+  return prisma.thread.findUnique({ where: { slug }, select: { id: true, title: true } })
+}
+
+/** Same shape, looked up by id instead of slug — `thread.notifySubscribers` (ticket 82) has a
+ *  `threadId` (from `threadRecomputeJob.ts`'s own upsert result) and needs the `slug` to build
+ *  the notification's target URL, plus `title` for its display text. */
+export async function findThreadTitleAndSlug(
+  threadId: string
+): Promise<{ id: string; title: string; slug: string } | null> {
+  return prisma.thread.findUnique({ where: { id: threadId }, select: { id: true, title: true, slug: true } })
+}
+
 export interface ThreadMemberForReader {
   analysisId: string
   seedHeadline: string

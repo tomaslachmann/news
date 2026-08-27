@@ -10,7 +10,7 @@ const COPY_CONFIRMATION_MS = 1800
 // such; these are the standard, license-compatible glyphs (Font Awesome's "f" mark, simple-icons'
 // current X wordmark and Instagram glyph) inlined directly rather than pulling in a whole
 // brand-icon package for three paths. One shared shell (`currentColor` fill, so each inherits
-// `.sharebar__btn`'s ink color like every other icon here) parameterized by path data — not three
+// `.icon-btn`'s ink color like every other icon here) parameterized by path data — not three
 // near-identical components (code review, ticket 81).
 function BrandIcon({ size, path }: { size: number; path: string }) {
   return (
@@ -47,7 +47,7 @@ function ShareIconButton({
 }) {
   const content = href ? (
     <a
-      className="btn btn--ghost sharebar__btn"
+      className="btn btn--ghost icon-btn"
       href={href}
       {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       aria-label={label}
@@ -55,7 +55,7 @@ function ShareIconButton({
       {children}
     </a>
   ) : (
-    <button type="button" className="btn btn--ghost sharebar__btn" onClick={onClick} aria-label={label}>
+    <button type="button" className="btn btn--ghost icon-btn" onClick={onClick} aria-label={label}>
       {children}
     </button>
   )

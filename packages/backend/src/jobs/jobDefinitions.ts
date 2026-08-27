@@ -8,6 +8,7 @@ export const JobName = {
   ThreadRecompute: 'thread.recompute',
   ThreadSynthesizeOpenQuestions: 'thread.synthesizeOpenQuestions',
   ThreadTrackClaimSeries: 'thread.trackClaimSeries',
+  ThreadNotifySubscribers: 'thread.notifySubscribers',
   EntityImageEnrich: 'entity.image.enrich',
   HomepageEntityStatsRefresh: 'homepage.entity-stats.refresh',
 } as const
@@ -45,6 +46,10 @@ export interface JobPayload {
   // narrativeJob.ts on its own completion, for a Story that's already a Thread member — see
   // claimSeriesJob.ts's own doc comment for why two trigger points are needed here.
   [JobName.ThreadTrackClaimSeries]: { threadId: string }
+  // Ticket 82 — same "a real Thread id, only ever runs once a Thread exists" shape as its
+  // ThreadSynthesizeOpenQuestions/ThreadTrackClaimSeries siblings above, chained from the same
+  // threadRecomputeJob.ts `if (changed)` block.
+  [JobName.ThreadNotifySubscribers]: { threadId: string }
   // Ticket 41 / ADR 0034 — enqueued only after the Admin's wikidataId-link transaction commits,
   // never from inside it, so a slow/failing Wikimedia call can't hold up or roll back the link.
   // The handler re-reads the Entity's current wikidataId by this id (retry-safe, same
@@ -94,6 +99,9 @@ export const JOB_RETRY_POLICY: Record<JobNameValue, QueueOptions> = {
   // have its own LLM-flakiness-tuned policy, not thread.recompute's tight DB-only one).
   [JobName.ThreadSynthesizeOpenQuestions]: LLM_JOB_RETRY_POLICY,
   [JobName.ThreadTrackClaimSeries]: LLM_JOB_RETRY_POLICY,
+  // An external HTTP dependency (the push service each subscription's endpoint belongs to), not
+  // an LLM call -- same reasoning EntityImageEnrich already uses this policy for (ADR 0034).
+  [JobName.ThreadNotifySubscribers]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
   [JobName.EntityImageEnrich]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
   [JobName.HomepageEntityStatsRefresh]: DB_DERIVED_READ_MODEL_RETRY_POLICY,
 }

@@ -10,6 +10,7 @@ import { registerEntitiesRoutes } from './routes/entities.js'
 import { registerHomepageStatsRoutes } from './routes/homepageStats.js'
 import { registerThreadRoutes } from './routes/thread.js'
 import { registerCategoryRoutes } from './routes/category.js'
+import { registerPushRoutes } from './routes/push.js'
 import { seedAdminUser } from './seed.js'
 import { getQueueClient } from './jobs/queueClient.js'
 import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
@@ -21,6 +22,13 @@ if (!process.env.JWT_SECRET) {
 
 if (!process.env.INGESTION_SECRET) {
   console.warn('Warning: INGESTION_SECRET is not set — POST /api/ingestion/run will always reject.')
+}
+
+if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY || !process.env.VAPID_CONTACT_EMAIL) {
+  console.warn(
+    'Warning: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/VAPID_CONTACT_EMAIL are not fully set — ' +
+      'GET /api/push/public-key will 503, and thread.notifySubscribers will skip sending.'
+  )
 }
 
 const server = Fastify({
@@ -55,6 +63,7 @@ const start = async () => {
     registerHomepageStatsRoutes(server)
     registerThreadRoutes(server)
     registerCategoryRoutes(server)
+    registerPushRoutes(server)
 
     await seedAdminUser()
 

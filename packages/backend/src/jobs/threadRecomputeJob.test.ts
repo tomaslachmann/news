@@ -117,6 +117,7 @@ describe('runThreadRecomputeJob', () => {
 
     expect(enqueueJob).toHaveBeenCalledWith(JobName.ThreadSynthesizeOpenQuestions, { threadId: 't1' })
     expect(enqueueJob).toHaveBeenCalledWith(JobName.ThreadTrackClaimSeries, { threadId: 't1' })
+    expect(enqueueJob).toHaveBeenCalledWith(JobName.ThreadNotifySubscribers, { threadId: 't1' })
   })
 
   it('does not enqueue thread.synthesizeOpenQuestions when the upsert was a no-op (changed: false)', async () => {
