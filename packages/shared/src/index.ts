@@ -176,6 +176,21 @@ export type PostDiscoverBody = z.infer<typeof PostDiscoverBodySchema>
 // and, downstream, real LLM spend (extraction/synthesis). See docs/audit.md P0-7, ticket 03.
 export const MAX_CUSTOM_URLS = 10
 
+// The browser's own `PushSubscription.toJSON()` shape (ticket 82) — `endpoint`/`keys.p256dh`/
+// `keys.auth` are exactly what `pushManager.subscribe()` returns and what `web-push` (backend)
+// needs to send to it later. Used by both POST /api/thread/:slug/follow and .../unfollow: a
+// follow needs the full subscription to store, an unfollow only strictly needs `endpoint` to
+// delete by, but sending the same shape for both keeps the frontend's one subscribe/unsubscribe
+// call site simple rather than building two different bodies for the same object.
+export const PushSubscriptionBodySchema = z.object({
+  endpoint: z.string(),
+  keys: z.object({
+    p256dh: z.string(),
+    auth: z.string(),
+  }),
+})
+export type PushSubscriptionBody = z.infer<typeof PushSubscriptionBodySchema>
+
 export const PatchCoveragesBodySchema = z.object({
   confirmedIds: z.array(z.string()),
   customUrls: z.array(z.string()).max(MAX_CUSTOM_URLS).optional(),

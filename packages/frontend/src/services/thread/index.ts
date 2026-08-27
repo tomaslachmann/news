@@ -61,3 +61,41 @@ export async function fetchThreadsPage(cursor?: string): Promise<Page<HomepageTh
 
   return res.json() as Promise<Page<HomepageThreadItem>>
 }
+
+/** Ticket 82 — "Sledovat vlákno": the VAPID public key `pushManager.subscribe()` needs. `null`
+ *  when Web Push isn't configured on this server (backend's own `GET /api/push/public-key`
+ *  returns 503 in that case) — `FollowThreadButton.tsx` treats that the same as "unsupported",
+ *  never a dead button. */
+export async function fetchPushPublicKey(): Promise<string | null> {
+  const res = await fetch('/api/push/public-key', { credentials: 'include' })
+  if (!res.ok) return null
+  const { publicKey } = (await res.json()) as { publicKey: string }
+  return publicKey
+}
+
+/** The browser's own `PushSubscription.toJSON()` shape — what `POST .../follow` and
+ *  `.../unfollow` both expect (`PushSubscriptionBodySchema`, shared). */
+export interface PushSubscriptionJSON {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+}
+
+export async function followThread(slug: string, subscription: PushSubscriptionJSON): Promise<void> {
+  const res = await fetch(`/api/thread/${slug}/follow`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(subscription),
+  })
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se nastavit sledování vlákna')
+}
+
+export async function unfollowThread(slug: string, subscription: PushSubscriptionJSON): Promise<void> {
+  const res = await fetch(`/api/thread/${slug}/unfollow`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(subscription),
+  })
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se zrušit sledování vlákna')
+}

@@ -49,6 +49,9 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       INGESTION_SECRET: ${INGESTION_SECRET}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_CONTACT_EMAIL: ${VAPID_CONTACT_EMAIL}
       PORT: 3001
       HOST: 0.0.0.0
     ports:
@@ -72,6 +75,9 @@ services:
       ENTITY_MODEL: ${ENTITY_MODEL:-gpt-4o}
       SYNTHESIS_MODEL: ${SYNTHESIS_MODEL:-gpt-4o}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_CONTACT_EMAIL: ${VAPID_CONTACT_EMAIL}
     depends_on:
       db:
         condition: service_healthy

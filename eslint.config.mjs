@@ -14,6 +14,11 @@ export default defineConfig(
       // Vanilla-JS static assets ported verbatim from news_design (ticket 39's /styleguide
       // route) — classic scripts served as-is, not part of the TS-checked app source.
       'packages/frontend/public/styleguide-assets/**',
+      // Same reasoning (ticket 82): a hand-written service worker, served as-is from public/,
+      // running in ServiceWorkerGlobalScope (self/clients/registration), not the browser `window`
+      // global this app's own TS project is configured for — not part of the TS-checked app
+      // source, and typed-linting has no tsconfig project that includes it anyway.
+      'packages/frontend/public/sw.js',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,

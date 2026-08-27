@@ -194,5 +194,18 @@ export async function runThreadRecomputeJob(
         'Failed to enqueue thread.trackClaimSeries after thread.recompute upsert'
       )
     }
+    // thread.notifySubscribers (ticket 82): same chaining reasoning as the two jobs above.
+    // Harmless to enqueue on a brand-new Thread's own first creation too, not just a later
+    // growth — nobody could have followed a Thread before it existed, so that run just finds
+    // zero ThreadFollow rows and no-ops, same as every other consumer of this `if (changed)`
+    // block already does for that case.
+    try {
+      await enqueueJob(JobName.ThreadNotifySubscribers, { threadId: thread.id })
+    } catch (err) {
+      log?.error(
+        { seedStoryId: payload.seedStoryId, threadId: thread.id, err },
+        'Failed to enqueue thread.notifySubscribers after thread.recompute upsert'
+      )
+    }
   }
 }

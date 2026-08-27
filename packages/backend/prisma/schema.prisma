@@ -455,10 +455,39 @@ model Thread {
   /// nullable column for.
   openQuestions Json           @default("[]")
   claimSeries   ClaimSeries[]
+  follows       ThreadFollow[]
 
   /// "All ACTIVE Threads, most recently active first" — no reader surface queries this yet
   /// (ticket 17's Answer, Q5); declared because ADR 0029's accepted schema already specifies it.
   @@index([status, lastEventAt])
+}
+
+/// One browser's Web Push subscription to one Thread's "new development" notifications (ticket
+/// 82) — `endpoint`/`p256dh`/`auth` are exactly `PushSubscription.toJSON()`'s own shape, stored
+/// verbatim. This app has no reader login (User/Role is Admin-only), so a subscription is
+/// per-browser, not per-account. One table, not a separate reusable `PushSubscription` entity
+/// joined to Thread: Thread is the only follow-target this ticket needs, and a join table only
+/// pays for itself once a second follow-target exists (ADR 0009's speculative-generality
+/// caution) — some redundant storage if the same browser follows several Threads (its
+/// endpoint/p256dh/auth repeated per row) is the accepted tradeoff for that simplicity.
+model ThreadFollow {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id])
+  endpoint  String
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  /// Re-following an already-followed Thread from the same browser is a no-op upsert, not a
+  /// duplicate row.
+  @@unique([threadId, endpoint])
+  /// thread.notifySubscribers job's own lookup ("everyone following this Thread").
+  @@index([threadId])
+  /// The 404/410 self-heal delete (a push service confirming a subscription is dead) is keyed on
+  /// endpoint alone, not threadId -- one dead browser subscription can be following more than one
+  /// Thread.
+  @@index([endpoint])
 }
 
 /// Ticket 72/75 — one numeric claim tracked across a Thread's multiple member Analyses over time

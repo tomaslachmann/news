@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Gauge } from '@/components/Gauge'
+import { FollowThreadButton } from '@/components/FollowThreadButton'
 import { formatDate } from '@/lib/formatDate'
 import { articlePath } from '@/lib/analysisRoutes'
 import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
@@ -363,6 +364,7 @@ function CompleteThread({ thread }: { thread: ThreadDetail }) {
         <header className="arthead" style={{ paddingTop: 'var(--sp-2)' }}>
           <h1 className="arthead__h">{thread.title}</h1>
           <ThreadByline thread={thread} />
+          <FollowThreadButton key={thread.slug} slug={thread.slug} />
         </header>
       </div>
 

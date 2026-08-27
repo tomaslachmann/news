@@ -6,6 +6,7 @@ import { runNarrativeJob } from './jobs/narrativeJob.js'
 import { runThreadRecomputeJob } from './jobs/threadRecomputeJob.js'
 import { runThreadOpenQuestionsJob } from './jobs/threadOpenQuestionsJob.js'
 import { runClaimSeriesJob } from './jobs/claimSeriesJob.js'
+import { runThreadNotifyJob } from './jobs/threadNotifyJob.js'
 import { runEntityImageEnrichJob } from './jobs/entityImageEnrichJob.js'
 import { runHomepageEntityStatsJob } from './jobs/homepageEntityStatsJob.js'
 import { makeConsoleLogger } from './jobs/consoleLogger.js'
@@ -20,6 +21,8 @@ import * as storyRelationRepo from './repositories/storyRelation.js'
 import * as synthesisResultRepo from './repositories/synthesisResult.js'
 import * as threadRepo from './repositories/thread.js'
 import * as claimSeriesRepo from './repositories/claimSeries.js'
+import * as threadFollowRepo from './repositories/threadFollow.js'
+import { sendThreadNotification } from './services/webPush.js'
 
 const workerLog = makeConsoleLogger()
 
@@ -104,6 +107,18 @@ const start = async () => {
           workerLog
         )
       ),
+      registerJobWorker(JobName.ThreadNotifySubscribers, (payload) =>
+        runThreadNotifyJob(
+          payload,
+          {
+            findThreadIdAndTitle: threadRepo.findThreadTitleAndSlug,
+            findFollowsForThread: threadFollowRepo.findFollowsForThread,
+            deleteThreadFollowsByEndpoint: threadFollowRepo.deleteThreadFollowsByEndpoint,
+            sendThreadNotification,
+          },
+          workerLog
+        )
+      ),
       registerJobWorker(JobName.EntityImageEnrich, (payload) =>
         runEntityImageEnrichJob(
           payload,
@@ -121,8 +136,8 @@ const start = async () => {
     ])
     console.log(
       'Worker started; entity.extract, narrative.generate, thread.recompute, ' +
-        'thread.synthesizeOpenQuestions, thread.trackClaimSeries, entity.image.enrich, and ' +
-        'homepage.entity-stats.refresh handlers registered.'
+        'thread.synthesizeOpenQuestions, thread.trackClaimSeries, thread.notifySubscribers, ' +
+        'entity.image.enrich, and homepage.entity-stats.refresh handlers registered.'
     )
   } catch (err) {
     console.error(err)

@@ -42,17 +42,15 @@
   max-width: var(--measure-head);
 }
 
-/* Share row (ticket 81) — sole consumer today, so it stays here rather than
-   ds/components.css, matching this file's own "extract once a class is about to be duplicated a
-   third time" convention (see components.css's file header). */
+/* Header icon-action row (ticket 81's ShareBar, ticket 82's FollowThreadButton on ThreadPage) —
+   a small flex row of icon-only buttons under the headline/byline. `.icon-btn` itself (the
+   square icon-only ghost-button sizing) lives in ds/controls.css alongside `.btn`/`.btn--ghost`
+   now that it's reused across two pages, not this file. */
 .sharebar {
   display: flex;
   align-items: center;
   gap: var(--sp-1);
   margin-top: var(--sp-2);
-}
-.sharebar .sharebar__btn {
-  padding: 0.4rem;
 }
 
 .artbody > * + * {
