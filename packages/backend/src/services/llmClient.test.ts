@@ -34,6 +34,7 @@ describe('callJsonModel', () => {
       ],
       response_format: { type: 'json_object' },
       temperature: 0,
+      store: true,
     })
   })
 

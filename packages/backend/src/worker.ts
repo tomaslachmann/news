@@ -9,8 +9,8 @@ import { runClaimSeriesJob } from './jobs/claimSeriesJob.js'
 import { runThreadNotifyJob } from './jobs/threadNotifyJob.js'
 import { runEntityImageEnrichJob } from './jobs/entityImageEnrichJob.js'
 import { runHomepageEntityStatsJob } from './jobs/homepageEntityStatsJob.js'
-import { makeConsoleLogger } from './jobs/consoleLogger.js'
 import { ensureScheduledJobs } from './jobs/schedule.js'
+import { createLogger } from './logger.js'
 import * as analysisRepo from './repositories/analysis.js'
 import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
@@ -23,8 +23,6 @@ import * as threadRepo from './repositories/thread.js'
 import * as claimSeriesRepo from './repositories/claimSeries.js'
 import * as threadFollowRepo from './repositories/threadFollow.js'
 import { sendThreadNotification } from './services/webPush.js'
-
-const workerLog = makeConsoleLogger()
 
 const start = async () => {
   try {
@@ -55,7 +53,7 @@ const start = async () => {
             findRelationCandidateStories: storyRelationRepo.findRelationCandidateStories,
             createStoryRelation: storyRelationRepo.createStoryRelation,
           },
-          workerLog
+          createLogger(JobName.EntityRelation)
         )
       ),
       registerJobWorker(JobName.Narrative, (payload) =>
@@ -70,7 +68,7 @@ const start = async () => {
             createNarrativeImage: narrativeImageRepo.createNarrativeImage,
             findThreadIdForStory: threadRepo.findThreadIdForStory,
           },
-          workerLog
+          createLogger(JobName.Narrative)
         )
       ),
       registerJobWorker(JobName.ThreadRecompute, (payload) =>
@@ -82,7 +80,7 @@ const start = async () => {
             findAgreementForTitle: threadRepo.findAgreementForTitle,
             upsertThreadFromComponent: threadRepo.upsertThreadFromComponent,
           },
-          workerLog
+          createLogger(JobName.ThreadRecompute)
         )
       ),
       registerJobWorker(JobName.ThreadSynthesizeOpenQuestions, (payload) =>
@@ -92,7 +90,7 @@ const start = async () => {
             findVisibleMembersForOpenQuestions: threadRepo.findVisibleMembersForOpenQuestions,
             updateThreadOpenQuestions: threadRepo.updateThreadOpenQuestions,
           },
-          workerLog
+          createLogger(JobName.ThreadSynthesizeOpenQuestions)
         )
       ),
       registerJobWorker(JobName.ThreadTrackClaimSeries, (payload) =>
@@ -104,7 +102,7 @@ const start = async () => {
             findLatestSeriesMembersForThread: claimSeriesRepo.findLatestSeriesMembersForThread,
             addClaimSeriesMember: claimSeriesRepo.addClaimSeriesMember,
           },
-          workerLog
+          createLogger(JobName.ThreadTrackClaimSeries)
         )
       ),
       registerJobWorker(JobName.ThreadNotifySubscribers, (payload) =>
@@ -116,7 +114,7 @@ const start = async () => {
             deleteThreadFollowsByEndpoint: threadFollowRepo.deleteThreadFollowsByEndpoint,
             sendThreadNotification,
           },
-          workerLog
+          createLogger(JobName.ThreadNotifySubscribers)
         )
       ),
       registerJobWorker(JobName.EntityImageEnrich, (payload) =>
@@ -127,11 +125,11 @@ const start = async () => {
             findEntityImageForEntity: entityImageRepo.findEntityImageForEntity,
             createEntityImage: entityImageRepo.createEntityImage,
           },
-          workerLog
+          createLogger(JobName.EntityImageEnrich)
         )
       ),
       registerJobWorker(JobName.HomepageEntityStatsRefresh, (payload) =>
-        runHomepageEntityStatsJob(payload, workerLog)
+        runHomepageEntityStatsJob(payload, createLogger(JobName.HomepageEntityStatsRefresh))
       ),
     ])
     console.log(

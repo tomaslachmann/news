@@ -70,8 +70,10 @@ async function fetchFeed(feed: SourceFeedWithSource, log?: FastifyBaseLogger): P
     return []
   }
 
+  log?.info({ source: feed.source.name, url: feed.url }, 'Fetching feed')
   try {
     const items = await feedParsers[feed.parserKind](feed.url)
+    log?.info({ source: feed.source.name, url: feed.url, itemCount: items.length }, 'Fetched feed')
     return items
       .filter((item) => item.link && item.title)
       .map((item) => {
@@ -94,8 +96,12 @@ async function fetchFeed(feed: SourceFeedWithSource, log?: FastifyBaseLogger): P
 }
 
 export async function queryRssFeeds(log?: FastifyBaseLogger): Promise<CandidateArticle[]> {
+  const rssLog = log?.child({ namespace: 'rss' })
   const feeds = await sourceRepo.findAllSourceFeeds()
-  const results = await Promise.allSettled(feeds.map((feed) => fetchFeed(feed, log)))
+  rssLog?.info({ feedCount: feeds.length }, 'Querying all source feeds')
+  const results = await Promise.allSettled(feeds.map((feed) => fetchFeed(feed, rssLog)))
 
-  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  const items = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  rssLog?.info({ feedCount: feeds.length, itemCount: items.length }, 'Finished querying all source feeds')
+  return items
 }

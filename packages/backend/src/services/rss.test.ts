@@ -173,8 +173,9 @@ describe('queryRssFeeds', () => {
   it('logs a warning and skips a feed with an unrecognized parserKind, without throwing', async () => {
     vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith({ parserKind: 'atom' })])
     const warn = vi.fn()
+    const fakeLog = { warn, info: vi.fn(), child: () => fakeLog }
 
-    const result = await queryRssFeeds({ warn } as never)
+    const result = await queryRssFeeds(fakeLog as never)
 
     expect(result).toEqual([])
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('atom'))
@@ -184,8 +185,9 @@ describe('queryRssFeeds', () => {
   it('treats an inherited Object.prototype property name as an unrecognized parserKind, not a real handler', async () => {
     vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith({ parserKind: 'constructor' })])
     const warn = vi.fn()
+    const fakeLog = { warn, info: vi.fn(), child: () => fakeLog }
 
-    const result = await queryRssFeeds({ warn } as never)
+    const result = await queryRssFeeds(fakeLog as never)
 
     expect(result).toEqual([])
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('constructor'))

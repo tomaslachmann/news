@@ -64,12 +64,19 @@ export async function scrapeForCoverage(
   url: string,
   log?: FastifyBaseLogger
 ): Promise<ScrapeForCoverageOutcome> {
+  const scrapeLog = log?.child({ namespace: 'scraper' })
+  scrapeLog?.info({ url }, 'Scraping article')
   try {
     const scraped = await scrapeArticle(url)
     const isBlocked = scraped.fullText.length < MIN_TEXT_LENGTH || isBlockedContent(scraped.fullText)
-    return isBlocked ? { status: 'EXTRACTION_FAILED' } : { status: 'OK', extractedText: scraped.fullText }
+    if (isBlocked) {
+      scrapeLog?.info({ url, textLength: scraped.fullText.length }, 'Scraped article too short or blocked')
+      return { status: 'EXTRACTION_FAILED' }
+    }
+    scrapeLog?.info({ url, textLength: scraped.fullText.length }, 'Scraped article')
+    return { status: 'OK', extractedText: scraped.fullText }
   } catch (err) {
-    log?.warn({ url, err }, 'Scraping Coverage article failed')
+    scrapeLog?.warn({ url, err }, 'Scraping Coverage article failed')
     return { status: 'EXTRACTION_FAILED' }
   }
 }

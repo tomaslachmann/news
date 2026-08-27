@@ -82,10 +82,13 @@ export async function runIngestionPass(log?: FastifyBaseLogger): Promise<Ingesti
 }
 
 async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<IngestionRunSummary> {
+  const ingestionLog = log?.child({ namespace: 'ingestion' })
   const summary: IngestionRunSummary = { checked: 0, created: 0, attached: 0, flagged: 0, skipped: 0 }
 
+  ingestionLog?.info('Ingestion run started')
   const items = await queryRssFeeds(log)
   summary.checked = items.length
+  ingestionLog?.info({ itemCount: items.length }, 'Fetched candidates from all source feeds')
 
   const [knownSeedUrls, knownCoverageUrls] = await Promise.all([
     analysisRepo.findAllSeedUrls(KNOWN_URL_LOOKBACK_HOURS),
@@ -117,7 +120,10 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
       // an embeddingModel/embeddingInputHash implying a real one exists.
       if (embeddingResult.vector.length === 0) throw new Error('Embedding API returned an empty vector')
     } catch (err) {
-      log?.warn({ url: item.url, err }, 'Ingestion: could not generate embedding, skipping this item')
+      ingestionLog?.warn(
+        { url: item.url, err },
+        'Ingestion: could not generate embedding, skipping this item'
+      )
       summary.skipped++
       continue
     }
@@ -148,7 +154,7 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
         // relying on that constraint to throw.
         const existing = await coverageRepo.findCoveragesForAnalysis(match.analysisId)
         if (existing.some((c) => c.sourceId === item.sourceId)) {
-          log?.info(
+          ingestionLog?.info(
             { analysisId: match.analysisId, sourceId: item.sourceId },
             'Ingestion: this Source already has Coverage on the matched Analysis, skipping duplicate'
           )
@@ -174,9 +180,13 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
             MAX_COVERAGES_PER_ANALYSIS
           )
           if (result.ok) {
+            ingestionLog?.info(
+              { analysisId: match.analysisId, sourceId: item.sourceId, url: item.url },
+              'Ingestion: attached Coverage to matched Analysis'
+            )
             summary.attached++
           } else {
-            log?.info(
+            ingestionLog?.info(
               { analysisId: match.analysisId, sourceId: item.sourceId, activeCount: result.activeCount },
               'Ingestion: skipping attach — matched Analysis at MAX_COVERAGES_PER_ANALYSIS, or a concurrent write already attached this Source'
             )
@@ -192,6 +202,10 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
           publishedAt: item.publishedAt,
           primaryCategory: resolveCategoryForCandidate(item),
         })
+        ingestionLog?.info(
+          { analysisId: match.analysisId, sourceId: item.sourceId, url: item.url },
+          'Ingestion: flagged as a PendingAddition against a COMPLETE Analysis'
+        )
         summary.flagged++
       } else {
         // Matched a FAILED (or rejected) Analysis — treat as already-seen; don't recreate it.
@@ -233,9 +247,14 @@ async function runIngestionPassLocked(log?: FastifyBaseLogger): Promise<Ingestio
         primaryCategory: resolveCategoryForCandidate(item),
       },
     ])
+    ingestionLog?.info(
+      { storyId: draft.storyId, analysisId: draft.id, sourceId: item.sourceId, url: item.url },
+      'Ingestion: created new Draft Story'
+    )
     summary.created++
   }
 
+  ingestionLog?.info(summary, 'Ingestion run finished')
   return summary
 }
 

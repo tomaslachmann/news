@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto'
 import { openai } from './llmClient.js'
 import { recordLlmCallSafe } from '../repositories/llmCallLog.js'
 import { findCachedEmbedding, saveCachedEmbedding } from '../repositories/embeddingCache.js'
+import { createLogger } from '../logger.js'
+
+const log = createLogger('embedding')
 
 /** Every module that calls generateEmbedding — see ADR 0020. Extend this when a new caller is
  *  added. Distinct from llmClient.ts's LlmCallSite: embeddings and chat completions are
@@ -37,14 +40,18 @@ export async function generateEmbedding(text: string, callSite: EmbeddingCallSit
 
   try {
     const cached = await findCachedEmbedding(model, inputHash)
-    if (cached) return { vector: cached, model, inputHash }
+    if (cached) {
+      log.info({ callSite, model }, 'Embedding cache hit')
+      return { vector: cached, model, inputHash }
+    }
   } catch (err) {
-    console.error('EmbeddingCache lookup failed; falling back to the embeddings API', err)
+    log.error({ callSite, model, err }, 'EmbeddingCache lookup failed; falling back to the embeddings API')
   }
 
   // No system prompt for an embeddings call — null, not omitted, since LlmCallLog is shared with
   // callJsonModel's chat-completion shape (ADR 0020).
   const logBase = { callSite, model, systemPrompt: null, userContent: text }
+  log.info({ callSite, model }, 'Embedding cache miss, calling the embeddings API')
   try {
     const response = await openai.embeddings.create({ model, input: text })
     const embedding = response.data[0]?.embedding
@@ -65,8 +72,9 @@ export async function generateEmbedding(text: string, callSite: EmbeddingCallSit
     try {
       await saveCachedEmbedding(model, inputHash, embedding)
     } catch (err) {
-      console.error('Failed to write EmbeddingCache entry', err)
+      log.error({ callSite, model, err }, 'Failed to write EmbeddingCache entry')
     }
+    log.info({ callSite, model, dimensions: embedding.length }, 'Embedding generated')
     return { vector: embedding, model, inputHash }
   } catch (err) {
     await recordLlmCallSafe({
@@ -74,6 +82,7 @@ export async function generateEmbedding(text: string, callSite: EmbeddingCallSit
       responseContent: null,
       error: err instanceof Error ? err.message : String(err),
     })
+    log.error({ callSite, model, err }, 'Embedding generation failed')
     throw err
   }
 }
