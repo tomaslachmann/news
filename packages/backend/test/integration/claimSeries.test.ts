@@ -38,6 +38,7 @@ async function makeCompleteThreadMember(seedUrl: string, headline: string) {
     headline,
     sourceOverlapPercentage: null,
     agreementCategory: 'PARTIAL',
+    searchText: 'test',
   })
   return analysis
 }

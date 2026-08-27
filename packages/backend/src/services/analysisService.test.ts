@@ -887,6 +887,7 @@ describe('getAnalysisDetail', () => {
         headline: 'Headline',
         narrativeGenerationFailedAt: null,
         narrativeImage: null,
+        searchText: null,
       },
     })
 
@@ -924,6 +925,7 @@ describe('getAnalysisDetail', () => {
         headline: 'Headline',
         narrativeGenerationFailedAt: null,
         narrativeImage: null,
+        searchText: null,
       },
     })
 
@@ -952,6 +954,7 @@ describe('getAnalysisDetail', () => {
         headline: 'Headline',
         narrativeGenerationFailedAt: null,
         narrativeImage: null,
+        searchText: null,
       },
     })
 
@@ -1109,6 +1112,7 @@ describe('getAnalysisDetail', () => {
         headline: null,
         narrativeGenerationFailedAt: null,
         narrativeImage: null,
+        searchText: null,
       },
     })
 
@@ -1149,6 +1153,7 @@ describe('getAnalysisDetail', () => {
           height: 4000,
           createdAt: new Date('2025-01-01T00:00:00Z'),
         },
+        searchText: null,
       },
     })
 
@@ -1181,6 +1186,7 @@ describe('getAnalysisDetail', () => {
         headline: 'Headline',
         narrativeGenerationFailedAt: null,
         narrativeImage: null,
+        searchText: null,
       },
     })
 
@@ -1208,6 +1214,7 @@ describe('getAnalysisDetail', () => {
         headline: null,
         narrativeGenerationFailedAt: new Date('2025-01-01T00:00:00Z'),
         narrativeImage: null,
+        searchText: null,
       },
     })
 
@@ -1347,6 +1354,7 @@ describe('getAnalysisDetail', () => {
         headline: 'Generated headline',
         narrativeGenerationFailedAt: null,
         narrativeImage: null,
+        searchText: null,
       },
     })
     expect((await getAnalysisDetail('a1', true)).title).toBe('Generated headline')

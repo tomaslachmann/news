@@ -1,6 +1,12 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import type { NarrativeDocument } from '@news-triangulator/shared'
-import { createAnalysis, completeAnalysisWithSynthesis, disconnect } from '../../src/repositories/analysis.js'
+import {
+  createAnalysis,
+  completeAnalysisWithSynthesis,
+  findAnalysesBySearch,
+  disconnect,
+} from '../../src/repositories/analysis.js'
+import { buildSearchText } from '../../src/services/searchIndexing.js'
 import {
   findSynthesisResultByAnalysisId,
   markNarrativeGenerationFailed,
@@ -20,6 +26,7 @@ describe('SynthesisResult repository against a real Postgres instance', () => {
       headline: 'Generated headline',
       sourceOverlapPercentage: null,
       agreementCategory: 'PARTIAL',
+      searchText: 'test',
     })
 
     await markNarrativeGenerationFailed(analysis.id)
@@ -41,6 +48,7 @@ describe('SynthesisResult repository against a real Postgres instance', () => {
       headline: null,
       sourceOverlapPercentage: null,
       agreementCategory: 'PARTIAL',
+      searchText: 'test',
     })
 
     const found = await findSynthesisResultByAnalysisId(analysis.id)
@@ -74,6 +82,7 @@ describe('SynthesisResult repository against a real Postgres instance', () => {
         headline: 'Generated headline',
         sourceOverlapPercentage: 100,
         agreementCategory: 'CONFIRMED',
+        searchText: 'test',
       })
 
       const document: NarrativeDocument = {
@@ -124,4 +133,86 @@ describe('SynthesisResult repository against a real Postgres instance', () => {
       expect(regenerated?.narrative).toEqual(document)
     }
   )
+})
+
+describe('findAnalysesBySearch (full-text search, ticket 83) against a real Postgres instance', () => {
+  afterAll(async () => {
+    await disconnect()
+  })
+
+  it("matches on a Dimension's own prose, ranks the more relevant hit first, and never matches an unrelated term", async () => {
+    const budget = await createAnalysis({
+      seedUrl: 'https://example.cz/search-budget',
+      seedHeadline: 'Pracovní název',
+    })
+    const budgetDimensions = {
+      agreement: [
+        {
+          id: 'i1',
+          prose: 'Vláda schválila unijní rozpočet na příští rok.',
+          attributions: [],
+        },
+      ],
+      contradiction: [],
+      uniqueReporting: [],
+      framing: [],
+    }
+    await completeAnalysisWithSynthesis(budget.id, budgetDimensions, {
+      headline: 'Rozpočet schválen',
+      sourceOverlapPercentage: null,
+      agreementCategory: 'PARTIAL',
+      searchText: buildSearchText('Pracovní název', 'Rozpočet schválen', budgetDimensions),
+    })
+
+    const weather = await createAnalysis({
+      seedUrl: 'https://example.cz/search-weather',
+      seedHeadline: 'Pracovní název 2',
+    })
+    const weatherDimensions = {
+      agreement: [{ id: 'i1', prose: 'Meteorologové varují před silným větrem.', attributions: [] }],
+      contradiction: [],
+      uniqueReporting: [],
+      framing: [],
+    }
+    await completeAnalysisWithSynthesis(weather.id, weatherDimensions, {
+      headline: 'Varování před větrem',
+      sourceOverlapPercentage: null,
+      agreementCategory: 'PARTIAL',
+      searchText: buildSearchText('Pracovní název 2', 'Varování před větrem', weatherDimensions),
+    })
+
+    // A second, less-relevant match for the same term (only in the headline, not repeated in the
+    // prose) -- confirms ranking, not just filtering.
+    const budgetMention = await createAnalysis({
+      seedUrl: 'https://example.cz/search-budget-mention',
+      seedHeadline: 'Pracovní název 3',
+    })
+    const mentionDimensions = {
+      agreement: [{ id: 'i1', prose: 'Ministr komentoval hospodářskou situaci.', attributions: [] }],
+      contradiction: [],
+      uniqueReporting: [],
+      framing: [],
+    }
+    await completeAnalysisWithSynthesis(budgetMention.id, mentionDimensions, {
+      headline: 'Rozpočet zmíněn na tiskovce',
+      sourceOverlapPercentage: null,
+      agreementCategory: 'PARTIAL',
+      searchText: buildSearchText('Pracovní název 3', 'Rozpočet zmíněn na tiskovce', mentionDimensions),
+    })
+
+    const results = await findAnalysesBySearch('rozpočet', 10)
+
+    const ids = results.map((r) => r.id)
+    expect(ids).toContain(budget.id)
+    expect(ids).toContain(budgetMention.id)
+    expect(ids).not.toContain(weather.id)
+    // The prose-and-headline match ranks above the headline-only mention.
+    expect(ids.indexOf(budget.id)).toBeLessThan(ids.indexOf(budgetMention.id))
+  })
+
+  it('returns nothing for a term that matches no COMPLETE Analysis at all', async () => {
+    const results = await findAnalysesBySearch('naprosto-nesouvisejici-vyraz-xyz', 10)
+
+    expect(results).toEqual([])
+  })
 })

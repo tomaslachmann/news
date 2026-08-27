@@ -140,6 +140,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
       headline: 'Vláda schválila rozpočet',
       sourceOverlapPercentage: null,
       agreementCategory: 'PARTIAL',
+      searchText: 'test',
     })
 
     const found = await findAnalysisWithDetails(analysis.id)
@@ -157,6 +158,7 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
       headline: null,
       sourceOverlapPercentage: null,
       agreementCategory: 'PARTIAL',
+      searchText: 'test',
     })
 
     const found = await findAnalysisWithDetails(analysis.id)

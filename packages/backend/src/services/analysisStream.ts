@@ -9,6 +9,7 @@ import { runExtractionPass, ExtractionResultSchema } from './extractionPass.js'
 import { runSynthesisPass, mergeAgreementCategory, type SourceExtraction } from './synthesisPass.js'
 import { computeSourceOverlapPercentage } from './sourceOverlap.js'
 import { runHeadlinePass } from './headlinePass.js'
+import { buildSearchText } from './searchIndexing.js'
 import type { CoverageWithSource } from '../repositories/coverage.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
@@ -63,12 +64,15 @@ export async function runAnalysisStream(
   // regardless, since `send` safely no-ops once the connection is closed.
   await new Promise<void>((resolve) => {
     onClientClose(resolve)
-    void runExtractionAndSynthesis(analysisId, coverages, extractable, send, log).then(resolve)
+    void runExtractionAndSynthesis(analysisId, analysis.seedHeadline, coverages, extractable, send, log).then(
+      resolve
+    )
   })
 }
 
 async function runExtractionAndSynthesis(
   analysisId: string,
+  seedHeadline: string,
   allCoverages: CoverageWithSource[],
   extractable: CoverageWithSource[],
   send: (event: SseEvent) => void,
@@ -179,6 +183,7 @@ async function runExtractionAndSynthesis(
       headline,
       sourceOverlapPercentage,
       agreementCategory: synthesis.agreementCategory,
+      searchText: buildSearchText(seedHeadline, headline, synthesis),
       onComplete: async (tx) => {
         await enqueueJob(JobName.Narrative, { analysisId }, { tx })
       },
