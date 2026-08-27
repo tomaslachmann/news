@@ -44,21 +44,21 @@ mechanism) — both already done.
 
 **Status:** ready-for-agent
 
-- [ ] `articleCategoryMapping.ts`: extend `SOURCE_CATEGORY_MAPS` with three new per-source tables
+- [x] `articleCategoryMapping.ts`: extend `SOURCE_CATEGORY_MAPS` with three new per-source tables
       (`src-denik`, `src-echo24`, `src-cnnprima`), using exactly the raw values/mappings the
       research above lists — no new raw value invented beyond what was actually observed.
-- [ ] Migration (raw SQL, matching tickets 78/79's own convention — apply directly, not via
+- [x] Migration (raw SQL, matching tickets 78/79's own convention — apply directly, not via
       `prisma db push`, per ticket 83's own hard-learned lesson about `db push` silently dropping
       unmodeled DB objects): 7 new `SourceFeed` rows for `src-hn` (domaci/zahranicni/byznys/
       nazory/tech/art/vikend, each with its `category` set) and 5 for `src-e15`
       (domaci/zahranicni/ekonomika/byznys/kultura). Each source's existing all-articles feed is
       kept alongside the new ones, not replaced — same reasoning ticket 79 already established
       (Ingestion's URL-keyed dedup already collapses an article arriving via both).
-- [ ] `CONTEXT.md`'s existing "Category" entry: no new concept introduced here, just more coverage
+- [x] `CONTEXT.md`'s existing "Category" entry: no new concept introduced here, just more coverage
       — update only if the entry's own source-coverage description goes stale, not a rewrite.
-- [ ] Tests: mapping-table resolution for the three new sources (first-mappable-tag-wins, the
+- [x] Tests: mapping-table resolution for the three new sources (first-mappable-tag-wins, the
       documented noise/topic tags falling through to `null`), same shape as ticket 78's own tests.
-- [ ] Manually verify against the real Docker backend, same rigor as tickets 82/83: confirm the new
+- [x] Manually verify against the real Docker backend, same rigor as tickets 82/83: confirm the new
       `SourceFeed` rows exist with the right `category`, and that `resolveCategoryForCandidate`
       resolves correctly for a sample raw tag from each of the three newly-mapped sources.
-- [ ] Typecheck + full test suites pass. `/code-review` clean.
+- [x] Typecheck + full test suites pass. `/code-review` clean.

@@ -41,6 +41,24 @@ describe('resolvePrimaryCategory', () => {
   it("maps Deník N's own domestic-rubric wording (Česko), distinct from the other outlets' Domácí", () => {
     expect(resolvePrimaryCategory('src-denikn', ['Česko'])).toBe('DOMESTIC')
   })
+
+  it('resolves Deník, skipping its own no-clean-fit noise tags (ticket 84)', () => {
+    expect(resolvePrimaryCategory('src-denik', ['Evropa'])).toBe('WORLD')
+    expect(resolvePrimaryCategory('src-denik', ['Nehody'])).toBe('CRIME')
+    expect(resolvePrimaryCategory('src-denik', ['Autotesty', 'Zahrada'])).toBeNull()
+  })
+
+  it('resolves Echo24, skipping its own syndication/format noise tags (ticket 84)', () => {
+    expect(resolvePrimaryCategory('src-echo24', ['Domov'])).toBe('DOMESTIC')
+    expect(resolvePrimaryCategory('src-echo24', ['Homepage', 'Bing cz', 'Svět'])).toBe('WORLD')
+    expect(resolvePrimaryCategory('src-echo24', ['Krátké zprávy', 'iPrima'])).toBeNull()
+  })
+
+  it('resolves CNN Prima NEWS, skipping its own per-country topic tags (ticket 84)', () => {
+    expect(resolvePrimaryCategory('src-cnnprima', ['Krimi'])).toBe('CRIME')
+    expect(resolvePrimaryCategory('src-cnnprima', ['Jihomoravský kraj'])).toBe('REGIONAL')
+    expect(resolvePrimaryCategory('src-cnnprima', ['Německo', 'Ukrajina'])).toBeNull()
+  })
 })
 
 describe('resolveCategoryForCandidate', () => {
