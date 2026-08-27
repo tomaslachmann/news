@@ -31,6 +31,11 @@ describe('resolvePrimaryCategory', () => {
     expect(resolvePrimaryCategory('src-seznamzpravy', ['Sport'])).toBe('SPORT')
   })
 
+  it("resolves Lifestyle/Komentáře, added after sampling Novinky's real szn:sections values live (ticket 85)", () => {
+    expect(resolvePrimaryCategory('src-novinky', ['Recepty', 'Lifestyle'])).toBe('LIFESTYLE')
+    expect(resolvePrimaryCategory('src-seznamzpravy', ['Komentáře'])).toBe('COMMENTARY')
+  })
+
   it("resolves České noviny's terse single-letter codes", () => {
     expect(resolvePrimaryCategory('src-ceskenoviny', ['d'])).toBe('DOMESTIC')
     expect(resolvePrimaryCategory('src-ceskenoviny', ['m'])).toBe('WORLD')

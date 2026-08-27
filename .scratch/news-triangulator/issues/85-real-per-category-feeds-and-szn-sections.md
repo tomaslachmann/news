@@ -93,30 +93,44 @@ not just a 200 status):
 
 **Blocked by:** 78, 79 (both already done — this ticket only uses their existing two mechanisms).
 
-**Status:** todo
+**Status:** in review
 
-- [ ] `services/rss.ts`: add `customFields: { item: [['szn:sections', 'sznSections']] }` to the
+- [x] `services/rss.ts`: add `customFields: { item: [['szn:sections', 'sznSections']] }` to the
       `rss-parser` config; when building `rawCategories`, fall back to `item.sznSections?.value`
       when `item.categories` is empty/undefined. Generic (any source could have this field), not
       Novinky/SeznamZpravy-specific code.
-- [ ] `articleCategoryMapping.ts`: add `Lifestyle: 'LIFESTYLE'` and `Komentáře: 'COMMENTARY'` to
+- [x] `articleCategoryMapping.ts`: add `Lifestyle: 'LIFESTYLE'` and `Komentáře: 'COMMENTARY'` to
       `STANDARD_CZECH_RUBRIC_MAP` (real values observed in Novinky's `szn:sections`, already mapped
       identically in `DENIK_N_MAP`).
-- [ ] Migration (raw SQL, applied directly per ticket 83's `db push`-drops-unmodeled-objects
-      lesson): 38 new `SourceFeed` rows total, each `category` set, existing all-articles feed for
-      every source kept alongside (ticket 79's established dedup reasoning) —
-      9 for `src-aktualne`, 5 for `src-ct24`, 5 for `src-ceskenoviny`, 7 for `src-denikn`, 3 for
-      `src-denik`, 3 for `src-echo24`, 9 for `src-cnnprima` — exactly the slugs/categories/URLs
-      the research above lists, no new value invented.
-- [ ] `CONTEXT.md`'s "Category" entry: note that feed-implied is now the primary mechanism for 9 of
+- [x] Migration (raw SQL, applied directly per ticket 83's `db push`-drops-unmodeled-objects
+      lesson): 41 new `SourceFeed` rows total (grew from the planned 38 once Aktuálně/ČT24/
+      CNN Prima's real feed counts were pinned down), each `category` set, existing all-articles
+      feed for every source kept alongside (ticket 79's established dedup reasoning) — 9 for
+      `src-aktualne`, 5 for `src-ct24`, 5 for `src-ceskenoviny`, 7 for `src-denikn`, 3 for
+      `src-denik`, 3 for `src-echo24`, 9 for `src-cnnprima` — exactly the slugs/categories/URLs the
+      research above lists, no new value invented.
+- [x] `CONTEXT.md`'s "Category" entry: note that feed-implied is now the primary mechanism for 9 of
       13 sources (only Deník N's remaining uncovered rubrics, Deník's general zpravy feed, and
       Novinky/Seznam Zprávy stay per-item-only), and that "coverage exists" (ticket 84's framing)
       undersold how unreliable some of that per-item coverage was before this ticket.
-- [ ] Tests: `rss.ts` — a unit test (or extend existing coverage) proving `szn:sections` items
+- [x] Tests: `rss.ts` — a unit test (or extend existing coverage) proving `szn:sections` items
       produce the right `rawCategories` and plain `<category>` items are unaffected. Mapping-table
       tests for the two new `STANDARD_CZECH_RUBRIC_MAP` entries.
-- [ ] Manually verify against the real Docker backend (rebuild, not restart): confirm all 38 new
+- [x] Manually verify against the real Docker backend (rebuild, not restart): confirm all 41 new
       `SourceFeed` rows exist with the right `category`, and that a real Novinky/Seznam Zprávy
       ingestion run now resolves `primaryCategory` via `szn:sections` where it previously always
       resolved `null`.
-- [ ] Typecheck + full test suites (unit + integration) pass. `/code-review` clean.
+- [x] Typecheck + full test suites (unit + integration) pass. `/code-review` clean.
+
+**Implementation notes (beyond the original checklist):**
+- Live verification against every one of the 13 sources' real feeds (via `queryRssFeeds` run
+  directly inside the rebuilt backend container, not through the full LLM-driven ingestion pass)
+  surfaced a second real bug, not just the szn:sections gap: `<category domain="...">` tags
+  (Aktuálně, ČT24, CNN Prima NEWS) parse through `rss-parser` as `{_: text, $: {domain}}` objects,
+  not plain strings, despite its own `.d.ts` claiming `categories?: string[]`.
+  `resolvePrimaryCategory` threw `Cannot convert object to primitive value` the moment it used an
+  unnormalized one as a map key — a crash that predated this ticket (these three sources have used
+  domain-attributed categories since before ticket 78) and was only ever masked for candidates
+  whose feed itself sets `feedCategory` (which short-circuits before touching `rawCategories`).
+  Fixed in `rss.ts` by normalizing every raw category value to plain text (`normalizeCategory`)
+  before it's exposed as `rawCategories`, with a regression test.

@@ -15,7 +15,9 @@ import type { ArticleCategory } from '../repositories/coverage.js'
 /// Novinky, Aktuálně, ČT24 and Seznam Zprávy each tag every item inline with their own
 /// `<category>` value, but independently verified live (2026-08-26) to use the same shared
 /// vocabulary of generic Czech news-rubric names -- one table reused across all four sourceIds
-/// rather than four near-identical copies.
+/// rather than four near-identical copies. `Lifestyle`/`Komentáře` added in ticket 85 after
+/// sampling Novinky's real `szn:sections` values live -- spelled identically to DENIK_N_MAP's own
+/// entries for the same two rubrics, so reusing them here is consistent, not a guess.
 const STANDARD_CZECH_RUBRIC_MAP: Record<string, ArticleCategory> = {
   Domácí: 'DOMESTIC',
   Zahraničí: 'WORLD',
@@ -35,6 +37,8 @@ const STANDARD_CZECH_RUBRIC_MAP: Record<string, ArticleCategory> = {
   Mobil: 'SCIENCE_TECH',
   Věda: 'SCIENCE_TECH',
   'Hlavní město Praha': 'REGIONAL',
+  Lifestyle: 'LIFESTYLE',
+  Komentáře: 'COMMENTARY',
 }
 
 /// Deník N multi-tags each item, mixing real rubrics with ongoing-story topic tags in the same
