@@ -42,7 +42,7 @@ categorization coverage by the time this is done.
 **Blocked by:** 78 (needs the mapping-table mechanism), 79 (needs the feed-implied-categorization
 mechanism) — both already done.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `articleCategoryMapping.ts`: extend `SOURCE_CATEGORY_MAPS` with three new per-source tables
       (`src-denik`, `src-echo24`, `src-cnnprima`), using exactly the raw values/mappings the
