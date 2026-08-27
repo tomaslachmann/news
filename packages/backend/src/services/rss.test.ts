@@ -75,6 +75,79 @@ describe('queryRssFeeds', () => {
     expect(result[0].rawCategories).toEqual(['Domácí', 'Krimi'])
   })
 
+  it('normalizes a <category domain="..."> tag (rss-parser hands back {_, $}, not a plain string) into just its text (ticket 85 -- a real crash for Aktuálně/ČT24/CNN Prima before this fix)', async () => {
+    vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith()])
+    mockParseURL.mockResolvedValue({
+      items: [
+        {
+          title: 'Headline',
+          link: 'https://idnes.cz/a1',
+          pubDate: '2026-01-01',
+          categories: [{ _: 'Sport', $: { domain: 'https://sport.example.cz/' } }, 'Fotbal'],
+        },
+      ],
+    })
+
+    const result = await queryRssFeeds()
+
+    expect(result[0].rawCategories).toEqual(['Sport', 'Fotbal'])
+  })
+
+  it("falls back to szn:sections values as rawCategories when <category> is absent (ticket 85 -- Novinky/Seznam Zprávy's real signal)", async () => {
+    vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith()])
+    mockParseURL.mockResolvedValue({
+      items: [
+        {
+          title: 'Headline',
+          link: 'https://idnes.cz/a1',
+          pubDate: '2026-01-01',
+          sznSections: { value: ['Evropa', 'Zahraniční', 'Stalo se'] },
+        },
+      ],
+    })
+
+    const result = await queryRssFeeds()
+
+    expect(result[0].rawCategories).toEqual(['Evropa', 'Zahraniční', 'Stalo se'])
+  })
+
+  it('normalizes a single szn:sections value (xml2js collapses a lone repeated element out of array form) into a one-element array', async () => {
+    vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith()])
+    mockParseURL.mockResolvedValue({
+      items: [
+        {
+          title: 'Headline',
+          link: 'https://idnes.cz/a1',
+          pubDate: '2026-01-01',
+          sznSections: { value: 'Kultura' },
+        },
+      ],
+    })
+
+    const result = await queryRssFeeds()
+
+    expect(result[0].rawCategories).toEqual(['Kultura'])
+  })
+
+  it('prefers <category> over szn:sections when an item somehow has both', async () => {
+    vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith()])
+    mockParseURL.mockResolvedValue({
+      items: [
+        {
+          title: 'Headline',
+          link: 'https://idnes.cz/a1',
+          pubDate: '2026-01-01',
+          categories: ['Domácí'],
+          sznSections: { value: ['Svět'] },
+        },
+      ],
+    })
+
+    const result = await queryRssFeeds()
+
+    expect(result[0].rawCategories).toEqual(['Domácí'])
+  })
+
   it('leaves rawCategories undefined for an item with no <category> tag at all', async () => {
     vi.mocked(sourceRepo.findAllSourceFeeds).mockResolvedValue([feedWith()])
     mockParseURL.mockResolvedValue({
