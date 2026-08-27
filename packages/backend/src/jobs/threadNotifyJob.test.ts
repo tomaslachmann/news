@@ -71,4 +71,17 @@ describe('runThreadNotifyJob', () => {
 
     expect(deps.deleteThreadFollowsByEndpoint).not.toHaveBeenCalled()
   })
+
+  it('does not throw when the expired-cleanup delete itself fails -- sends already went out, so a retry must not re-send to everyone', async () => {
+    const dead = { endpoint: 'https://push.example/dead', p256dh: 'p1', auth: 'a1' }
+    const deps = baseDeps({
+      findFollowsForThread: vi.fn().mockResolvedValue([dead]),
+      sendThreadNotification: vi.fn().mockResolvedValue({ ok: false, expired: true }),
+      deleteThreadFollowsByEndpoint: vi.fn().mockRejectedValue(new Error('db down')),
+    })
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+
+    await expect(runThreadNotifyJob({ threadId: 't1' }, deps, log as never)).resolves.toBeUndefined()
+    expect(log.error).toHaveBeenCalled()
+  })
 })

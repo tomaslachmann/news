@@ -53,7 +53,21 @@ export async function runThreadNotifyJob(
     })
     .map((f) => f.endpoint)
 
-  await Promise.all(expiredEndpoints.map((endpoint) => deps.deleteThreadFollowsByEndpoint(endpoint)))
+  // Best-effort cleanup, its own try/catch: sends above have already gone out by this point, so a
+  // failure here must never throw and fail the whole job -- pg-boss would then retry it from
+  // scratch (JOB_RETRY_POLICY), re-sending a real push to every follower a second time, including
+  // ones already successfully notified on this attempt (code review). A dead subscription this
+  // pass couldn't clean up just stays around until the Thread's next genuine development retries
+  // the same self-heal, same "eventually, not immediately" convention as IngestionRunLock's own
+  // staleAfterMinutes self-heal.
+  try {
+    await Promise.all(expiredEndpoints.map((endpoint) => deps.deleteThreadFollowsByEndpoint(endpoint)))
+  } catch (err) {
+    log?.error(
+      { threadId: payload.threadId, expiredEndpoints, err },
+      'thread.notifySubscribers job: failed to clean up an expired ThreadFollow row; will retry on the next notify'
+    )
+  }
 
   log?.info(
     { threadId: payload.threadId, sent: follows.length, expired: expiredEndpoints.length },
