@@ -16,7 +16,7 @@ no `web-push` dependency, no service worker, no manifest. Building this from zer
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `packages/backend`: add the `web-push` dependency — the one piece of this ticket that
       genuinely needs a library (VAPID JWT signing + the Web Push encryption protocol are real
