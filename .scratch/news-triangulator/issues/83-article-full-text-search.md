@@ -30,7 +30,7 @@ tradeoff the existing `pg_trgm` entity search already accepts.
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `prisma/schema.prisma`: `SynthesisResult.searchText String?` (nullable, no backfill — ADR
       0021's convention, existing rows simply don't show up in search until their Analysis is
