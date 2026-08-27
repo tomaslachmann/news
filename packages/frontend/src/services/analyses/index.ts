@@ -156,6 +156,17 @@ export async function fetchArticles(cursor?: string): Promise<Page<AnalysisListI
   return res.json() as Promise<Page<AnalysisListItem>>
 }
 
+/** Content search (ticket 83) — a bounded, ranked list, not paginated (see the ticket's own
+ *  Answer: a relevance ranking doesn't compose with "load more" the way a newest-first feed
+ *  does), unlike every other fetch* here. */
+export async function searchArticles(query: string): Promise<AnalysisListItem[]> {
+  const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { credentials: 'include' })
+
+  if (!res.ok) return throwApiError(res, 'Nepodařilo se vyhledat články')
+
+  return res.json() as Promise<AnalysisListItem[]>
+}
+
 function on<T extends SseEvent['type']>(
   es: EventSource,
   type: T,

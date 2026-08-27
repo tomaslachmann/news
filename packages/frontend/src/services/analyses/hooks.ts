@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchAnalysis, fetchAnalyses, fetchArticles } from './index'
+import { fetchAnalysis, fetchAnalyses, fetchArticles, searchArticles } from './index'
 import { usePaginatedQuery } from '../pagination'
 
 export function useAnalysisDetail(analysisId: string | undefined) {
@@ -16,4 +16,13 @@ export function useAnalysesList() {
 
 export function useArticlesList() {
   return usePaginatedQuery(['articles'], fetchArticles)
+}
+
+export function useArticleSearch(query: string) {
+  const trimmed = query.trim()
+  return useQuery({
+    queryKey: ['articles', 'search', trimmed],
+    queryFn: () => searchArticles(trimmed),
+    enabled: trimmed.length > 0,
+  })
 }

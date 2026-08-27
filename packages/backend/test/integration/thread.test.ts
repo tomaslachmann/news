@@ -120,7 +120,12 @@ describe('Thread repository against a real Postgres instance', () => {
           uniqueReporting: [],
           framing: [],
         },
-        { headline: 'Generated A', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+        {
+          headline: 'Generated A',
+          sourceOverlapPercentage: null,
+          agreementCategory: 'PARTIAL',
+          searchText: 'test',
+        }
       )
       const b = await createAnalysis({ seedUrl: 'https://example.cz/thread-title-b', seedHeadline: 'Seed B' })
       // No SynthesisResult at all for b — an Analysis that hasn't reached COMPLETE yet.
@@ -351,7 +356,7 @@ describe('Thread repository against a real Postgres instance', () => {
           uniqueReporting: [],
           framing: [{ id: 'd-a-framing', prose: 'Framing A', attributions: [] }],
         },
-        { headline: 'A', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+        { headline: 'A', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL', searchText: 'test' }
       )
       await completeAnalysisWithSynthesis(
         b.id,
@@ -361,7 +366,7 @@ describe('Thread repository against a real Postgres instance', () => {
           uniqueReporting: [{ id: 'd-b-unique', prose: 'Unikátní B', attributions: [] }],
           framing: [],
         },
-        { headline: 'B', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+        { headline: 'B', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL', searchText: 'test' }
       )
       // c stays PENDING (no completeAnalysisWithSynthesis) — not currently visible, must be excluded.
       const span = {
@@ -408,12 +413,12 @@ describe('Thread repository against a real Postgres instance', () => {
           uniqueReporting: [],
           framing: [],
         },
-        { headline: 'A', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+        { headline: 'A', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL', searchText: 'test' }
       )
       await completeAnalysisWithSynthesis(
         b.id,
         { agreement: [], contradiction: [], uniqueReporting: [], framing: [] },
-        { headline: 'B', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+        { headline: 'B', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL', searchText: 'test' }
       )
       const span = {
         firstEventAt: new Date('2026-01-01T00:00:00Z'),
@@ -490,7 +495,12 @@ describe('Thread repository against a real Postgres instance', () => {
       await completeAnalysisWithSynthesis(
         b.id,
         { agreement: [], contradiction: [], uniqueReporting: [], framing: [] },
-        { headline: 'Generated B', sourceOverlapPercentage: null, agreementCategory: 'PARTIAL' }
+        {
+          headline: 'Generated B',
+          sourceOverlapPercentage: null,
+          agreementCategory: 'PARTIAL',
+          searchText: 'test',
+        }
       )
       const span = {
         firstEventAt: new Date('2026-01-01T00:00:00Z'),
@@ -560,7 +570,12 @@ describe('Thread repository against a real Postgres instance', () => {
           uniqueReporting: [],
           framing: [],
         },
-        { headline: 'Generated A', sourceOverlapPercentage: 80, agreementCategory: 'CONFIRMED' }
+        {
+          headline: 'Generated A',
+          sourceOverlapPercentage: 80,
+          agreementCategory: 'CONFIRMED',
+          searchText: 'test',
+        }
       )
       // b stays PENDING (no completeAnalysisWithSynthesis call) — must not appear in the result.
       // Recent, not a fixed historical date — a lastEventAt more than 30 days in the past would

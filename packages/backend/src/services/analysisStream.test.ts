@@ -32,6 +32,9 @@ const ACTOR_ID = 'admin1'
 const anyOnComplete = expect.any(Function) as unknown as NonNullable<
   CompleteAnalysisWithSynthesisOptions['onComplete']
 >
+// Same reasoning as anyOnComplete above -- the assertions below only care that a searchText was
+// computed at all, not its exact flattened contents (that's searchIndexing.test.ts's job).
+const anyString = expect.any(String) as unknown as string
 
 const ANALYSIS = {
   id: 'a1',
@@ -120,6 +123,7 @@ describe('runAnalysisStream', () => {
       headline: 'Vláda schválila rozpočet',
       sourceOverlapPercentage: 100,
       agreementCategory: 'CONFIRMED',
+      searchText: anyString,
       onComplete: anyOnComplete,
     })
     expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
@@ -193,6 +197,7 @@ describe('runAnalysisStream', () => {
       headline: null,
       sourceOverlapPercentage: null,
       agreementCategory: 'DISPUTED',
+      searchText: anyString,
       onComplete: anyOnComplete,
     })
   })

@@ -30,35 +30,71 @@ tradeoff the existing `pg_trgm` entity search already accepts.
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `prisma/schema.prisma`: `SynthesisResult.searchText String?` (nullable, no backfill — ADR
+- [x] `prisma/schema.prisma`: `SynthesisResult.searchText String?` (nullable, no backfill — ADR
       0021's convention, existing rows simply don't show up in search until their Analysis is
       reprocessed). Computed once, application-side, at the single real write point
       (`completeAnalysisWithSynthesis`, `repositories/analysis.ts` — `analysisStream.ts`'s
       `runAnalysisStream` is its only real caller) by flattening `seedHeadline` + `headline` +
       every Dimension item's `prose` into one plain-text string.
-- [ ] Migration (raw SQL, matching this codebase's own convention for anything Prisma's schema DSL
+- [x] Migration (raw SQL, matching this codebase's own convention for anything Prisma's schema DSL
       can't express — see the `pg_trgm` GIN index migration for entity search): add `searchText`,
       then a DB-generated `"searchVector" tsvector GENERATED ALWAYS AS (to_tsvector('simple',
       coalesce("searchText", ''))) STORED` column with a GIN index. No extension needed (`tsvector`
       is Postgres core, unlike `pg_trgm`).
-- [ ] `GET /api/search?q=...` (public, COMPLETE-only — same posture as `/api/articles`): a bounded
+- [x] `GET /api/search?q=...` (public, COMPLETE-only — same posture as `/api/articles`): a bounded
       top-N (`DEFAULT_PAGE_SIZE`, no "load more" — a ranked relevance list doesn't paginate the way
       a newest-first feed does; a future ticket can revisit if a real need shows up) list ranked by
       `ts_rank`, using `plainto_tsquery('simple', $1)`. Same two-step "raw SQL picks the ranked
       ids, then hydrate through the existing `ANALYSIS_LIST_ROW_INCLUDE`/`toAnalysisListRow`
       pairing" pattern ticket 80's `findAnalysesByCategoryPage` already established, so a search
       result row looks and behaves exactly like `/articles`/`/category/:slug`.
-- [ ] `SearchPage.tsx`: add a second results section for this query (reusing `ArchiveRow`, ticket
+- [x] `SearchPage.tsx`: add a second results section for this query (reusing `ArchiveRow`, ticket
       80/81's own precedent) alongside the existing entity results — one query, two independent
       result sets, both real. Empty-state copy must distinguish "no entities match" from "no
       articles match" from "neither" (never claim zero results when one section actually has some).
-- [ ] Tests: the `searchText`-flattening function (empty dimensions, a mix of populated/empty
+- [x] Tests: the `searchText`-flattening function (empty dimensions, a mix of populated/empty
       prose, headline present vs. absent), the ranked-search repository query's SQL shape (mocked,
       same convention as ticket 80's category-filter tests — no real-DB integration suite exists).
-- [ ] Manually verify against the real Docker backend the way ticket 82 did (insert one throwaway
+- [x] Manually verify against the real Docker backend the way ticket 82 did (insert one throwaway
       COMPLETE Analysis + SynthesisResult with real Czech `searchText`, hit `GET /api/search`,
       confirm ranking and that an unrelated term returns nothing) — this ticket's backend is fully
       verifiable that way, unlike ticket 82's browser-only gap.
-- [ ] Typecheck + full test suites pass. `/code-review` clean.
+- [x] Typecheck + full test suites pass. `/code-review` clean.
+
+## Implementation notes
+
+**This project turns out to already have a real testcontainers-based integration suite** (`npm run
+test:integration`, `packages/backend/test/integration/*.test.ts`, `@testcontainers/postgresql`) —
+line 59's "no real-DB integration suite exists" was wrong, carried over from an assumption made
+while filing the ticket, not verified against the repo. Discovered mid-implementation when the
+`completeAnalysisWithSynthesis` signature change (adding the required `searchText` param) broke
+compilation in 13 call sites across `test/integration/*.test.ts`. Since it exists, used it
+properly: added a dedicated `findAnalysesBySearch` integration test
+(`test/integration/synthesisResult.test.ts`) against a real, freshly-migrated Postgres — confirms
+prose-content matching, `ts_rank` ordering (a prose-and-headline match ranks above a
+headline-only mention), and that an unrelated term returns nothing. All 14 integration files / 109
+tests (including the 13 patched call sites) pass, and — genuinely useful side effect — every one of
+this project's 36 migrations, including this ticket's own hand-written one, applies cleanly to a
+brand-new Postgres from scratch.
+
+**A `prisma db push` mid-ticket silently dropped the unrelated `entity_canonicalName_trgm_idx`
+GIN index** (ticket 78's own full-text search index for entity name search) — `db push` diffs the
+*entire* live schema against `schema.prisma`, not just the model being changed, and drops any
+DB-level object (an index, in this case) it has no way to know about because it isn't declared in
+`schema.prisma` (the same reason it isn't declared: Prisma's schema DSL can't express an
+operator-class GIN index). Caught immediately by checking `pg_indexes`, recreated by hand. Avoided
+for the rest of this ticket: applied this ticket's own generated-column migration via raw SQL
+(`docker compose exec db psql < migration.sql`) instead, exactly like the `SourceFeed` category
+seed data in tickets 78/79 already had to. Worth remembering for any future ticket that touches
+schema.prisma in this repo: prefer applying migration SQL directly over `prisma db push` whenever
+hand-authored, unmodeled DB objects exist (there are now three: the `pg_trgm` index, `Coverage`'s
+partial unique index, and this ticket's own generated `tsvector` column).
+
+**Verified live against the real Docker backend** (rebuilt — built images, not bind-mounted, same
+gotcha as ticket 82) with one throwaway `Story`/`Analysis`/`SynthesisResult` row: `GET
+/api/search?q=rozpočet` correctly matched and ranked it; `q=fotbal` (unrelated) returned `[]`; and
+— confirming the documented `'simple'`-config limitation is real, not just claimed — `q=rozpočtu`
+(the inflected form, never typed into `searchText` verbatim) also returned `[]`. Cleaned up
+afterward.

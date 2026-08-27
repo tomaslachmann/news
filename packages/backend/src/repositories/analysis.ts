@@ -328,6 +328,37 @@ export async function findAnalysesByCategoryPage(
     .map(toAnalysisListRow)
 }
 
+/** Public content search (ticket 83) — ranked (`ts_rank`) COMPLETE Analyses whose
+ *  `SynthesisResult.searchVector` (a DB-generated `tsvector` over `searchText` — see
+ *  `buildSearchText`, services/searchIndexing.ts) matches `query`. A bounded top-`limit` list, not
+ *  keyset-paginated: a relevance ranking doesn't compose with "load more" the way a newest-first
+ *  feed does (ticket's own Answer). Same two-step "raw SQL finds the ranked ids, then hydrate
+ *  through the existing `ANALYSIS_LIST_ROW_INCLUDE`/`toAnalysisListRow` pairing, gap-tolerant"
+ *  pattern `findAnalysesByCategoryPage` above already established, so a search result row looks
+ *  and behaves exactly like `/articles`/`/category/:slug`. */
+export async function findAnalysesBySearch(query: string, limit: number): Promise<AnalysisListRow[]> {
+  const idRows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT a.id
+    FROM "Analysis" a
+    JOIN "SynthesisResult" sr ON sr."analysisId" = a.id
+    WHERE a.status = 'COMPLETE'
+      AND sr."searchVector" @@ plainto_tsquery('simple', ${query})
+    ORDER BY ts_rank(sr."searchVector", plainto_tsquery('simple', ${query})) DESC
+    LIMIT ${limit}
+  `
+  if (idRows.length === 0) return []
+
+  const rows = await prisma.analysis.findMany({
+    where: { id: { in: idRows.map((r) => r.id) } },
+    include: ANALYSIS_LIST_ROW_INCLUDE,
+  })
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  return idRows
+    .map((idRow) => byId.get(idRow.id))
+    .filter((row): row is NonNullable<typeof row> => row !== undefined)
+    .map(toAnalysisListRow)
+}
+
 export interface DraftListRow {
   id: string
   seedHeadline: string
@@ -427,6 +458,11 @@ export interface CompleteAnalysisWithSynthesisOptions {
   /** Ticket 38 / ADR 0030 — lifted straight off the already-validated `SynthesisResult` the model
    *  returned. */
   agreementCategory: SynthesisAgreementCategory
+  /** Ticket 83 — `buildSearchText` (services/searchIndexing.ts)'s flattened plain-text output.
+   *  Computed by the caller, not here: this repository layer stays pure data access (ADR 0010),
+   *  the same reason `sourceOverlapPercentage` above is already computed upstream rather than
+   *  derived inline. */
+  searchText: string
   /** Runs inside the same transaction as the writes below (ADR 0028: "vytvoř Draft a naplánuj
    *  jeho zpracování" is one atomic step) — used by `analysisStream.ts` to enqueue the
    *  `narrative.generate` job (ticket 15) atomically with the COMPLETE transition, so a queue
@@ -445,14 +481,20 @@ export interface CompleteAnalysisWithSynthesisOptions {
 export async function completeAnalysisWithSynthesis(
   analysisId: string,
   dimensions: Prisma.InputJsonValue,
-  { headline, sourceOverlapPercentage, agreementCategory, onComplete }: CompleteAnalysisWithSynthesisOptions
+  {
+    headline,
+    sourceOverlapPercentage,
+    agreementCategory,
+    searchText,
+    onComplete,
+  }: CompleteAnalysisWithSynthesisOptions
 ): Promise<void> {
   await prisma.$transaction(
     async (tx) => {
       await tx.synthesisResult.upsert({
         where: { analysisId },
-        create: { analysisId, dimensions, headline, sourceOverlapPercentage, agreementCategory },
-        update: { dimensions, headline, sourceOverlapPercentage, agreementCategory },
+        create: { analysisId, dimensions, headline, sourceOverlapPercentage, agreementCategory, searchText },
+        update: { dimensions, headline, sourceOverlapPercentage, agreementCategory, searchText },
       })
       await tx.analysis.update({ where: { id: analysisId }, data: { status: 'COMPLETE' } })
       await onComplete?.(tx)

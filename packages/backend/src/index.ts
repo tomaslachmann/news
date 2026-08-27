@@ -11,6 +11,7 @@ import { registerHomepageStatsRoutes } from './routes/homepageStats.js'
 import { registerThreadRoutes } from './routes/thread.js'
 import { registerCategoryRoutes } from './routes/category.js'
 import { registerPushRoutes } from './routes/push.js'
+import { registerSearchRoutes } from './routes/search.js'
 import { seedAdminUser } from './seed.js'
 import { getQueueClient } from './jobs/queueClient.js'
 import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
@@ -64,6 +65,7 @@ const start = async () => {
     registerThreadRoutes(server)
     registerCategoryRoutes(server)
     registerPushRoutes(server)
+    registerSearchRoutes(server)
 
     await seedAdminUser()
 

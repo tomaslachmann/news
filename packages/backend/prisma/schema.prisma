@@ -684,6 +684,20 @@ model SynthesisResult {
   /// for Analyses completed before this feature shipped, per ADR 0021's established no-backfill
   /// convention for this project).
   narrativeImage              NarrativeImage?
+  /// Full-text search source (ticket 83) — `seedHeadline` + `headline` + every Dimension item's
+  /// `prose`, flattened into one plain-text string at the same write point `headline`/`dimensions`
+  /// themselves get (`completeAnalysisWithSynthesis`, repositories/analysis.ts) —
+  /// `buildSearchText` (services/searchIndexing.ts). Deliberately not `Coverage.extractedText`
+  /// (raw per-source scrape — noisy, duplicated near-verbatim across every source) or
+  /// `Attribution.czechQuote` (a real v2, "search original quotes," out of this ticket's scope) or
+  /// the Narrative's own prose (redundant per ADR 0012 — Narrative never introduces content beyond
+  /// the Dimensions). Nullable, no backfill (ADR 0021) — a row from before this field existed
+  /// stays `null` and simply doesn't surface in search until its Analysis is reprocessed. The
+  /// actual `tsvector` search column generated from this (`searchVector`, GIN-indexed) is DB-only,
+  /// not modeled here — Prisma's schema DSL can't express a `GENERATED ALWAYS AS ... STORED`
+  /// column, same "not modeled in schema.prisma" precedent as the `pg_trgm` entity-search index —
+  /// see the migration's own comment.
+  searchText                  String?
 }
 
 /// A single illustrative lead image selected for a Narrative by topic relevance (ticket 51) —

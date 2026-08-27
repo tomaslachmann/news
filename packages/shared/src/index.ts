@@ -421,6 +421,16 @@ export const EntitySearchQuerySchema = z.object({
 })
 export type EntitySearchQuery = z.infer<typeof EntitySearchQuerySchema>
 
+/// Content search (ticket 83) — GET /api/search. Same shape/bound as EntitySearchQuerySchema, a
+/// separate schema rather than a shared alias: these validate two structurally-identical but
+/// conceptually distinct query params (an entity name vs. a full-text search phrase), matching
+/// this file's own convention of one small schema per endpoint (PostAnalysisBodySchema/
+/// PostAttachSeedBodySchema/PostDiscoverBodySchema are similarly near-identical but separate).
+export const SearchQuerySchema = z.object({
+  q: z.string().min(1).max(200),
+})
+export type SearchQuery = z.infer<typeof SearchQuerySchema>
+
 /** One name-search match — keyed by `Entity.key` (the stable, publicly-referenceable identifier,
  *  ADR 0034), never the internal id. */
 export interface EntitySearchResultItem {
