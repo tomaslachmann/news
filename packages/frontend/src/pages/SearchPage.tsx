@@ -97,7 +97,7 @@ export default function SearchPage() {
               <p className="error__p">Vyhledávání entit selhalo.</p>
             </div>
           )}
-          {!entitiesLoading && !entitiesError && !hasEntityResults && (
+          {!bothFetchedEmpty && !entitiesLoading && !entitiesError && !hasEntityResults && (
             <p className="note">Žádná entita neodpovídá hledanému výrazu.</p>
           )}
           {hasEntityResults && (
@@ -128,7 +128,7 @@ export default function SearchPage() {
               <p className="error__p">Vyhledávání článků selhalo.</p>
             </div>
           )}
-          {!articlesLoading && !articlesError && !hasArticleResults && (
+          {!bothFetchedEmpty && !articlesLoading && !articlesError && !hasArticleResults && (
             <p className="note">Žádný článek neodpovídá hledanému výrazu.</p>
           )}
           {hasArticleResults && (
