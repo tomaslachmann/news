@@ -73,7 +73,7 @@ back through.
 
 **Blocked by:** none.
 
-**Status:** in review
+**Status:** done review
 
 - [x] `packages/backend/src/logger.ts` — implemented differently than originally planned. An
       imperative `initRootLogger(service)` call turned out to be unreliable: ES module imports are
