@@ -1,4 +1,4 @@
-import Fastify from 'fastify'
+import Fastify, { type FastifyBaseLogger } from 'fastify'
 import cookie from '@fastify/cookie'
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAnalysesRoutes } from './routes/analyses.js'
@@ -15,6 +15,7 @@ import { registerSearchRoutes } from './routes/search.js'
 import { seedAdminUser } from './seed.js'
 import { getQueueClient } from './jobs/queueClient.js'
 import { NotFoundError, ValidationError, ExternalServiceError, ConflictError } from './errors.js'
+import { createLogger } from './logger.js'
 
 if (!process.env.JWT_SECRET) {
   console.error('Error: JWT_SECRET environment variable is required but not set.')
@@ -32,8 +33,20 @@ if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY || !process.
   )
 }
 
-const server = Fastify({
-  logger: true,
+const rootLogger = createLogger('http')
+
+// Explicit type args pin the Logger generic back to plain FastifyBaseLogger (Fastify's own
+// default) -- passing `loggerInstance` without them makes TS infer the fuller pino.Logger type
+// instead, which every route file's `FastifyInstance` param (using the plain default) then
+// rejects. `rootLogger` still satisfies FastifyBaseLogger structurally at runtime; only the type
+// parameter differs.
+const server = Fastify<
+  import('http').Server,
+  import('http').IncomingMessage,
+  import('http').ServerResponse,
+  FastifyBaseLogger
+>({
+  loggerInstance: rootLogger,
 })
 
 server.setErrorHandler((err, request, reply) => {

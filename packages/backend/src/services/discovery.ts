@@ -39,13 +39,16 @@ export async function discoverCoverage(
   keywords: string[],
   log?: FastifyBaseLogger
 ): Promise<DiscoveryResult> {
+  const discoveryLog = log?.child({ namespace: 'discovery' })
   const seen = new Set<string>()
   let gdeltResults: CandidateArticle[] = []
 
+  discoveryLog?.info({ keywords }, 'Querying GDELT')
   try {
     gdeltResults = await queryGdelt(keywords)
+    discoveryLog?.info({ keywords, resultCount: gdeltResults.length }, 'GDELT query finished')
   } catch (err) {
-    log?.warn(`GDELT unreachable, falling back to RSS only: ${(err as Error).message}`)
+    discoveryLog?.warn(`GDELT unreachable, falling back to RSS only: ${(err as Error).message}`)
   }
 
   const gdeltDeduped = deduplicateInto(gdeltResults, seen, MAX_CANDIDATES)
@@ -54,6 +57,10 @@ export async function discoverCoverage(
     return { candidates: gdeltDeduped, gdeltCount: gdeltDeduped.length }
   }
 
+  discoveryLog?.info(
+    { gdeltCount: gdeltDeduped.length },
+    'GDELT under the minimum threshold, falling back to RSS'
+  )
   const rssResults = await queryRssFeeds(log)
   const rssDeduped = deduplicateInto(rssResults, seen, MAX_CANDIDATES - gdeltDeduped.length)
 

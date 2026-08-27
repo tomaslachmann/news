@@ -3,8 +3,13 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions'
 import type { z } from 'zod'
 import { recordLlmCallSafe } from '../repositories/llmCallLog.js'
+import { createLogger } from '../logger.js'
 
 export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+// Traces call flow only (callSite, model, duration, success/fail) -- the full prompt/response
+// content stays exclusively in LlmCallLog (ADR 0020), never duplicated here. See docs/adr/0038.
+const log = createLogger('llm')
 
 /** Every module that calls callJsonModel, so a typo'd or future value can't silently fragment
  *  LlmCallLog's callSite column — see ADR 0020. Extend this when a new caller is added. */
@@ -33,6 +38,8 @@ async function callModel(
 ): Promise<unknown> {
   let raw: string | null = null
   const logBase = { callSite, model, systemPrompt, userContent }
+  const startedAt = Date.now()
+  log.info({ callSite, model }, `LLM call started`)
   try {
     const response = await openai.chat.completions.create({
       model,
@@ -42,10 +49,15 @@ async function callModel(
       ],
       response_format: responseFormat,
       temperature,
+      // Makes this completion visible under platform.openai.com's Logs page — the prompt/response
+      // content is already sent to OpenAI as part of the request either way; this only affects how
+      // long OpenAI's own dashboard keeps it retrievable, not what's transmitted.
+      store: true,
     })
     raw = response.choices[0]?.message?.content ?? '{}'
     const parsed: unknown = JSON.parse(raw)
     await recordLlmCallSafe({ ...logBase, responseContent: raw, error: null })
+    log.info({ callSite, model, durationMs: Date.now() - startedAt }, 'LLM call finished')
     return parsed
   } catch (err) {
     await recordLlmCallSafe({
@@ -53,6 +65,7 @@ async function callModel(
       responseContent: raw,
       error: err instanceof Error ? err.message : String(err),
     })
+    log.error({ callSite, model, durationMs: Date.now() - startedAt, err }, 'LLM call failed')
     throw err
   }
 }

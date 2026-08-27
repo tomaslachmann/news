@@ -73,56 +73,73 @@ back through.
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** in review
 
-- [ ] New file `services... ` — actually `packages/backend/src/logger.ts`: `initRootLogger(service:
-      string): pino.Logger` (multi-target: `pino-pretty` to stdout with a namespace-hashed-color
-      `messageFormat`, plus `pino-roll` writing NDJSON to `${LOG_DIR ?? './logs'}/<service>`,
-      `frequency: 'daily'`, `mkdir: true`) and `createLogger(namespace: string): pino.Logger`
-      (child of the root, throws a clear error if called before `initRootLogger`). `LOG_LEVEL` env
-      var (default `info`) controls both targets.
-- [ ] `index.ts`: call `initRootLogger('backend')`; `Fastify({ loggerInstance: rootLogger })`
-      replacing `logger: true` — existing per-request logging (`request.log`) keeps working
-      unchanged, now flowing through the same colorized/file-backed pipeline.
-- [ ] `worker.ts`: call `initRootLogger('worker')`; delete `jobs/consoleLogger.ts` and its test
-      (superseded, not kept as a shim). Each of the 8 job registrations gets its own
-      `createLogger(JobName.X)` instead of the one shared `workerLog` — e.g.
-      `runEntityRelationJob(payload, {...}, createLogger(JobName.EntityRelation))`.
-- [ ] `jobs/registerWorker.ts`: wrap the per-job `handler` call with start/success/failure/duration
-      logging using `createLogger(name)` (the job name is already namespace-shaped) — this alone
-      gives every one of the 8 jobs "started / finished in Nms / failed after Nms" tracing with no
-      changes to the individual job files.
-- [ ] Pipeline stage tracing (info-level, using the logger already threaded through each call —
-      only new `.info()` calls, no signature changes):
-  - `rss.ts`: `fetchFeed` — log before each feed fetch (source name, url) and the result (item
-    count on success; the existing `warn` already covers failure).
-  - `ingestionService.ts`: run start (item count target unknown until after `queryRssFeeds`, so log
-    right after: "fetched N candidates from M feeds"), and a run-summary log at the end (the
-    existing `summary` object's counts — checked/created/attached/flagged/skipped).
-  - `discovery.ts`: GDELT query start/result count, alongside its existing `warn` fallback.
-  - `articleScraper.ts`/`scrapeForCoverage`: scrape attempt/result per URL.
-- [ ] `llmClient.ts`: module-level `const log = createLogger('llm')`; log before each call
-      (`callSite`, `model`) and after (success + rough duration, or failure) — no prompt/response
-      content (stays exclusively in `LlmCallLog`, per ADR 0020/this ticket's own ADR).
-- [ ] `embeddingClient.ts`: module-level `const log = createLogger('embedding')`; replace the two
-      bare `console.error` cache-failure calls with it, and add a cache-hit/cache-miss-then-API-call
-      trace line.
-- [ ] `llmClient.ts`: add `store: true` to the single `openai.chat.completions.create` call in
-      `callModel` — makes every chat completion visible on platform.openai.com's Logs page.
-- [ ] `docker-compose.yml`: bind-mount `./logs:/app/packages/backend/logs` on `backend` and
-      `worker` (not `ingestion-cron`, out of scope per research above); `.gitignore` gets
+- [x] `packages/backend/src/logger.ts` — implemented differently than originally planned. An
+      imperative `initRootLogger(service)` call turned out to be unreliable: ES module imports are
+      always fully resolved (running every imported module's top-level code) before the importing
+      module's own body runs, so `llmClient.ts`'s/`embeddingClient.ts`'s module-level
+      `createLogger('llm')`/`createLogger('embedding')` calls would execute *before*
+      `index.ts`'s own `initRootLogger('backend')` line, not after — a real ordering bug caught
+      via `npm run typecheck`/manual reasoning before it ever shipped. Replaced with a lazily
+      self-initializing root logger keyed off a `SERVICE_NAME` env var (set in
+      `docker-compose.yml`/`package.json` scripts, available before any JS module body runs at
+      all) — no imperative init call needed anywhere. `createLogger(namespace)` is safe to call at
+      module load time.
+- [x] A second real bug caught during implementation (not in the original plan):
+      `pino.transport({ targets: [...] })` runs every target in a worker thread and
+      structured-clones its options across that boundary — a live `messageFormat` function can't
+      survive that (`DataCloneError`, reproduced by the real test suite, not hypothetical). Fixed
+      by building the colorized `pino-pretty` stream synchronously in-process (no worker thread,
+      function stays local) and only routing the file target through `pino.transport()` (pino-roll's
+      options are plain serializable data, no functions) — combined via `pino.multistream()`.
+- [x] `index.ts`: `Fastify({ loggerInstance: createLogger('http') })` replacing `logger: true` —
+      needed explicit generic type args to keep the Logger type parameter as plain
+      `FastifyBaseLogger` (Fastify's own default), since passing a `loggerInstance` without them
+      makes TS infer the fuller `pino.Logger` type instead, which every route file's
+      `FastifyInstance` param (using the plain default) then rejects.
+- [x] `worker.ts`: `jobs/consoleLogger.ts` and its test deleted (superseded, not kept as a shim).
+      Each of the 8 job registrations gets its own `createLogger(JobName.X)` instead of the one
+      shared `workerLog`. `scripts/regenNarrativeForAnalysis.ts` (a 9th, one-off caller of
+      `makeConsoleLogger()` the original research missed) updated the same way, its own run
+      instructions doc comment now prefixing `SERVICE_NAME=scripts`.
+- [x] `jobs/registerWorker.ts`: wraps the per-job `handler` call with start/success/failure/duration
+      logging via `createLogger(name)` — covers all 8 job types with no changes to the individual
+      job files.
+- [x] Pipeline stage tracing added to `rss.ts`, `ingestionService.ts`, `discovery.ts`,
+      `articleScraper.ts` exactly as planned, using `.child({ namespace })` on the already-threaded
+      logger at each module's entry point.
+- [x] `llmClient.ts`/`embeddingClient.ts`: module-level namespaced loggers; `embeddingClient.ts`'s
+      two bare `console.error` calls replaced, plus cache-hit/cache-miss/generated tracing.
+- [x] `llmClient.ts`: `store: true` added to the single `chat.completions.create` call.
+- [x] `docker-compose.yml`: `./logs:/app/packages/backend/logs` bind-mounted on `backend` and
+      `worker`, plus `SERVICE_NAME` set per service. `.gitignore` covers `logs/` and
       `packages/backend/logs/`.
-- [ ] New dependencies (`packages/backend/package.json`): `pino-pretty`, `pino-roll`.
-- [ ] New ADR (`docs/adr/0038-...`): records that this extends, not reverses, ADR 0020 — pino/file
-      logging is for real-time flow visibility, `LlmCallLog` stays the durable full-content record;
-      log lines never duplicate prompt/response text.
-- [ ] Tests: `logger.ts` (namespace→color determinism, root-not-initialized error),
-      `registerWorker.ts` (start/success/failure logging wraps the handler without changing its
-      existing per-job-independent-settlement behavior — extend the existing test file, don't
-      replace its coverage).
-- [ ] Manually verify against the real Docker backend (rebuild, not restart): trigger a real
-      ingestion pass, confirm colorized namespaced lines appear in `docker compose logs -f backend
-      worker`, confirm `./logs/backend.<today>.1.log` and `./logs/worker.<today>.1.log` exist and
-      contain the same lines as clean NDJSON, and confirm a real chat completion shows up under
-      platform.openai.com's Logs page.
-- [ ] Typecheck + full test suites pass. `/code-review` clean.
+- [x] New dependencies: `pino`, `pino-pretty`, `pino-roll` (`pino` added explicitly rather than
+      relying on Fastify's transitive copy, since `logger.ts` imports it directly).
+- [x] `docs/adr/0038-structured-namespaced-logging.md` — records this as additive to ADR 0020, and
+      documents both real bugs found during implementation (see above).
+- [x] Tests: `logger.test.ts` covers `colorForNamespace`'s pure hashing logic only (deterministic,
+      in-palette, has spread across namespaces) — deliberately not exercising `createLogger` itself,
+      which would spin up a real `pino.transport()` worker thread and real file I/O, too heavy for
+      a unit test. `registerWorker.test.ts` extended with 2 new tests (start+finish logging,
+      failure logging) plus a `../logger.js` mock so the existing 3 tests don't need to know about
+      logging at all.
+- [x] Manually verified against the real rebuilt Docker backend: triggered a real ingestion pass
+      end to end (2461 checked, 712 created, 148 attached — a real one-time backlog catch-up from
+      ticket 85's 41 new feeds being polled for the first time) and watched
+      `[ingestion]`/`[rss]`/`[embedding]` namespaced, colorized lines the whole way through,
+      including the final run-summary log. Confirmed `logs/backend.2026-08-27.1.log` and
+      `logs/worker.2026-08-27.1.log` exist on the host as clean NDJSON (worker's file also showed
+      real `[llm]`/job-namespaced lines from its own already-queued background jobs). One cosmetic,
+      accepted quirk found live: a request-scoped logger that's `.child()`'d twice with the same
+      binding key (`namespace: 'http'` from Fastify, then `namespace: 'ingestion'` from
+      `runIngestionPassLocked`) produces a technically-duplicate `namespace` key in the raw NDJSON
+      line — harmless (both `JSON.parse` and `pino-pretty`'s own parsing take the last value, which
+      is the correct, most-specific one) and a known, documented pino child-logger behavior, not a
+      bug introduced here. Did not independently verify the OpenAI dashboard's Logs page itself
+      (no browser access from this environment) — `store: true` is confirmed to be a real, typed,
+      accepted SDK parameter and the live call succeeded with it set; dashboard visibility follows
+      from OpenAI's own documented behavior for that flag.
+- [x] Typecheck + full unit test suite (709/709) + full integration suite (111/111) pass.
+      `/code-review` pending.

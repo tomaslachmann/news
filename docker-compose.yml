@@ -54,8 +54,11 @@ services:
       VAPID_CONTACT_EMAIL: ${VAPID_CONTACT_EMAIL}
       PORT: 3001
       HOST: 0.0.0.0
+      SERVICE_NAME: backend
     ports:
       - '3001:3001'
+    volumes:
+      - ./logs:/app/packages/backend/logs
     depends_on:
       db:
         condition: service_healthy
@@ -78,6 +81,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_CONTACT_EMAIL: ${VAPID_CONTACT_EMAIL}
+      SERVICE_NAME: worker
+    volumes:
+      - ./logs:/app/packages/backend/logs
     depends_on:
       db:
         condition: service_healthy
