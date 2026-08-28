@@ -11,6 +11,7 @@ export const JobName = {
   ThreadNotifySubscribers: 'thread.notifySubscribers',
   EntityImageEnrich: 'entity.image.enrich',
   HomepageEntityStatsRefresh: 'homepage.entity-stats.refresh',
+  EntityWikidataScan: 'entity.wikidata.scan',
 } as const
 
 export type JobNameValue = (typeof JobName)[keyof typeof JobName]
@@ -57,6 +58,10 @@ export interface JobPayload {
   // wikidataId carried in the payload, which could be stale by the time the job runs.
   [JobName.EntityImageEnrich]: { entityId: string }
   [JobName.HomepageEntityStatsRefresh]: Record<string, never>
+  // Ticket 93 / ADR 0042 — the scheduled semi-automated Wikidata linker. No payload: it re-derives
+  // its whole work-list (unlinked entities above a story-count threshold, capped per run) from the
+  // DB on each run, exactly like homepage.entity-stats.refresh.
+  [JobName.EntityWikidataScan]: Record<string, never>
 }
 
 // A repeated LLM failure is either a persistent outage (more retries won't help) or a genuine
@@ -104,4 +109,7 @@ export const JOB_RETRY_POLICY: Record<JobNameValue, QueueOptions> = {
   [JobName.ThreadNotifySubscribers]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
   [JobName.EntityImageEnrich]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
   [JobName.HomepageEntityStatsRefresh]: DB_DERIVED_READ_MODEL_RETRY_POLICY,
+  // External HTTP dependency (Wikidata + the reconciliation service), same as EntityImageEnrich.
+  // The scan is idempotent — a retry just re-derives the work-list and recomputes.
+  [JobName.EntityWikidataScan]: EXTERNAL_HTTP_JOB_RETRY_POLICY,
 }

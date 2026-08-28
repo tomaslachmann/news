@@ -48,27 +48,27 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 ### Data model
 
-- [ ] New Prisma model `EntityWikidataSuggestion`: `id`, `entityId` (`@unique` — one live
+- [x] New Prisma model `EntityWikidataSuggestion`: `id`, `entityId` (`@unique` — one live
       suggestion per entity; a re-scan replaces it), `candidates Json` (ranked
       `{ qid, label, description, score, reasons: string[] }[]`), `createdAt`, `updatedAt`. Deleted
       when an Admin confirms or dismisses it. Hand-written migration, no `prisma migrate dev`.
-- [ ] New Prisma model `EntityWikidataCandidateRejection`: `id`, `entityId`, `qid`, `rejectedBy`,
+- [x] New Prisma model `EntityWikidataCandidateRejection`: `id`, `entityId`, `qid`, `rejectedBy`,
       `createdAt`, `@@unique([entityId, qid])`. "This specific Q-id is not this entity" — permanent,
       mirrors `EntityAliasRejection`'s REJECTED-permanence semantics. The scan excludes these qids;
       dismissing a whole suggestion writes one rejection row per candidate currently shown, so an
       identical candidate set is never re-suggested (a genuinely new/different candidate later still
       creates a fresh suggestion).
-- [ ] `AdminAction` union gains `entity.wikidata_autolinked`, `entity.wikidata_suggestion_dismissed`,
+- [x] `AdminAction` union gains `entity.wikidata_autolinked`, `entity.wikidata_suggestion_dismissed`,
       `entity.wikidata_candidate_rejected`. `entity.wikidata_linked` is reused when an Admin confirms
       a queued suggestion (same outcome as today's manual link).
 
 ### Backend — Wikidata clients
 
-- [ ] `wikidataSearchClient.ts` gains, alongside `searchWikidataEntities`:
+- [x] `wikidataSearchClient.ts` gains, alongside `searchWikidataEntities`:
       - `resolveByCswikiTitle(title): Promise<WikidataItemDetail | null>` — `wbgetentities&
         sites=cswiki&titles=<title>&props=labels|aliases|descriptions|claims|sitelinks&
         languages=cs|en`, `maxlag=5`. Returns `{ qid, labels, aliases, description, p31: string[],
@@ -80,7 +80,7 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
         (≤50 ids) for the scoring/rival checks.
       All serial, `maxlag=5`, honest UA, unit-tested by mocking the HTTP call (never hits real
       Wikidata — same convention as the existing client).
-- [ ] New `wikidataReconcileClient.ts`: `reconcile(query, typeQids, properties?): Promise<{ qid,
+- [x] New `wikidataReconcileClient.ts`: `reconcile(query, typeQids, properties?): Promise<{ qid,
       score, match } | null>` — form-encoded `queries` POST to
       `https://wikidata-reconciliation.wmcloud.org/cs/api`. Throws a typed `ReconcileUnavailableError`
       on 429 / timeout / non-OK so the scan job can fall back to "queue for admin" rather than
@@ -88,7 +88,7 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
 
 ### Backend — matching logic (pure, unit-tested)
 
-- [ ] New `entityWikidataMatching.ts`:
+- [x] New `entityWikidataMatching.ts`:
       - `TYPE_P31_QIDS: Record<EntityType, string[]>` — the P31 targets per entity type (from the
         research §1.3 table: `PERSON`→`[Q5]`, `COUNTRY`→sovereign-state set, `PLACE`→settlement set,
         `ORGANIZATION`→org-subtype set). A tunable constant, same convention as `MATCH_THRESHOLD`;
@@ -106,10 +106,10 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
 
 ### Backend — scan orchestration + job
 
-- [ ] `JobName.EntityWikidataScan = 'entity.wikidata.scan'`, payload `Record<string, never>`,
+- [x] `JobName.EntityWikidataScan = 'entity.wikidata.scan'`, payload `Record<string, never>`,
       `EXTERNAL_HTTP_JOB_RETRY_POLICY`. Scheduled in `schedule.ts` (daily, `Europe/Prague`,
       singleton) exactly like `homepage.entity-stats.refresh`.
-- [ ] `services/entityWikidataScanService.ts` — injectable-deps orchestration (mirrors
+- [x] `services/entityWikidataScanService.ts` — injectable-deps orchestration (mirrors
       `runEntityImageEnrichJob`'s deps object). Per run:
       - Load unlinked entities (`wikidataId IS NULL`) with `storyCount >= WIKIDATA_SCAN_MIN_STORY_COUNT`
         (tunable constant) that don't already have a suggestion refreshed within the last N days,
@@ -122,14 +122,14 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
         `entity.image.enrich`. On `ReconcileUnavailableError` / disagreement → fall through to queue.
       - Otherwise → `upsert` an `EntityWikidataSuggestion` with the ranked candidates (empty
         candidate list after rejection filtering → no suggestion row).
-- [ ] `jobs/entityWikidataScanJob.ts` + wire into `worker.ts` (deps object) and the startup log line.
+- [x] `jobs/entityWikidataScanJob.ts` + wire into `worker.ts` (deps object) and the startup log line.
 
 ### Backend — suggestion review service + routes
 
-- [ ] `repositories/entityWikidataSuggestion.ts`: `findUnlinkedEntitiesForScan`, `upsertSuggestion`,
+- [x] `repositories/entityWikidataSuggestion.ts`: `findUnlinkedEntitiesForScan`, `upsertSuggestion`,
       `deleteSuggestion`, `listSuggestions` (queue), `findSuggestionByEntityKey`, `rejectCandidate`,
       `findRejectedQidsByEntity`.
-- [ ] `entityWikidataService.ts` gains: `getWikidataSuggestions()` (queue list),
+- [x] `entityWikidataService.ts` gains: `getWikidataSuggestions()` (queue list),
       `confirmSuggestion(entityKey, wikidataId, actorId)` (validates the qid is one of the
       suggestion's candidates, then the same link + `entity.wikidata_linked` + enrich enqueue as
       `linkEntityWikidata`, then deletes the suggestion), `dismissSuggestion(entityKey, actorId)`
@@ -137,46 +137,106 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
       `entity.wikidata_suggestion_dismissed`), `rejectSuggestionCandidate(entityKey, wikidataId,
       actorId)` (one rejection row, drops that candidate from the suggestion, logs
       `entity.wikidata_candidate_rejected`).
-- [ ] `routes/entityWikidata.ts` gains `GET /api/admin/entity-wikidata-suggestions`,
+- [x] `routes/entityWikidata.ts` gains `GET /api/admin/entity-wikidata-suggestions`,
       `POST …/:key/confirm` (`{ wikidataId }`), `POST …/:key/dismiss`,
       `POST …/:key/reject-candidate` (`{ wikidataId }`) — all `requireAdmin`.
-- [ ] Shared types: `EntityWikidataSuggestionItem { entityKey, canonicalName, type, candidates }`,
+- [x] Shared types: `EntityWikidataSuggestionItem { entityKey, canonicalName, type, candidates }`,
       `WikidataSuggestionCandidate { qid, label, description?, score, reasons }`, body schemas
       (reuse the `Q[1-9]\d*` regex).
 
 ### Frontend — review queue
 
-- [ ] New `AdminEntityWikidataSuggestionsPage.tsx` at `/admin/entity-wikidata-suggestions`
+- [x] New `AdminEntityWikidataSuggestionsPage.tsx` at `/admin/entity-wikidata-suggestions`
       (registered in `App.tsx` under `AdminLayout`, `ProtectedRoute`). Mirrors `EntityAliasesPage`:
       a list of entities each with their ranked candidate rows; per candidate a "Propojit" button;
       per candidate a "To není ono" (reject-candidate); per entity a "Žádná shoda" (dismiss). Shows
       each candidate's `score` and `reasons`. Re-fetches after every action (no fixed candidate
       identity across polls — same as the other queues).
-- [ ] `services/entityWikidataSuggestions/` client + hooks (mirror `services/entityAliases/`).
-- [ ] Add the nav link wherever `AdminLayout` lists the other admin queues.
-- [ ] Extract any non-trivial derived display logic into a `*ViewModel.ts` + unit test, per repo
+- [x] `services/entityWikidataSuggestions/` client + hooks (mirror `services/entityAliases/`).
+- [x] Add the nav link wherever `AdminLayout` lists the other admin queues.
+- [x] Extract any non-trivial derived display logic into a `*ViewModel.ts` + unit test, per repo
       convention (only if there is real logic — don't invent it).
 
 ### Cross-cutting
 
-- [ ] New ADR (0042): the six-condition auto-link rule and its rationale, `actorId =
+- [x] New ADR (0042): the six-condition auto-link rule and its rationale, `actorId =
       'system:auto-wikidata'` + the `entity.wikidata_autolinked` audit action, the suggestion-queue
       + candidate-rejection tables, the reconciliation endpoint as a **non-blocking** cross-check,
       the scheduled-scan trigger, and the explicit decision **not** to use an LLM on the auto path.
       Reference ADR 0022 / ADR 0012 for why this is still safe.
-- [ ] Amend `docs/spec-entity-resolution.md` User Story 11: a Wikidata link **may** be auto-applied
+- [x] Amend `docs/spec-entity-resolution.md` User Story 11: a Wikidata link **may** be auto-applied
       when the deterministic six-condition test passes; every other case stays admin-confirmed;
       alias merges are untouched. Update the Implementation Decisions + Out of Scope sections to
       match (the "Any automated/unconfirmed … Wikidata link" out-of-scope bullet is narrowed, not
       deleted).
-- [ ] `CONTEXT.md`: entries for the auto-link rule and the suggestion queue / the
+- [x] `CONTEXT.md`: entries for the auto-link rule and the suggestion queue / the
       `system:auto-wikidata` actor.
-- [ ] Tests: `entityWikidataMatching` unit (normalization, every gate condition, scoring, type
+- [x] Tests: `entityWikidataMatching` unit (normalization, every gate condition, scoring, type
       mapping); `wikidataReconcileClient` + new `wikidataSearchClient` functions unit (mocked
       fetch); `entityWikidataScanService` unit with all deps mocked (auto-link path; rival blocks
       auto-link; reconcile-unavailable → queue; reconcile-disagree → queue; rejected qid excluded;
       per-run cap respected); `entityWikidataService` suggestion actions unit (repo mocks +
       `AdminActionLog`); repo integration against real Postgres (scan query, upsert/delete,
       rejection uniqueness) + the migration; frontend hooks / view-model.
-- [ ] Typecheck + full suites (`test`, `test:integration`, frontend `test`) + lint pass.
+- [x] Typecheck + full suites (`test`, `test:integration`, frontend `test`) + lint pass.
       `/code-review` clean.
+
+## Implementation notes (2026-08-28)
+
+- **Models.** `EntityWikidataSuggestion` (one row per entity, `candidates` JSONB) +
+  `EntityWikidataCandidateRejection` (`@@unique([entityId, qid])`). Migration
+  `20260828140000_add_entity_wikidata_suggestion`, `prisma migrate deploy` (never `dev`).
+- **Clients.** `wikidataSearchClient.ts` gained `resolveByCswikiTitle` / `searchTypedCandidates` /
+  `fetchItemDetails` (all `maxlag=5`, honest UA, `WikidataItemDetail` shape lives in
+  `entityWikidataMatching.ts` so the client can import it without a service→client cycle). New
+  `wikidataReconcileClient.ts` — `reconcile(name, entityType)` constrains by the broad root class
+  (`RECONCILE_TYPE_QID`), throws `ReconcileUnavailableError` on any transport/HTTP failure.
+- **Matching** (`entityWikidataMatching.ts`, pure): `TYPE_P31_QIDS` (enumerated subtypes, not a
+  `P279*` walk — a miss just routes to the queue), `normalizeName` (NFD + diacritics + whitespace +
+  cs-locale lowercase), `scoreCandidate` (60/25/10/5 weights, Wikimedia-internal → 0),
+  `evaluateAutoLink` (the six-condition gate; condition 6 — reconciliation agreement — is applied
+  by the scan service, not this pure fn).
+- **Scan** (`entityWikidataScanService.ts`, injectable deps like `runEntityImageEnrichJob`):
+  serial per entity, `WIKIDATA_SCAN_MIN_STORY_COUNT` (2) / `WIKIDATA_SCAN_MAX_PER_RUN` (25) /
+  `WIKIDATA_SUGGESTION_TTL_DAYS` (14) env-tunable. One entity's Wikidata failure is caught and the
+  run continues (`skipped++`). `entity.wikidata.scan` cron `30 4 * * *` Europe/Prague, **no**
+  on-boot `send` (unlike homepage stats) since it makes external calls.
+- **Service/routes.** `linkEntityWikidata` refactored to share `applyWikidataLink` with
+  `confirmWikidataSuggestion`. Four new routes under `/api/admin/entity-wikidata-suggestions`
+  (list / confirm / dismiss / reject-candidate), all `requireAdmin`.
+- **Frontend.** `/admin/entity-wikidata-suggestions` page + `services/entityWikidataSuggestions/`
+  + nav link "Návrhy Wikidat". No view-model extracted — the page has no derived logic worth one
+  (mirrors `EntityAliasesPage`).
+- **Docs.** ADR 0042; `spec-entity-resolution.md` US11 + Out-of-Scope amended in place;
+  CONTEXT.md "Entity Wikidata linking" entry.
+- Tests: `entityWikidataMatching` (17), `wikidataReconcileClient` (5), new `wikidataSearchClient`
+  (5), `entityWikidataScanService` (8), `entityWikidataService` suggestion actions (8), integration
+  `entityWikidataSuggestion` (5). Backend 782 unit + 126 integration, frontend 77, all green.
+
+## Code-review fixes (2026-08-28)
+
+Two-axis review (Standards + Spec) — no hard violations. Addressed:
+
+- **429/503 `Retry-After` backoff** (Spec): added `fetchWithRetry` to `httpClient.ts` (bounded
+  retry on 429/503, honours `Retry-After`, exponential-backoff fallback, 15s cap). All three
+  Wikidata Action-API reads and the reconciliation call now use it.
+- **Reconcile transport** (both axes): switched from `GET ?queries=` to the spec-primary
+  `POST` with an `application/x-www-form-urlencoded` `queries=` body.
+- **Layering / Feature Envy** (Standards): `wikidataSearchClient` no longer imports from
+  `entityWikidataMatching` — `searchTypedCandidates(name, p31Qids: string[])` takes the Q-id list
+  as a param (the scan service passes `TYPE_P31_QIDS[type]`), and `WikidataItemDetail` now lives in
+  the client (its own return shape), re-exported by matching for convenience.
+- **Speculative Generality** (Standards): `fetchItemDetails` is one call + a 50-id `slice` guard,
+  not a paging loop (callers never exceed ~11 ids).
+- **Scan-path enqueue now best-effort** (Spec): `enqueueImageEnrich` failure after an auto-link is
+  caught and logged, so the entity isn't miscounted `skipped` when the link actually committed.
+- `srsearch` now strips `"` from the entity name before wrapping it in the phrase query.
+
+Consciously **not** changed:
+- `reconcile(query, entityType)` has no `properties?` param (ticket line 83). Research §8 Step 4
+  says pass a discriminating property "if we have one" — we extract none (no P106/P39 from
+  context), so an unused param would be speculative generality (ADR 0009). The door is open: add
+  it when a property source exists.
+- Repo names the "candidates for this entity" reader `findSuggestionCandidates(entityId)` rather
+  than `findSuggestionByEntityKey` — it returns the candidate array, not a row, and every caller
+  already holds the entity id.

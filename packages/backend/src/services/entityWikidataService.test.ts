@@ -4,11 +4,21 @@ import * as adminActionLogRepo from '../repositories/adminActionLog.js'
 import { enqueueJob } from '../jobs/enqueue.js'
 import { JobName } from '../jobs/jobDefinitions.js'
 import { searchWikidataEntities } from './wikidataSearchClient.js'
-import { getWikidataCandidates, linkEntityWikidata, unlinkEntityWikidata } from './entityWikidataService.js'
+import * as suggestionRepo from '../repositories/entityWikidataSuggestion.js'
+import {
+  confirmWikidataSuggestion,
+  dismissWikidataSuggestion,
+  getWikidataCandidates,
+  getWikidataSuggestions,
+  linkEntityWikidata,
+  rejectWikidataSuggestionCandidate,
+  unlinkEntityWikidata,
+} from './entityWikidataService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/entity.js')
 vi.mock('../repositories/adminActionLog.js')
+vi.mock('../repositories/entityWikidataSuggestion.js')
 vi.mock('../jobs/enqueue.js')
 vi.mock('./wikidataSearchClient.js')
 
@@ -128,5 +138,109 @@ describe('unlinkEntityWikidata', () => {
 
     await expect(unlinkEntityWikidata('person:nobody', ACTOR_ID)).rejects.toThrow(NotFoundError)
     expect(entityRepo.clearEntityWikidataId).not.toHaveBeenCalled()
+  })
+})
+
+const CANDIDATES = [
+  { qid: 'Q1', label: 'A', score: 70, reasons: ['přesná shoda jména'] },
+  { qid: 'Q2', label: 'B', score: 40, reasons: ['typ nesouhlasí'] },
+]
+
+describe('getWikidataSuggestions', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('returns the raw repository list unchanged', async () => {
+    const list = [
+      { entityKey: 'person:x', canonicalName: 'X', type: 'PERSON' as const, candidates: CANDIDATES },
+    ]
+    vi.mocked(suggestionRepo.listSuggestions).mockResolvedValue(list)
+
+    await expect(getWikidataSuggestions()).resolves.toEqual(list)
+  })
+})
+
+describe('confirmWikidataSuggestion', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('links the chosen candidate, logs entity.wikidata_linked, enqueues enrich, and clears the suggestion', async () => {
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
+    vi.mocked(suggestionRepo.findSuggestionCandidates).mockResolvedValue(CANDIDATES)
+
+    await confirmWikidataSuggestion('person:petr-fiala', 'Q1', ACTOR_ID)
+
+    expect(entityRepo.setEntityWikidataId).toHaveBeenCalledWith('e-1', 'Q1')
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'entity.wikidata_linked',
+      targetType: 'entity',
+      targetId: 'e-1',
+    })
+    expect(enqueueJob).toHaveBeenCalledWith(JobName.EntityImageEnrich, { entityId: 'e-1' })
+    expect(suggestionRepo.deleteSuggestion).toHaveBeenCalledWith('e-1')
+  })
+
+  it('rejects a Q-id that was never among the suggested candidates', async () => {
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
+    vi.mocked(suggestionRepo.findSuggestionCandidates).mockResolvedValue(CANDIDATES)
+
+    await expect(confirmWikidataSuggestion('person:petr-fiala', 'Q999', ACTOR_ID)).rejects.toThrow(
+      ValidationError
+    )
+    expect(entityRepo.setEntityWikidataId).not.toHaveBeenCalled()
+  })
+
+  it('throws NotFoundError when the entity has no pending suggestion', async () => {
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
+    vi.mocked(suggestionRepo.findSuggestionCandidates).mockResolvedValue(null)
+
+    await expect(confirmWikidataSuggestion('person:petr-fiala', 'Q1', ACTOR_ID)).rejects.toThrow(
+      NotFoundError
+    )
+  })
+})
+
+describe('dismissWikidataSuggestion', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('records every shown candidate as rejected, clears the suggestion, and logs the dismissal', async () => {
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
+    vi.mocked(suggestionRepo.findSuggestionCandidates).mockResolvedValue(CANDIDATES)
+
+    await dismissWikidataSuggestion('person:petr-fiala', ACTOR_ID)
+
+    expect(suggestionRepo.rejectCandidate).toHaveBeenCalledWith('e-1', 'Q1', ACTOR_ID)
+    expect(suggestionRepo.rejectCandidate).toHaveBeenCalledWith('e-1', 'Q2', ACTOR_ID)
+    expect(suggestionRepo.deleteSuggestion).toHaveBeenCalledWith('e-1')
+    expect(adminActionLogRepo.recordAdminActionSafe).toHaveBeenCalledWith({
+      actorId: ACTOR_ID,
+      action: 'entity.wikidata_suggestion_dismissed',
+      targetType: 'entity',
+      targetId: 'e-1',
+    })
+  })
+})
+
+describe('rejectWikidataSuggestionCandidate', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('rejects one Q-id and re-saves the suggestion with the rest', async () => {
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
+    vi.mocked(suggestionRepo.findSuggestionCandidates).mockResolvedValue(CANDIDATES)
+
+    await rejectWikidataSuggestionCandidate('person:petr-fiala', 'Q1', ACTOR_ID)
+
+    expect(suggestionRepo.rejectCandidate).toHaveBeenCalledWith('e-1', 'Q1', ACTOR_ID)
+    expect(suggestionRepo.upsertSuggestion).toHaveBeenCalledWith('e-1', [CANDIDATES[1]])
+    expect(suggestionRepo.deleteSuggestion).not.toHaveBeenCalled()
+  })
+
+  it('clears the whole suggestion when the last candidate is rejected', async () => {
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
+    vi.mocked(suggestionRepo.findSuggestionCandidates).mockResolvedValue([CANDIDATES[0]])
+
+    await rejectWikidataSuggestionCandidate('person:petr-fiala', 'Q1', ACTOR_ID)
+
+    expect(suggestionRepo.upsertSuggestion).not.toHaveBeenCalled()
+    expect(suggestionRepo.deleteSuggestion).toHaveBeenCalledWith('e-1')
   })
 })

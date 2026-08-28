@@ -467,6 +467,36 @@ export interface WikidataCandidateItem {
   description?: string
 }
 
+// Ticket 93 / ADR 0042 — the scheduled scan's suggestion queue. `confirm` and `reject-candidate`
+// both carry just a Q-id, structurally identical to LinkEntityWikidataBodySchema; kept as its own
+// name for the same one-schema-per-endpoint reason as SearchQuerySchema vs EntitySearchQuerySchema.
+export const ResolveEntityWikidataSuggestionBodySchema = z.object({
+  wikidataId: z.string().regex(/^Q[1-9]\d*$/, 'Neplatné Wikidata Q-id'),
+})
+export type ResolveEntityWikidataSuggestionBody = z.infer<typeof ResolveEntityWikidataSuggestionBodySchema>
+
+/** One scored candidate in an `EntityWikidataSuggestionItem` (ticket 93). `score` (0–100) orders
+ *  the list and is shown to the Admin for context — never a gate on its own (that is the
+ *  six-condition auto-link test, which these candidates already failed). `reasons` are short Czech
+ *  phrases explaining the score ("přesná shoda jména", "typ nesouhlasí", "chybí článek na cswiki"). */
+export interface WikidataSuggestionCandidate {
+  qid: string
+  label: string
+  description?: string
+  score: number
+  reasons: string[]
+}
+
+/** One entity awaiting an Admin's Wikidata-link decision (ticket 93) — keyed by `Entity.key`, the
+ *  stable public identifier the confirm/dismiss/reject endpoints take. Candidates are ordered
+ *  best-first; the row is recomputed by every scan and deleted the moment the Admin acts. */
+export interface EntityWikidataSuggestionItem {
+  entityKey: string
+  canonicalName: string
+  type: EntityTypeLabel
+  candidates: WikidataSuggestionCandidate[]
+}
+
 // Ticket 42 — reader-facing entity browse/search (public, no auth)
 
 /// Matches the backend's EntityRelationType Prisma enum exactly — see entityTypes.ts.

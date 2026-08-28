@@ -28,6 +28,12 @@ export type AdminAction =
   | 'entity.alias_rejected'
   | 'entity.wikidata_linked'
   | 'entity.wikidata_unlinked'
+  // Ticket 93 / ADR 0042 — the scheduled scan's own actions. `entity.wikidata_autolinked` is
+  // recorded with actorId 'system:auto-wikidata' so the audit trail distinguishes a deterministic
+  // auto-link from an Admin's `entity.wikidata_linked`.
+  | 'entity.wikidata_autolinked'
+  | 'entity.wikidata_suggestion_dismissed'
+  | 'entity.wikidata_candidate_rejected'
 
 export type AdminActionTargetType =
   'analysis' | 'story_relation' | 'pending_addition' | 'user' | 'entity_alias' | 'entity'
