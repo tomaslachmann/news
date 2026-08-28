@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { EntityRow } from '@/components/EntityRow'
 import { Gauge } from '@/components/Gauge'
 import type { AnalysisListSummary } from '@/services/analyses'
 import type { HomepageArticleItem } from '@/services/homepageStats'
@@ -251,27 +252,21 @@ function EntsPanel() {
         <p className="legend">Zatím žádné entity za 24 hodin.</p>
       ) : (
         entities.map((e) => {
-          const size = getEntityDotSize(e.recentEventCount, min, max)
           const trend = e.trendPercent
           return (
-            <Link className="erow" to={`/entity/${e.key}`} key={e.key}>
-              <span className="erow__c">
-                <span className="erow__dot" style={{ inlineSize: size, blockSize: size }}>
-                  {e.recentEventCount}
-                </span>
-              </span>
-              <span>
-                <span className="erow__n hl">{e.canonicalName}</span>
-                <span className="erow__k">
-                  {ENTITY_TYPE_LABELS[e.type]} · {e.recentSourceCount} zdrojů
-                </span>
-              </span>
-              {trend !== undefined ? (
-                <span className={`erow__t ${entityTrendClass(trend)}`}>{formatEntityTrend(trend)}</span>
-              ) : (
-                <span className="erow__t" />
-              )}
-            </Link>
+            <EntityRow
+              key={e.key}
+              to={`/entity/${e.key}`}
+              badge={e.recentEventCount}
+              badgeSize={getEntityDotSize(e.recentEventCount, min, max)}
+              name={e.canonicalName}
+              meta={`${ENTITY_TYPE_LABELS[e.type]} · ${e.recentSourceCount} zdrojů`}
+              trailing={
+                trend !== undefined && (
+                  <span className={`erow__t ${entityTrendClass(trend)}`}>{formatEntityTrend(trend)}</span>
+                )
+              }
+            />
           )
         })
       )}

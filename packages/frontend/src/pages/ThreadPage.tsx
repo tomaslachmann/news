@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { EntityRow } from '@/components/EntityRow'
 import { Gauge } from '@/components/Gauge'
 import { FollowThreadButton } from '@/components/FollowThreadButton'
 import { formatDate } from '@/lib/formatDate'
@@ -289,13 +290,13 @@ function ThreadEntitiesRail({ entities }: { entities: EntityMentionItem[] }) {
       </div>
       <div className="ents">
         {entities.map((e) => (
-          <Link className="erow" to={`/entity/${e.key}`} key={e.key}>
-            <span className="erow__dot">{ENTITY_TYPE_LABELS[e.type][0]}</span>
-            <span>
-              <span className="erow__n hl">{e.canonicalName}</span>
-              <span className="erow__k">{ENTITY_TYPE_LABELS[e.type]}</span>
-            </span>
-          </Link>
+          <EntityRow
+            key={e.key}
+            to={`/entity/${e.key}`}
+            badge={ENTITY_TYPE_LABELS[e.type][0]}
+            name={e.canonicalName}
+            meta={ENTITY_TYPE_LABELS[e.type]}
+          />
         ))}
       </div>
     </section>

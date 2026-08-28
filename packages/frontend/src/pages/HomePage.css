@@ -226,68 +226,13 @@
   color: var(--bad);
 }
 
-.ents {
-  border-top: var(--bw-rule) solid var(--line-strong);
-  padding-top: var(--sp-3);
-}
+/* .ents / .erow* now live in ds/components.css (ticket 91). `.ents__note` stays here — it's the
+   homepage-only "circle size = 24h mentions" caption. */
 .ents__note {
   margin-bottom: var(--sp-3);
   font-family: var(--font-sans);
   font-size: var(--text-micro);
   color: var(--ink-3);
-}
-.erow {
-  display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
-  gap: 0.6rem;
-  align-items: center;
-  padding: 0.35rem 0;
-  border-bottom: var(--bw-hair) solid var(--line-2);
-}
-.erow__c {
-  display: grid;
-  place-items: center;
-}
-.erow__dot {
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: var(--bw-hair) solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: var(--accent-soft);
-  font-family: var(--font-sans);
-  font-optical-sizing: none;
-  font-size: 0.625rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.erow:hover .erow__dot {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-.erow__n {
-  display: block;
-  font-size: var(--text-small);
-  line-height: 1.25;
-}
-.erow__k {
-  display: block;
-  font-family: var(--font-sans);
-  font-size: var(--text-micro);
-  color: var(--ink-3);
-}
-.erow__t {
-  text-align: right;
-  font-family: var(--font-sans);
-  font-size: var(--text-micro);
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.erow__t.is-up {
-  color: var(--ok);
-}
-.erow__t.is-down {
-  color: var(--bad);
 }
 
 .pull {
