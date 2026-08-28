@@ -16,14 +16,12 @@ export interface DraftExclusionNotice {
   groups: DraftExclusionGroup[]
 }
 
-const REASON_LABELS: Record<DraftExclusionReason, string> = {
-  'failed-verification': 'Neprošly ověřením, že popisují stejnou událost',
-  'no-title': 'Bez staženého názvu článku – ověření neproběhlo',
-}
-
-// Fixed reason order so the notice reads the same regardless of the order approveDraft happened
-// to concatenate its two exclusion buckets in.
-const REASON_ORDER: DraftExclusionReason[] = ['failed-verification', 'no-title']
+// One ordered source of truth for both the label and the display order of each reason bucket, so
+// the notice reads the same regardless of the order approveDraft concatenated its buckets in.
+const REASON_GROUPS: { reason: DraftExclusionReason; label: string }[] = [
+  { reason: 'failed-verification', label: 'Neprošly ověřením, že popisují stejnou událost' },
+  { reason: 'no-title', label: 'Bez staženého názvu článku – ověření neproběhlo' },
+]
 
 /** Ticket 87 — turns `approveDraft`'s `excluded` list into the banner shown on `/review/:id` right
  *  after approval, so a source count that shrank between `/admin/ingestion` and here reads as "the
@@ -31,9 +29,11 @@ const REASON_ORDER: DraftExclusionReason[] = ['failed-verification', 'no-title']
 export function buildDraftExclusionNotice(exclusions: DraftExclusion[]): DraftExclusionNotice | null {
   if (exclusions.length === 0) return null
 
-  const groups = REASON_ORDER.flatMap((reason): DraftExclusionGroup[] => {
-    const outlets = exclusions.filter((e) => e.reason === reason).map((e) => e.outlet)
-    return outlets.length > 0 ? [{ reason, label: REASON_LABELS[reason], outlets }] : []
+  const groups = REASON_GROUPS.flatMap(({ reason, label }): DraftExclusionGroup[] => {
+    // De-duped: two excluded Coverage from the same outlet (rare, but possible) shouldn't print
+    // the outlet's name twice.
+    const outlets = [...new Set(exclusions.filter((e) => e.reason === reason).map((e) => e.outlet))]
+    return outlets.length > 0 ? [{ reason, label, outlets }] : []
   })
 
   return {

@@ -58,7 +58,6 @@ export default function ReviewPage() {
 
   const draftExclusions = (location.state as ReviewLocationState | null)?.draftExclusions ?? []
   const [exclusionBannerDismissed, setExclusionBannerDismissed] = useState(false)
-  const showExclusionBanner = draftExclusions.length > 0 && !exclusionBannerDismissed
 
   const [mode, setMode] = useState<PageMode>('select')
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
@@ -156,7 +155,7 @@ export default function ReviewPage() {
           <span aria-current="page">Výběr zdrojů</span>
         </nav>
 
-        {showExclusionBanner && (
+        {!exclusionBannerDismissed && (
           <DraftExclusionBanner
             exclusions={draftExclusions}
             onDismiss={() => setExclusionBannerDismissed(true)}
@@ -237,7 +236,7 @@ export default function ReviewPage() {
         <span aria-current="page">Výběr zdrojů</span>
       </nav>
 
-      {showExclusionBanner && (
+      {!exclusionBannerDismissed && (
         <DraftExclusionBanner
           exclusions={draftExclusions}
           onDismiss={() => setExclusionBannerDismissed(true)}

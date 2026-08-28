@@ -316,17 +316,15 @@ export async function approveDraft(
   // /review/:id, which outlets the gate dropped and why — the same two buckets the warn logs keep,
   // but surfaced in the UI instead of only in Docker logs.
   const outletByCoverageId = new Map(coverages.map((c) => [c.id, c.source.name]))
+  const toExclusions = (ids: string[], reason: DraftExclusion['reason']): DraftExclusion[] =>
+    ids.map((id) => ({
+      coverageId: id,
+      outlet: outletByCoverageId.get(id) ?? 'Neznámý zdroj',
+      reason,
+    }))
   const excluded: DraftExclusion[] = [
-    ...failedVerificationIds.map((id) => ({
-      coverageId: id,
-      outlet: outletByCoverageId.get(id) ?? 'Neznámý zdroj',
-      reason: 'failed-verification' as const,
-    })),
-    ...unverifiableIds.map((id) => ({
-      coverageId: id,
-      outlet: outletByCoverageId.get(id) ?? 'Neznámý zdroj',
-      reason: 'no-title' as const,
-    })),
+    ...toExclusions(failedVerificationIds, 'failed-verification'),
+    ...toExclusions(unverifiableIds, 'no-title'),
   ]
 
   // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during

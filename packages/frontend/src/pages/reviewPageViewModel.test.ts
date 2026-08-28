@@ -43,6 +43,12 @@ describe('buildDraftExclusionNotice', () => {
     expect(notice?.groups[0]?.reason).toBe('failed-verification')
   })
 
+  it('de-dupes an outlet that had two Coverage rows excluded for the same reason', () => {
+    const notice = buildDraftExclusionNotice([failed('iDnes'), failed('iDnes')])
+
+    expect(notice?.groups[0]?.outlets).toEqual(['iDnes'])
+  })
+
   it('omits a bucket entirely when no outlet falls into it', () => {
     const notice = buildDraftExclusionNotice([noTitle('ČT24')])
 
