@@ -64,17 +64,17 @@ function retryDelayMs(res: Response, attempt: number): number {
 
 /** Decodes the body by its declared charset. undici's `Response.text()` always assumes UTF-8, so
  *  an outlet still serving a legacy charset (idnes.cz — `windows-1250`) would come back with
- *  mangled Czech diacritics. Node ships full-ICU, so `TextDecoder` handles the legacy labels;
- *  an unknown or absent label falls back to UTF-8. */
+ *  mangled Czech diacritics. Node ships full-ICU, so `TextDecoder` handles the legacy labels; an
+ *  unknown, absent, or unparseable label (`TextDecoder` throws `RangeError`) falls back to UTF-8. */
 async function decodeBody(res: Response): Promise<string> {
-  const charset = /charset=([^;]+)/i
+  const buffer = await res.arrayBuffer()
+  const declared = /charset=["']?([^;"']+)/i
     .exec(res.headers.get('content-type') ?? '')?.[1]
     ?.trim()
     .toLowerCase()
-  const buffer = await res.arrayBuffer()
-  if (!charset || charset === 'utf-8' || charset === 'utf8') return new TextDecoder('utf-8').decode(buffer)
+  const label = declared && declared !== 'utf-8' && declared !== 'utf8' ? declared : 'utf-8'
   try {
-    return new TextDecoder(charset).decode(buffer)
+    return new TextDecoder(label).decode(buffer)
   } catch {
     return new TextDecoder('utf-8').decode(buffer)
   }

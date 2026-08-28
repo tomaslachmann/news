@@ -64,6 +64,15 @@ describe('fetchArticleHtml', () => {
     expect(html).toBe('<p>Šščřž</p>')
   })
 
+  it('decodes a quoted charset label (charset="windows-1250")', async () => {
+    const win1250 = Uint8Array.from([0x3c, 0x70, 0x3e, 0x8a, 0x9a, 0xe8, 0xf8, 0x9e, 0x3c, 0x2f, 0x70, 0x3e])
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(win1250, { status: 200, headers: { 'content-type': 'text/html; charset="windows-1250"' } })
+    )
+
+    expect(await fetchArticleHtml('https://www.idnes.cz/quoted-charset')).toBe('<p>Šščřž</p>')
+  })
+
   it('retries a 403 (irozhlas burst rate-limit), then succeeds', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(new Response('nope', { status: 403 }))
@@ -74,6 +83,17 @@ describe('fetchArticleHtml', () => {
 
     expect(await promise).toBe('<html>recovered</html>')
     expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('gives up after 3 attempts on a persistent 403, reporting HTTP 403', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 403 }))
+
+    const promise = fetchArticleHtml('https://www.irozhlas.cz/forbidden')
+    const assertion = expect(promise).rejects.toThrow('HTTP 403')
+    await vi.runAllTimersAsync()
+    await assertion
+
+    expect(fetch).toHaveBeenCalledTimes(3)
   })
 
   it('throws immediately on a non-retryable 404, no retry attempted', async () => {

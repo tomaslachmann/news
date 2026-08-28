@@ -62,4 +62,7 @@ guessed):
       `httpClient` tests still show Wikidata/Wikimedia unchanged.
       → done; also verified end-to-end against the two live URLs (both `scrape=OK`, diacritics
       intact).
+- [x] ADR 0040 records the honest-UA reversal (article-fetch path only) + consent cookie + 403
+      retry + charset decode; ADR 0032's "honest User-Agent" decision gets a superseded-in-part
+      note pointing to it. (Added after the first `/code-review` round flagged the missing ADR.)
 - [x] Typecheck + full test suites pass. `/code-review` clean.
