@@ -2,7 +2,8 @@
    class as pages start needing them (not the whole 57 KB file at once — see the ticket's own
    mechanics checklist). Extracted here once a class was about to be duplicated a third time
    (.byline/.chip/.gauge/.kicker/.hl/.layout, first built in HomePage.css, needed again by
-   AnalysisPage.css) rather than staying page-scoped like page-only classes (.qbox, .legend, …)
+   AnalysisPage.css; .ents/.erow* pulled up from both once drift produced a real bug, ticket 91)
+   rather than staying page-scoped like page-only classes (.qbox, .legend, …)
    still do. Tokens only, imported globally from main.tsx alongside ds/base.css/ds/controls.css. */
 
 .layout {
@@ -186,4 +187,73 @@ a:hover .hl {
 }
 .note b {
   color: var(--ink-2);
+}
+
+/* Entity row — a linked entity in a rail list: a round badge, name + type line, optional
+   trailing cell. Promoted here from HomePage.css/AnalysisPage.css (ticket 91) after it had been
+   copy-pasted into both and drifted — the shared `<EntityRow>` component renders this markup for
+   the homepage "Entity dne" rail, the Article "Entity ve zprávě" rail, and the Thread one.
+   `.erow__dot` is a fixed-size circle by default; the homepage's proportional-bubble variant
+   overrides `inline-size`/`block-size` inline (a data-viz size ∝ 24h mention count). */
+.ents {
+  border-top: var(--bw-rule) solid var(--line-strong);
+  padding-top: var(--sp-3);
+}
+.erow {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+a.erow:hover {
+  background: var(--surface-2);
+}
+.erow__c {
+  display: grid;
+  place-items: center;
+}
+.erow__dot {
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: 50%;
+  border: var(--bw-hair) solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: var(--accent-soft);
+  font-family: var(--font-sans);
+  font-optical-sizing: none;
+  font-size: 0.625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.erow:hover .erow__dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.erow__n {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 1.25;
+}
+.erow__k {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.erow__t {
+  text-align: right;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.erow__t.is-up {
+  color: var(--ok);
+}
+.erow__t.is-down {
+  color: var(--bad);
 }

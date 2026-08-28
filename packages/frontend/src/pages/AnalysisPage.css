@@ -387,47 +387,8 @@ a.threadband:hover {
   margin-bottom: var(--sp-3);
 }
 
-/* Entity mentions (ticket 43) — each row links to /entity/:key, reusing Home's .ents/.erow visual
-   language (EntsPanel, HomePage.tsx) with .erow__dot showing a type-initial letter instead of a
-   24h mention count (this project has no such notion). */
-.ents {
-  border-top: var(--bw-rule) solid var(--line-strong);
-  padding-top: var(--sp-3);
-}
-.erow {
-  display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
-  gap: 0.6rem;
-  align-items: center;
-  padding: 0.35rem 0;
-  border-bottom: var(--bw-hair) solid var(--line-2);
-}
-a.erow:hover {
-  background: var(--surface-2);
-}
-.erow__dot {
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: var(--bw-hair) solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: var(--accent-soft);
-  font-family: var(--font-sans);
-  font-optical-sizing: none;
-  font-size: 0.625rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.erow__n {
-  display: block;
-  font-size: var(--text-small);
-  line-height: 1.25;
-}
-.erow__k {
-  display: block;
-  font-family: var(--font-sans);
-  font-size: var(--text-micro);
-  color: var(--ink-3);
-}
+/* Entity mentions (ticket 43): `.ents` / `.erow*` moved to ds/components.css (ticket 91) — shared
+   with the homepage and Thread entity rails via the `<EntityRow>` component. */
 
 .spin {
   animation: nt-spin 0.8s linear infinite;

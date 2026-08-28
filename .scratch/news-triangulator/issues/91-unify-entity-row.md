@@ -31,22 +31,30 @@ Thread pages renders as a squashed ellipse instead of a circle.
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
-- [ ] Promote `.ents` / `.erow` / `.erow__c` / `.erow__dot` / `.erow__n` / `.erow__k` / `.erow__t`
+- [x] Promote `.ents` / `.erow` / `.erow__c` / `.erow__dot` / `.erow__n` / `.erow__k` / `.erow__t`
       to `ds/components.css` as one canonical definition. Remove the duplicated blocks from
       `HomePage.css` and `AnalysisPage.css` (keep page-only bits like HomePage's `.ents__note`).
-- [ ] `.erow__dot` gets a fixed default square size in the shared rule so it is a circle
+- [x] `.erow__dot` gets a fixed default square size in the shared rule so it is a circle
       everywhere; HomePage's proportional bubble keeps overriding size inline (inline style wins).
       The hover-fill rule moves to the shared def too.
-- [ ] New shared `<EntityRow>` component (`components/EntityRow.tsx`): `to`, `badge` (a number or a
+- [x] New shared `<EntityRow>` component (`components/EntityRow.tsx`): `to`, `badge` (a number or a
       type-initial), optional `badgeSize` (px, HomePage's bubble only), `name`, `meta` (the
       "Osoba · N zdrojů" line), optional `trailing` (HomePage's trend %). `EntsPanel`,
       `EntityMentionsSection`, and `ThreadPage`'s entity block all render through it.
-- [ ] `ThreadPage` keeps its `AnalysisPage.css` / `HomePage.css` imports (still needed for
+- [x] `ThreadPage` keeps its `AnalysisPage.css` / `HomePage.css` imports (still needed for
       `.crumbs`/`.arthead`/`.daystats`/`.box`/… ) — only the `.erow`/`.ents` blocks move out from
       under them.
-- [ ] Visual check: the entity dot is a circle on Home, Article, and Thread; HomePage's
+- [x] Visual check: the entity dot is a circle on Home, Article, and Thread; HomePage's
       proportional bubbles still scale.
-- [ ] Tests: no new component-test infra (none exists) — cover any extracted pure helper; existing
+- [x] Tests: no new component-test infra (none exists) — cover any extracted pure helper; existing
       view-model tests still pass. Typecheck + full suites. `/code-review` clean.
+
+## Follow-up (2026-08-28, user feedback)
+The dot badge showed the *type* initial (O/Z/M) on Article/Thread and the raw 24h mention count
+(mostly "1" on sparse data) on Home — user wanted the entity's own initial everywhere. New
+`lib/entityInitials.ts` (first + last word initial, Czech-locale uppercase, unit-tested); all
+three pages now pass `entityInitials(canonicalName)` as the badge. Home keeps the proportional
+bubble *size* (= mention count, per the "Velikost kruhu…" caption); the number is no longer
+printed inside.
