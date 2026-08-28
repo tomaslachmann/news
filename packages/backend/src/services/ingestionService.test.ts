@@ -498,12 +498,12 @@ const DRAFT_WITH_STORY = {
   },
 }
 
-function makeCoverage(id: string, title: string) {
+function makeCoverage(id: string, title: string, outlet = 'iDnes') {
   return {
     id,
     analysisId: 'a1',
     sourceId: 'src-idnes',
-    source: { name: 'iDnes' },
+    source: { name: outlet },
     title,
     articleUrl: `https://idnes.cz/${id}`,
     publishedAt: '2026-01-01T00:00:00Z',
@@ -516,8 +516,8 @@ function makeCoverage(id: string, title: string) {
   }
 }
 
-function makeTitlelessCoverage(id: string) {
-  return { ...makeCoverage(id, ''), title: null }
+function makeTitlelessCoverage(id: string, outlet = 'iDnes') {
+  return { ...makeCoverage(id, '', outlet), title: null }
 }
 
 describe('approveDraft', () => {
@@ -540,8 +540,9 @@ describe('approveDraft', () => {
     vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue(coverages)
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue(coverages)
 
-    await approveDraft('a1', ACTOR_ID)
+    const result = await approveDraft('a1', ACTOR_ID)
 
+    expect(result).toEqual({ excluded: [] })
     expect(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).toHaveBeenCalledWith(
       coverages,
       'Anchor headline',
@@ -636,6 +637,51 @@ describe('approveDraft', () => {
     expect(log.warn).toHaveBeenCalledTimes(2)
   })
 
+  it('returns a failed-verification exclusion summary naming the dropped outlet (ticket 87)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const good = makeCoverage('c1', 'Related to the anchor', 'ČT24')
+    const bad = makeCoverage('c2', 'Unrelated trending item', 'Blesk')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([good, bad])
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([good])
+
+    const result = await approveDraft('a1', ACTOR_ID)
+
+    expect(result).toEqual({
+      excluded: [{ coverageId: 'c2', outlet: 'Blesk', reason: 'failed-verification' }],
+    })
+  })
+
+  it('returns a no-title exclusion distinctly from a failed one, each with its outlet (ticket 87)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const rejected = makeCoverage('c1', 'Unrelated trending item', 'Blesk')
+    const titleless = makeTitlelessCoverage('c2', 'Seznam Zprávy')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([rejected, titleless])
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([])
+
+    const result = await approveDraft('a1', ACTOR_ID)
+
+    expect(result).toEqual({
+      excluded: [
+        { coverageId: 'c1', outlet: 'Blesk', reason: 'failed-verification' },
+        { coverageId: 'c2', outlet: 'Seznam Zprávy', reason: 'no-title' },
+      ],
+    })
+  })
+
+  it('still returns the exclusion summary when the Draft was concurrently rejected (ticket 87)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
+    const bad = makeCoverage('c1', 'Unrelated', 'Blesk')
+    vi.mocked(coverageRepo.findCoveragesForAnalysis).mockResolvedValue([bad])
+    vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue([])
+    vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(false)
+
+    const result = await approveDraft('a1', ACTOR_ID)
+
+    expect(result).toEqual({
+      excluded: [{ coverageId: 'c1', outlet: 'Blesk', reason: 'failed-verification' }],
+    })
+  })
+
   it('does not resurrect a Draft that was concurrently rejected while verification was in flight', async () => {
     vi.mocked(analysisRepo.findAnalysisWithStory).mockResolvedValue(DRAFT_WITH_STORY)
     const coverages = [makeCoverage('c1', 'T1')]
@@ -643,7 +689,7 @@ describe('approveDraft', () => {
     vi.mocked(storyVerificationModule.verifyCandidatesAgainstAnchorInBatches).mockResolvedValue(coverages)
     vi.mocked(analysisRepo.updateAnalysisStatusIfCurrently).mockResolvedValue(false)
 
-    await expect(approveDraft('a1', ACTOR_ID)).resolves.toBeUndefined()
+    await expect(approveDraft('a1', ACTOR_ID)).resolves.toEqual({ excluded: [] })
 
     expect(analysisRepo.updateAnalysisStatusIfCurrently).toHaveBeenCalledWith(
       'a1',

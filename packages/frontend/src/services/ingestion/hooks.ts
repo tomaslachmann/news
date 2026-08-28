@@ -24,7 +24,7 @@ export function useVisibleDrafts() {
   return usePaginatedQuery(VISIBLE_DRAFTS_QUERY_KEY, fetchVisibleDrafts)
 }
 
-function useDraftDecision(mutationFn: (analysisId: string) => Promise<void>) {
+function useDraftDecision<TResult>(mutationFn: (analysisId: string) => Promise<TResult>) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn,

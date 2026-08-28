@@ -361,6 +361,26 @@ export interface IngestionRunSummary {
   skipped: number
 }
 
+/** Why a Coverage was dropped from a Draft by `approveDraft`'s Pre-Extraction quality gate
+ *  (ticket 24): `failed-verification` — the same-story LLM check rejected or errored on its title;
+ *  `no-title` — it had no scraped title, so it was never sent to verification at all (not evidence
+ *  the LLM rejected it — see docs audit P1-12). */
+export type DraftExclusionReason = 'failed-verification' | 'no-title'
+
+export interface DraftExclusion {
+  coverageId: string
+  outlet: string
+  reason: DraftExclusionReason
+}
+
+/** `PATCH /api/admin/ingestion/drafts/:id/approve` response (ticket 87). `excluded` names every
+ *  Coverage the quality gate dropped between the `/admin/ingestion` list count and the source list
+ *  on `/review/:id`, so the Admin isn't left reading a shrinking source count as data loss. Empty
+ *  when nothing was excluded. */
+export interface DraftApprovalResult {
+  excluded: DraftExclusion[]
+}
+
 export interface AdminUserListItem {
   id: string
   email: string

@@ -36,18 +36,28 @@ guessed):
 
 **Status:** todo
 
-- [ ] Decide and implement a way for the Admin to see, at the moment of approval (or immediately
+- [x] Decide and implement a way for the Admin to see, at the moment of approval (or immediately
       after landing on `/review/:id`), which sources (if any) were excluded and why — same-story
       verification failure vs. no title. A toast/banner naming the excluded outlet(s) is the
       obvious shape; the backend already has everything needed (`excludedIds`,
       `failedVerificationIds` vs. `unverifiableIds` are already computed and distinguished inside
       `approveDraft`, just never returned to the caller).
-- [ ] `approveDraft`'s route/service return shape likely needs to carry this exclusion summary back
+      → Dismissible banner on `/review/:id` (`DraftExclusionBanner`), fed by nav-state the
+      Ingestion queue passes on redirect; two labelled buckets (failed verification vs. no title),
+      each listing the dropped outlet names.
+- [x] `approveDraft`'s route/service return shape likely needs to carry this exclusion summary back
       to the frontend, rather than a bare `void`.
-- [ ] Consider whether the list page's "N zdrojů" pill should itself hint that this count is
+      → `approveDraft` now returns `DraftApprovalResult` (`{ excluded: DraftExclusion[] }`); the
+      approve route sends it as the response body; the frontend `approveDraft` service + mutation
+      thread it through to the redirect.
+- [x] Consider whether the list page's "N zdrojů" pill should itself hint that this count is
       pre-verification (e.g. a tooltip), separate from the post-approval banner — avoid solving only
       half the confusion.
-- [ ] Tests: `approveDraft` returning the right exclusion summary shape for both exclusion reasons
+      → `title` tooltip added to the pill on `/admin/ingestion`.
+- [x] Tests: `approveDraft` returning the right exclusion summary shape for both exclusion reasons
       and for the no-exclusions case; frontend test that the banner/toast renders correctly from
       that shape.
-- [ ] Typecheck + full test suites pass. `/code-review` clean.
+      → 4 new `approveDraft` service tests (no-exclusions, failed-verification, no-title distinct,
+      concurrently-rejected still returns summary); 5 new `buildDraftExclusionNotice` view-model
+      tests.
+- [x] Typecheck + full test suites pass. `/code-review` clean.

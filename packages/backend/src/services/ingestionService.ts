@@ -5,6 +5,8 @@ import type {
   AnalysisListItem,
   PendingStoryRelationItem,
   Page,
+  DraftApprovalResult,
+  DraftExclusion,
 } from '@news-triangulator/shared'
 import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
 import { fetchPage } from '../pagination.js'
@@ -262,7 +264,7 @@ export async function approveDraft(
   analysisId: string,
   actorId: string,
   log?: FastifyBaseLogger
-): Promise<void> {
+): Promise<DraftApprovalResult> {
   const analysis = await analysisRepo.findAnalysisWithStory(analysisId)
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
   if (analysis.status !== 'DRAFT') throw new ValidationError('Schválit lze pouze koncepty')
@@ -310,6 +312,23 @@ export async function approveDraft(
     await coverageRepo.excludeCoverageIds(excludedIds)
   }
 
+  // Returned to the caller (ticket 87) so the Admin who just approved this Draft can be shown, on
+  // /review/:id, which outlets the gate dropped and why — the same two buckets the warn logs keep,
+  // but surfaced in the UI instead of only in Docker logs.
+  const outletByCoverageId = new Map(coverages.map((c) => [c.id, c.source.name]))
+  const excluded: DraftExclusion[] = [
+    ...failedVerificationIds.map((id) => ({
+      coverageId: id,
+      outlet: outletByCoverageId.get(id) ?? 'Neznámý zdroj',
+      reason: 'failed-verification' as const,
+    })),
+    ...unverifiableIds.map((id) => ({
+      coverageId: id,
+      outlet: outletByCoverageId.get(id) ?? 'Neznámý zdroj',
+      reason: 'no-title' as const,
+    })),
+  ]
+
   // Conditional on still being DRAFT — a concurrent rejectDraft may have already resolved during
   // the verification pass above; if so, this must not resurrect it back to PENDING, and there's
   // no point enqueueing extraction for a Draft that just got rejected.
@@ -344,7 +363,7 @@ export async function approveDraft(
       { analysisId },
       'Draft was no longer DRAFT when the quality gate finished (likely rejected concurrently); not overwriting its status'
     )
-    return
+    return { excluded }
   }
   await recordAdminActionSafe({
     actorId,
@@ -352,6 +371,7 @@ export async function approveDraft(
     targetType: 'analysis',
     targetId: analysisId,
   })
+  return { excluded }
 }
 
 export async function rejectDraft(analysisId: string, actorId: string): Promise<void> {

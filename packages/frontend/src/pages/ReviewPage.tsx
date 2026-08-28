@@ -1,12 +1,48 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { DraftExclusion } from '@/services/ingestion'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
 import { formatDate } from '@/lib/formatDate'
 import { analysisPath } from '@/lib/analysisRoutes'
+import { buildDraftExclusionNotice } from './reviewPageViewModel'
 import './ReviewPage.css'
 
 type PageMode = 'select' | 'confirming' | 'results'
+
+/** Ticket 87 — approval nav-state carrier. `IngestionReviewPage` puts `approveDraft`'s `excluded`
+ *  list here when it redirects to `/review/:id`, so the source count that just shrank is explained
+ *  on arrival rather than read as a bug. */
+interface ReviewLocationState {
+  draftExclusions?: DraftExclusion[]
+}
+
+function DraftExclusionBanner({
+  exclusions,
+  onDismiss,
+}: {
+  exclusions: DraftExclusion[]
+  onDismiss: () => void
+}) {
+  const notice = buildDraftExclusionNotice(exclusions)
+  if (!notice) return null
+  return (
+    <aside className="xnote" role="status">
+      <button className="xnote__x" type="button" onClick={onDismiss} aria-label="Zavřít">
+        ×
+      </button>
+      <p className="xnote__h">{notice.heading}</p>
+      <p className="xnote__d">{notice.detail}</p>
+      <ul className="xnote__l">
+        {notice.groups.map((group) => (
+          <li key={group.reason}>
+            <span className="xnote__r">{group.label}:</span> {group.outlets.join(', ')}
+          </li>
+        ))}
+      </ul>
+    </aside>
+  )
+}
 
 function StatusText({ status }: { status: CoverageInfo['status'] }) {
   if (status === 'ok') return <span className="pick__x is-ok">Extrahováno</span>
@@ -17,7 +53,12 @@ function StatusText({ status }: { status: CoverageInfo['status'] }) {
 export default function ReviewPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
+
+  const draftExclusions = (location.state as ReviewLocationState | null)?.draftExclusions ?? []
+  const [exclusionBannerDismissed, setExclusionBannerDismissed] = useState(false)
+  const showExclusionBanner = draftExclusions.length > 0 && !exclusionBannerDismissed
 
   const [mode, setMode] = useState<PageMode>('select')
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
@@ -115,6 +156,13 @@ export default function ReviewPage() {
           <span aria-current="page">Výběr zdrojů</span>
         </nav>
 
+        {showExclusionBanner && (
+          <DraftExclusionBanner
+            exclusions={draftExclusions}
+            onDismiss={() => setExclusionBannerDismissed(true)}
+          />
+        )}
+
         <header className="ahead">
           <h1 className="ahead__t">{analysis.seedHeadline}</h1>
           <p className="ahead__d">Extrakce dokončena.</p>
@@ -188,6 +236,13 @@ export default function ReviewPage() {
       <nav className="crumbs" aria-label="Cesta">
         <span aria-current="page">Výběr zdrojů</span>
       </nav>
+
+      {showExclusionBanner && (
+        <DraftExclusionBanner
+          exclusions={draftExclusions}
+          onDismiss={() => setExclusionBannerDismissed(true)}
+        />
+      )}
 
       <div className="steps">
         <span className="steps__i is-done">
