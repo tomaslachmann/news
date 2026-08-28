@@ -48,8 +48,7 @@ Thumbs.db
 .cache/
 tmp/
 
-# Structured pipeline logs (ticket 86) — daily-rotated, unbounded growth is a deliberate
-# accepted trade-off (same convention ADR 0020 already established for LlmCallLog), never
-# committed.
+# Structured pipeline logs (ticket 86) — daily-rotated, gzipped, and pruned to a retention
+# window (ticket 92); never committed.
 logs/
 packages/backend/logs/

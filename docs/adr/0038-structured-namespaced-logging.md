@@ -34,10 +34,14 @@ Each root logger fans out to two destinations via `pino.multistream()`:
   implementation, not a hypothetical). Namespace color is a deterministic hash of the namespace
   string into a small fixed ANSI palette (same approach the `debug` npm package uses), so a given
   namespace always renders the same color without a manually maintained map.
-- **Daily-rotated NDJSON files** — `pino-roll`, writing to `${LOG_DIR}/<service>` and rolling to a
-  new file every day (`<service>.<date>.<n>.log`). `LOG_DIR` defaults to `./logs` (gitignored),
-  bind-mounted from the host in `docker-compose.yml` so the files persist across container
-  restarts/rebuilds, unlike Docker's own log driver.
+- **Daily-rotated NDJSON files** — writing to `${LOG_DIR}/<service>.log`, rotated to
+  `<service>-<date>.log.gz` (gzipped) each day and pruned to `LOG_RETENTION_DAYS` (default 14);
+  `LOG_MAX_FILE_SIZE` (default `50M`) is a within-day safety cap for a runaway loop. `LOG_DIR`
+  defaults to `./logs` (gitignored), bind-mounted from the host in `docker-compose.yml` so the
+  files persist across container restarts/rebuilds, unlike Docker's own log driver.
+  _(Originally `pino-roll` with no compression or retention — ticket 92 swapped it for
+  `rotating-file-stream`, which does rotate + gzip + prune natively; `pino-roll` v4 can't
+  compress. See the retention consequence below.)_
 
 **This is additive to ADR 0020, not a reopening of it.** Log lines here trace *flow* — what stage a
 run is at, right now, and a lightweight persisted trail of that — using call metadata (`callSite`,
@@ -51,17 +55,23 @@ This doesn't change what's transmitted (the prompt/response already goes to Open
 request); it only affects how long OpenAI's own dashboard keeps it viewable.
 
 ## Consequences
-- A developer running `docker compose logs -f backend worker` (or reading
-  `./logs/backend.<date>.1.log` / `./logs/worker.<date>.1.log` afterward) can now see a real
-  Ingestion pass unfold: which feeds were fetched and how many items each returned, which items
-  matched an existing Story vs. created a new Draft, every LLM/embedding call's model and duration,
-  and every job's start/finish/failure with duration — without touching `LlmCallLog` at all.
+- A developer running `docker compose logs -f backend worker` (or reading `./logs/backend.log` /
+  `./logs/worker.log` live, or `zcat ./logs/worker-<date>.log.gz` for an earlier day) can now see
+  a real Ingestion pass unfold: which feeds were fetched and how many items each returned, which
+  items matched an existing Story vs. created a new Draft, every LLM/embedding call's model and
+  duration, and every job's start/finish/failure with duration — without touching `LlmCallLog` at
+  all.
 - `registerJobWorker` (`jobs/registerWorker.ts`) is the single instrumentation point for all 8 job
   types' start/finish/failure/duration tracing — adding a 9th job type gets this for free, no new
   logging code needed at the call site.
-- No retention policy on the log files, same explicit trade-off ADR 0020 already made for
-  `LlmCallLog`: unbounded growth is accepted for now, revisited only if real disk usage becomes a
-  problem in practice, not preemptively.
+- ~~No retention policy on the log files~~ — **superseded (ticket 92).** A worker left running all
+  day writes ~15 MB of plain NDJSON, so "real disk usage becomes a problem in practice" arrived.
+  The daily file is now gzipped on rotation and the rotated set is pruned to `LOG_RETENTION_DAYS`
+  (a bare-filename `history` sidecar lets the prune span process restarts). `pino-roll` v4 has no
+  compression option, so the file sink moved to `rotating-file-stream` — a plain in-process
+  `Writable` in `pino.multistream()`, no `pino.transport()` worker thread (the pretty stream was
+  already in-process for the same reason: a `messageFormat` function can't be structured-cloned).
+  `LlmCallLog`'s own no-retention trade-off is untouched — that's a DB table, a different problem.
 - `jobs/consoleLogger.ts` (the worker's previous bespoke `console.log` adapter) is deleted, not
   kept as a fallback — every process that logs now goes through the same `logger.ts`.
 - A namespaced child logger is created per call to a top-level pipeline function (e.g. once per
