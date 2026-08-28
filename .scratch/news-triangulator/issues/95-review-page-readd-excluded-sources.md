@@ -38,44 +38,80 @@ in `confirmedIds` — the gap is purely that the UI never shows them.
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 ### Backend
 
-- [ ] `findAnalysisWithDetails(id, opts?: { includeExcluded?: boolean })` — when `includeExcluded`,
+- [x] `findAnalysisWithDetails(id, opts?: { includeExcluded?: boolean })` — when `includeExcluded`,
       additionally load the analysis's `excluded: true` coverages (separate query keyed by
       `analysisId`, `include: { source }`, `orderBy: id`) onto a new `excludedCoverages` field on
       `AnalysisWithDetails`. The existing `coverages` include stays `excluded: false` verbatim, so
       every count / mapper that reads `analysis.coverages` is untouched.
-- [ ] `getAnalysisDetail(id, isAdmin)` passes `{ includeExcluded: isAdmin }`. A non-admin caller
+- [x] `getAnalysisDetail(id, isAdmin)` passes `{ includeExcluded: isAdmin }`. A non-admin caller
       never gets excluded rows (they only ever see COMPLETE anyway).
-- [ ] `AnalysisDetail` (shared) gains `excludedCoverages: CoverageInfo[]` — `[]` for non-admin /
+- [x] `AnalysisDetail` (shared) gains `excludedCoverages: CoverageInfo[]` — `[]` for non-admin /
       when there are none. `toAnalysisDetail` maps `analysis.excludedCoverages ?? []` through
       `toCoverageInfo`.
-- [ ] No change to `reconcileCoverages` / `confirmCoverages` — re-inclusion already works (an
+- [x] No change to `reconcileCoverages` / `confirmCoverages` — re-inclusion already works (an
       excluded id arriving in `confirmedIds` is set `excluded: false`, then scraped if PENDING).
       Confirm with a test rather than assuming.
 
 ### Frontend — ReviewPage
 
-- [ ] Render `analysis.excludedCoverages` below the active picker list (a labelled subsection,
+- [x] Render `analysis.excludedCoverages` below the active picker list (a labelled subsection,
       e.g. *"Automaticky vyloučené zdroje — zaškrtnutím je vrátíte do analýzy"*). Each row: the
       same `pick__i` layout, checkbox `checked={checkedIds.has(id)}` (starts **unchecked** — they
       are not in the `checkedIds` seed), a muted "vyloučeno" treatment, and — when this approval's
       `draftExclusions` names the row — the specific reason label.
-- [ ] `checkedCount` / the "Vybráno X z Y" line count the excluded rows in Y.
-- [ ] Ticking an excluded row adds its id to `checkedIds` → it flows into `confirmedIds` on
+- [x] `checkedCount` / the "Vybráno X z Y" line count the excluded rows in Y.
+- [x] Ticking an excluded row adds its id to `checkedIds` → it flows into `confirmedIds` on
       confirm exactly like an active row. Nothing else to wire.
-- [ ] `reviewPageViewModel.ts`: `coverageExclusionLabel(coverageId, exclusions)` — the specific
+- [x] `reviewPageViewModel.ts`: `coverageExclusionLabel(coverageId, exclusions)` — the specific
       `REASON_GROUPS` label when `exclusions` names the id, a neutral fallback otherwise. Unit
       tested.
 
 ### Cross-cutting
 
-- [ ] Tests: repo integration (`findAnalysisWithDetails` with/without `includeExcluded`);
+- [x] Tests: repo integration (`findAnalysisWithDetails` with/without `includeExcluded`);
       `getAnalysisDetail` service (admin sees `excludedCoverages`, non-admin gets `[]`);
       `toAnalysisDetail` mapper (excluded rows mapped, counts unaffected); `confirmCoverages`
       re-includes an excluded id passed in `confirmedIds`; `reviewPageViewModel` unit.
-- [ ] Typecheck + full suites + lint. `/code-review` clean.
-- [ ] No ADR — this finishes ticket 87's stated intent ("zůstávají u konceptu jen označené jako
+- [x] Typecheck + full suites + lint. `/code-review` clean.
+- [x] No ADR — this finishes ticket 87's stated intent ("zůstávají u konceptu jen označené jako
       vyloučené"), not a new architectural call.
+
+## Implementation notes (2026-08-28)
+
+- `findAnalysisWithDetails(id, { includeExcluded })` runs a second `coverage.findMany` for the
+  excluded rows (Prisma can't include one relation twice with different `where`). Only the Admin
+  `/review/:id` read pays for it; `AnalysisWithDetails.excludedCoverages` is `undefined` otherwise,
+  so `countValidExtractions` / `sourceOverlap` and every other `analysis.coverages` reader is
+  untouched.
+- `AnalysisDetail.excludedCoverages` is a required `CoverageInfo[]` in the shared type, `[]` for
+  readers / when nothing is excluded — `toAnalysisDetail` maps `analysis.excludedCoverages ?? []`.
+- ReviewPage: the excluded rows render in a labelled `.pick__sub` subsection below the active
+  list, muted (`.pick__i.is-off`), checkbox unchecked (they're not in the `checkedIds` seed).
+  Ticking one flows into `confirmedIds` exactly like an active row — `reconcileCoverages` already
+  sets `excluded: false` for every confirmed id, no backend change. The empty-state guard and the
+  "Vybráno X z Y" count now use a single `totalCount` (active + excluded + custom URLs), so an
+  analysis where *every* source was auto-excluded still shows them instead of "žádné pokrytí".
+- `coverageExclusionLabel(coverageId, draftExclusions)` shows the specific quality-gate reason
+  when this approval's nav state still names the row, a neutral "zaškrtnutím vrátíte" fallback on
+  a reload or for an Admin-deselected source (no stored reason).
+
+## Code-review fixes (2026-08-28)
+
+Two-axis review — no hard violations, nothing "implemented wrong". Addressed:
+
+- **Duplicated row markup** (Standards): extracted `<PickRow>` — the active and excluded coverage
+  rows now share one renderer (`note` prop drives the muted `is-off` + reason label). Custom-URL
+  rows stay separate (unchecking one deletes it — genuinely different).
+- **`is-bad` semantic overload** (both axes): the exclusion label was rendering in the error-red
+  `.pick__x.is-bad` (elsewhere "Nelze extrahovat"). Now plain `.pick__x` (muted `--ink-3`), which
+  is what "vyloučeno" should read as; the row is already muted via `is-off`.
+- **Banner copy scope creep** (Spec): reverted the extra sentence added to ticket 87's
+  `buildDraftExclusionNotice` detail text — the `.pick__sub` subsection heading already carries
+  the "zaškrtnutím je vrátíte" message.
+- **"counts unaffected" half untested** (Spec): added a `getAnalysisDetail` test that an excluded
+  coverage with a valid extraction does not inflate `sourceOverlap.sourceCount`.
+- Fallback exclusion label trimmed to just "Vyloučeno" (the heading already says the rest).

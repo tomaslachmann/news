@@ -5,7 +5,7 @@ import type { DraftExclusion } from '@/services/ingestion'
 import { fetchAnalysis, patchCoverages, type CoverageInfo } from '@/services/analyses'
 import { formatDate } from '@/lib/formatDate'
 import { analysisPath } from '@/lib/analysisRoutes'
-import { buildDraftExclusionNotice } from './reviewPageViewModel'
+import { buildDraftExclusionNotice, coverageExclusionLabel } from './reviewPageViewModel'
 import './ReviewPage.css'
 
 type PageMode = 'select' | 'confirming' | 'results'
@@ -48,6 +48,32 @@ function StatusText({ status }: { status: CoverageInfo['status'] }) {
   if (status === 'ok') return <span className="pick__x is-ok">Extrahováno</span>
   if (status === 'extraction-failed') return <span className="pick__x is-bad">Nelze extrahovat</span>
   return null
+}
+
+/** One selectable source row in the picker — an active coverage or an auto-excluded one (`note`
+ *  set, muted). The custom-URL rows below stay their own thing: unchecking one deletes it. */
+function PickRow({
+  coverage,
+  checked,
+  onToggle,
+  note,
+}: {
+  coverage: CoverageInfo
+  checked: boolean
+  onToggle: (checked: boolean) => void
+  note?: string
+}) {
+  return (
+    <div className={`pick__i${note ? ' is-off' : ''}`}>
+      <span className="pick__c">
+        <input type="checkbox" checked={checked} onChange={(e) => onToggle(e.target.checked)} />
+      </span>
+      <span className="pick__w">{coverage.outlet}</span>
+      <p className="pick__t">{coverage.title ?? coverage.articleUrl}</p>
+      {note && <span className="pick__x">{note}</span>}
+      {coverage.publishedAt && <span className="pick__u">{formatDate(coverage.publishedAt, 'long')}</span>}
+    </div>
+  )
 }
 
 export default function ReviewPage() {
@@ -106,6 +132,15 @@ export default function ReviewPage() {
     onSuccess: () => navigate(analysisPath(id!)),
   })
 
+  const toggleChecked = (coverageId: string, checked: boolean) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(coverageId)
+      else next.delete(coverageId)
+      return next
+    })
+  }
+
   const addCustomUrl = () => {
     const trimmed = customUrlInput.trim()
     try {
@@ -125,7 +160,9 @@ export default function ReviewPage() {
     })
   }
 
+  const excludedCoverages = analysis?.excludedCoverages ?? []
   const checkedCount = checkedIds.size + customUrls.length
+  const totalCount = (analysis?.coverages.length ?? 0) + excludedCoverages.length + customUrls.length
 
   if (isLoading) {
     return (
@@ -269,7 +306,7 @@ export default function ReviewPage() {
         </p>
       </header>
 
-      {analysis.coverages.length === 0 && customUrls.length === 0 ? (
+      {totalCount === 0 ? (
         <p style={{ marginTop: 'var(--sp-5)', color: 'var(--ink-3)' }}>
           Nebylo nalezeno žádné pokrytí. Přidejte odkazy na články níže, nebo se vraťte a upravte klíčová
           slova.
@@ -277,30 +314,25 @@ export default function ReviewPage() {
       ) : (
         <div className="pick">
           {analysis.coverages.map((coverage) => (
-            <div className="pick__i" key={coverage.id}>
-              <span className="pick__c">
-                <input
-                  type="checkbox"
-                  checked={checkedIds.has(coverage.id)}
-                  onChange={(e) => {
-                    setCheckedIds((prev) => {
-                      const next = new Set(prev)
-                      if (e.target.checked) {
-                        next.add(coverage.id)
-                      } else {
-                        next.delete(coverage.id)
-                      }
-                      return next
-                    })
-                  }}
-                />
-              </span>
-              <span className="pick__w">{coverage.outlet}</span>
-              <p className="pick__t">{coverage.title ?? coverage.articleUrl}</p>
-              {coverage.publishedAt && (
-                <span className="pick__u">{formatDate(coverage.publishedAt, 'long')}</span>
-              )}
-            </div>
+            <PickRow
+              key={coverage.id}
+              coverage={coverage}
+              checked={checkedIds.has(coverage.id)}
+              onToggle={(checked) => toggleChecked(coverage.id, checked)}
+            />
+          ))}
+
+          {excludedCoverages.length > 0 && (
+            <p className="pick__sub">Automaticky vyloučené zdroje — zaškrtnutím je vrátíte do analýzy</p>
+          )}
+          {excludedCoverages.map((coverage) => (
+            <PickRow
+              key={coverage.id}
+              coverage={coverage}
+              checked={checkedIds.has(coverage.id)}
+              onToggle={(checked) => toggleChecked(coverage.id, checked)}
+              note={coverageExclusionLabel(coverage.id, draftExclusions)}
+            />
           ))}
 
           {customUrls.map((url) => (
@@ -364,7 +396,7 @@ export default function ReviewPage() {
 
       <div className="confirm">
         <p className="confirm__n">
-          Vybráno <b>{checkedCount}</b> z <b>{analysis.coverages.length + customUrls.length}</b>.
+          Vybráno <b>{checkedCount}</b> z <b>{totalCount}</b>.
         </p>
         <div className="confirm__act">
           <button

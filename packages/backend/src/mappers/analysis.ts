@@ -84,6 +84,9 @@ export function toAnalysisDetail(
     createdAt: analysis.createdAt.toISOString(),
     status: STATUS_MAP[analysis.status],
     coverages: analysis.coverages.map(toCoverageInfo),
+    // Ticket 95 — Admin `/review/:id` only; `undefined` (→ `[]`) for a reader or when nothing is
+    // excluded. Never folded into `coverages` so `countValidExtractions` above stays accurate.
+    excludedCoverages: (analysis.excludedCoverages ?? []).map(toCoverageInfo),
     synthesisResult: analysis.synthesisResult
       ? mergeAgreementCategory(
           analysis.synthesisResult.dimensions,

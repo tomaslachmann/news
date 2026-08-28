@@ -835,6 +835,11 @@ export interface AnalysisDetail {
   createdAt: string
   status: AnalysisStatusLabel
   coverages: CoverageInfo[]
+  /** Ticket 95 — the analysis's auto-excluded sources (quality gate at Draft approval, or an
+   *  Admin deselecting one earlier). Admin-only: `[]` for a reader on `/article/:id` and whenever
+   *  nothing is excluded. The `/review/:id` picker shows these unchecked so an Admin can tick any
+   *  back into the analysis. */
+  excludedCoverages: CoverageInfo[]
   synthesisResult?: AnalysisDimensions
   /** Ticket 38 / ADR 0030 — undefined exactly when `synthesisResult.agreement` was empty (nothing
    *  to measure), never a pending/not-computed-yet state for an Analysis reaching this mapper. */

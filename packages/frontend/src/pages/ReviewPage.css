@@ -108,6 +108,17 @@
 .pick {
   border-top: var(--bw-hair) solid var(--line-2);
 }
+/* ticket 95 — divider before the auto-excluded sources an Admin can tick back on */
+.pick__sub {
+  padding: var(--sp-4) 0 var(--sp-2);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
 .pick__i {
   display: grid;
   grid-template-columns: 1.5rem minmax(0, 1fr) auto;

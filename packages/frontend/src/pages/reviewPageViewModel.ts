@@ -44,3 +44,16 @@ export function buildDraftExclusionNotice(exclusions: DraftExclusion[]): DraftEx
     groups,
   }
 }
+
+// The subsection heading in ReviewPage already says "zaškrtnutím je vrátíte"; the per-row label
+// only adds the *reason*, so the fallback (reason unknown) stays terse.
+const EXCLUSION_FALLBACK_LABEL = 'Vyloučeno'
+
+/** Ticket 95 — the per-row label for an auto-excluded source in the `/review/:id` picker. Uses the
+ *  specific quality-gate reason when *this* approval's `draftExclusions` still names the row (fresh
+ *  navigation from `/admin/ingestion`); a neutral fallback otherwise — on a plain reload the nav
+ *  state is gone, and a source an Admin deselected in an earlier round carries no reason at all. */
+export function coverageExclusionLabel(coverageId: string, exclusions: DraftExclusion[]): string {
+  const reason = exclusions.find((e) => e.coverageId === coverageId)?.reason
+  return REASON_GROUPS.find((g) => g.reason === reason)?.label ?? EXCLUSION_FALLBACK_LABEL
+}

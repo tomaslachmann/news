@@ -397,7 +397,9 @@ export async function confirmCoverages(
  *  server-side gate, not just on the frontend choosing not to render the monitoring UI, since the
  *  API itself is reachable directly regardless of which frontend route a client used to get here. */
 export async function getAnalysisDetail(analysisId: string, isAdmin: boolean): Promise<AnalysisDetail> {
-  const analysis = await analysisRepo.findAnalysisWithDetails(analysisId)
+  // Ticket 95 — only an Admin (on `/review/:id`) sees the auto-excluded sources, so they can tick
+  // any back into the analysis; a reader on `/article/:id` never does.
+  const analysis = await analysisRepo.findAnalysisWithDetails(analysisId, { includeExcluded: isAdmin })
   if (!analysis) throw new NotFoundError('Analýza nenalezena')
   if (!isAdmin && analysis.status !== 'COMPLETE') throw new NotFoundError('Analýza nenalezena')
 

@@ -11,6 +11,7 @@ import {
 import {
   createCoverages,
   excludeCoverages,
+  excludeCoverageIds,
   findCoveragesForAnalysis,
   reconcileCoverages,
   addCoveragesUpToLimit,
@@ -118,6 +119,35 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const entry = list.find((a) => a.id === analysis.id)
 
     expect(entry?.okCoverageCount).toBe(1)
+  })
+
+  it('findAnalysisWithDetails hides excluded coverages by default, exposes them under excludedCoverages with includeExcluded (ticket 95)', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/t95', seedHeadline: 'T95' })
+    await createCoverages([
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-idnes',
+        articleUrl: 'https://idnes.cz/t95-kept',
+        status: 'OK',
+      },
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-novinky',
+        articleUrl: 'https://novinky.cz/t95-excl',
+        status: 'PENDING',
+      },
+    ])
+    const excl = (await findCoveragesForAnalysis(analysis.id)).find((c) => c.articleUrl.endsWith('t95-excl'))!
+    await excludeCoverageIds([excl.id])
+
+    const plain = await findAnalysisWithDetails(analysis.id)
+    expect(plain?.coverages.map((c) => c.articleUrl)).toEqual(['https://idnes.cz/t95-kept'])
+    expect(plain?.excludedCoverages).toBeUndefined()
+
+    const withExcluded = await findAnalysisWithDetails(analysis.id, { includeExcluded: true })
+    expect(withExcluded?.coverages.map((c) => c.articleUrl)).toEqual(['https://idnes.cz/t95-kept'])
+    expect(withExcluded?.excludedCoverages?.map((c) => c.articleUrl)).toEqual(['https://novinky.cz/t95-excl'])
+    expect(withExcluded?.excludedCoverages?.[0]?.source.name).toBe('Novinky')
   })
 
   it('excludes non-complete analyses when includeAllStatuses is false', async () => {
@@ -237,6 +267,30 @@ describe('Analysis + Coverage repositories against a real Postgres instance', ()
     const active = await findCoveragesForAnalysis(analysis.id)
     expect(active.map((c) => c.sourceId).sort()).toEqual(['src-aktualne', 'src-idnes'].sort())
     expect(active.some((c) => c.id === toExclude.id)).toBe(false)
+  })
+
+  it('reconcileCoverages re-activates a previously-excluded coverage whose id is in confirmedIds (ticket 95)', async () => {
+    const analysis = await createAnalysis({ seedUrl: 'https://example.cz/t95r', seedHeadline: 'T95 re-add' })
+    await createCoverages([
+      { analysisId: analysis.id, sourceId: 'src-idnes', articleUrl: 'https://idnes.cz/t95r1', status: 'OK' },
+      {
+        analysisId: analysis.id,
+        sourceId: 'src-novinky',
+        articleUrl: 'https://novinky.cz/t95r2',
+        status: 'PENDING',
+      },
+    ])
+    const kept = (await findCoveragesForAnalysis(analysis.id)).find((c) => c.articleUrl.endsWith('t95r1'))!
+    const readd = (await findCoveragesForAnalysis(analysis.id)).find((c) => c.articleUrl.endsWith('t95r2'))!
+    await excludeCoverageIds([readd.id])
+    expect((await findCoveragesForAnalysis(analysis.id)).some((c) => c.id === readd.id)).toBe(false)
+
+    const result = await reconcileCoverages(analysis.id, [kept.id, readd.id], [], 5)
+
+    expect(result).toEqual({ ok: true })
+    expect((await findCoveragesForAnalysis(analysis.id)).map((c) => c.id).sort()).toEqual(
+      [kept.id, readd.id].sort()
+    )
   })
 
   it('addCoveragesUpToLimit truncates new coverages to whatever room remains under the cap', async () => {
