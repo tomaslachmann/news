@@ -3,8 +3,8 @@ import { vi } from 'vitest'
 // Global for the whole unit suite (wired in via vitest.config.ts's `setupFiles`), not per-test-file
 // vi.mock calls: llmClient.ts/embeddingClient.ts create a real, module-level `createLogger(...)`
 // logger at import time (ticket 86) — without this, every test file that transitively imports
-// either of them spins up logger.ts's real pino.transport() worker thread and pino-roll file I/O
-// as an unintended side effect of running `npm test`, not because any test actually exercises
+// either of them spins up logger.ts's real pino.multistream() sinks and rotating-file-stream file
+// I/O as an unintended side effect of running `npm test`, not because any test actually exercises
 // logging (code review finding, ticket 86).
 const fakeLogger = {
   info: vi.fn(),

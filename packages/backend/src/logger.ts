@@ -1,6 +1,7 @@
 import path from 'node:path'
 import pino from 'pino'
 import pinoPretty from 'pino-pretty'
+import { createStream, type Generator as RfsGenerator } from 'rotating-file-stream'
 
 // See docs/adr/0038-structured-namespaced-logging.md. This complements, not replaces, ADR 0020's
 // LlmCallLog table — log lines here trace pipeline flow (what stage a run is at, right now, and
@@ -20,6 +21,14 @@ const LOG_DIR = process.env.LOG_DIR ?? path.join(process.cwd(), 'logs')
 const LOG_LEVEL = process.env.LOG_LEVEL ?? 'info'
 const SERVICE_NAME = process.env.SERVICE_NAME ?? 'app'
 
+// Rotated daily, gzipped, and pruned to a window — ADR 0038 deferred a retention policy until
+// "real disk usage becomes a problem"; a worker left running all day writes ~15 MB of plain
+// NDJSON, so it is one now. Both tunable via env.
+const LOG_RETENTION_DAYS = Number(process.env.LOG_RETENTION_DAYS) || 14
+// A within-day safety cap for a runaway loop — a normal day is far under this; it just stops one
+// bad day from filling the disk before the daily boundary rotates it.
+const LOG_MAX_FILE_SIZE = process.env.LOG_MAX_FILE_SIZE ?? '50M'
+
 // A small fixed ANSI color palette, picked from a hash of the namespace string -- same approach
 // the `debug` npm package uses, so a given namespace (e.g. "rss", "entity.extract") gets the same
 // color every run without a manually maintained namespace -> color map that goes stale the moment
@@ -27,20 +36,20 @@ const SERVICE_NAME = process.env.SERVICE_NAME ?? 'app'
 const NAMESPACE_COLORS = [36, 33, 35, 32, 34, 96, 93, 95, 92, 94]
 
 /** Exported for `logger.test.ts` -- the pure hashing logic is what's worth unit-testing here; the
- *  real `createLogger` spins up a `pino.transport()` worker thread and real file I/O (`pino-roll`),
- *  too heavy for a fast unit test and not what actually needs coverage. */
+ *  real `createLogger` writes to files and is globally mocked in the unit suite (`testSetup.ts`),
+ *  not what needs coverage. */
 export function colorForNamespace(namespace: string): number {
   let hash = 0
   for (let i = 0; i < namespace.length; i++) hash = (hash * 31 + namespace.charCodeAt(i)) >>> 0
   return NAMESPACE_COLORS[hash % NAMESPACE_COLORS.length]
 }
 
-// `pino.transport({ targets: [...] })` runs every target in a worker thread, which means every
-// option -- including `messageFormat` -- gets structured-cloned across the thread boundary. A
-// live function can't survive that (DataCloneError), so the colorized pretty stream is built
-// directly, in-process, instead (`pinoPretty()` is synchronous and returns a plain writable
-// stream); only the file target -- pino-roll's options are plain serializable data, no functions
-// -- goes through `pino.transport()`. `pino.multistream()` fans one logger out to both.
+// Both sinks are plain in-process writable streams fanned out by `pino.multistream()`, no
+// `pino.transport()` worker thread. The colorized pretty stream has to be in-process anyway --
+// its `messageFormat` is a live function, and `pino.transport()` structured-clones its options
+// across the thread boundary (DataCloneError on a function). `rotating-file-stream` (the file
+// sink, `buildFileStream` below) is a Writable and works directly here too -- it doesn't need a
+// transport the way `pino-roll` did, and unlike `pino-roll` it can gzip.
 function buildPrettyStream(service: string) {
   return pinoPretty({
     colorize: true,
@@ -55,15 +64,48 @@ function buildPrettyStream(service: string) {
   })
 }
 
-function buildFileTransport(service: string) {
-  return pino.transport({
-    target: 'pino-roll',
-    options: {
-      file: path.join(LOG_DIR, service),
-      frequency: 'daily',
-      dateFormat: 'yyyy-MM-dd',
-      mkdir: true,
-    },
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/** rfs filename generator: `<service>.log` for the file being written, `<service>-YYYY-MM-DD.log.gz`
+ *  once rotated (the content is gzipped, so the name must carry `.gz` — rfs's own built-in
+ *  generator does the same). `intervalBoundary` makes `time` the start of the day the lines
+ *  belong to, so the date in the name is that day, not the rotation moment (00:00 of the next).
+ *  UTC throughout (matches `intervalUTC: true` below) so the filename is deterministic regardless
+ *  of the host timezone. `index` disambiguates a same-day mid-day rotation (the `size` safety
+ *  cap). rfs passes `null` for the active file despite the declared `number | Date` type.
+ *  Exported for `logger.test.ts`. */
+export function logFileNameFor(service: string): RfsGenerator {
+  return (time, index) => {
+    if (!time) return `${service}.log`
+    const d = time instanceof Date ? time : new Date(time)
+    const date = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`
+    const seq = index && index > 1 ? `.${index}` : ''
+    return `${service}-${date}${seq}.log.gz`
+  }
+}
+
+// A plain in-process writable stream, like `buildPrettyStream` above — not a `pino.transport()`
+// worker thread. `pino-roll` needed the transport (only serializable options cross the boundary)
+// but also can't compress; `rotating-file-stream` does daily rotation + gzip + `maxFiles`
+// pruning natively and works fine as a direct `pino.multistream` target.
+function buildFileStream(service: string) {
+  return createStream(logFileNameFor(service), {
+    path: LOG_DIR,
+    interval: '1d',
+    intervalBoundary: true,
+    intervalUTC: true,
+    compress: 'gzip',
+    // Counts rotated files, ~= days at one rotation/day. A runaway day that hits `size` many
+    // times over would prune its own early hours before older days — an acceptable failure mode
+    // for the runaway case (the alternative is a full disk).
+    maxFiles: LOG_RETENTION_DAYS,
+    size: LOG_MAX_FILE_SIZE,
+    // Persist the rotated-file list so `maxFiles` prunes the whole history across restarts (the
+    // worker restarts on every deploy), not just files this process run produced. A bare
+    // filename — rfs resolves it under `path` (an absolute value gets `path` prepended and breaks).
+    history: `.${service}-history`,
   })
 }
 
@@ -73,7 +115,7 @@ function getRootLogger(): pino.Logger {
   if (!rootLogger) {
     const streams = [
       { stream: buildPrettyStream(SERVICE_NAME), level: LOG_LEVEL },
-      { stream: buildFileTransport(SERVICE_NAME), level: LOG_LEVEL },
+      { stream: buildFileStream(SERVICE_NAME), level: LOG_LEVEL },
     ]
     rootLogger = pino({ level: LOG_LEVEL, base: { service: SERVICE_NAME } }, pino.multistream(streams))
   }
