@@ -302,6 +302,23 @@ describe('Pagination against a real Postgres instance', () => {
       })
       expect(asc.rows.map((r) => r.id)).toEqual([x.id, y.id])
     })
+
+    it('filters to additions whose Source name matches the outlet substring (case-insensitive)', async () => {
+      const lo = futureTimestamp()
+      const fromNovinky = await makePendingAddition('https://novinky.cz/pending-outlet', SOURCES[1])
+      await makePendingAddition('https://idnes.cz/pending-outlet', SOURCES[0])
+      const hi = futureTimestamp()
+
+      const filtered = await findPendingAdditionsPage({
+        offset: 0,
+        limit: 50,
+        outlet: 'novin',
+        createdAfter: lo,
+        createdBefore: hi,
+      })
+      expect(filtered.total).toBe(1)
+      expect(filtered.rows.map((r) => r.id)).toEqual([fromNovinky.id])
+    })
   })
 
   describe('findPendingReviewRelationsPage', () => {

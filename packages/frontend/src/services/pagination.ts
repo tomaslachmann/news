@@ -30,8 +30,16 @@ export function usePagedQuery<T>(queryKey: unknown[], fetchPage: () => Promise<P
   return useQuery({ queryKey, queryFn: fetchPage, placeholderData: keepPreviousData })
 }
 
+/** Widens a bare `yyyy-mm-dd` (from `<input type="date">`) to that day's last millisecond, so an
+ *  inclusive "up to and including this date" upper bound doesn't silently drop everything created
+ *  after midnight. Returns `undefined` for an empty string. */
+export function inclusiveEndOfDay(date: string): string | undefined {
+  return date ? `${date}T23:59:59.999` : undefined
+}
+
 /** Serialises an admin-queue filter object into a `?a=b&c=d` string, dropping `undefined`/empty
- *  values so a pristine queue still requests a bare, cache-friendly URL. */
+ *  values — callers also omit defaults (page 1, no filters), so a pristine queue requests a
+ *  bare, cache-friendly URL. */
 export function adminQueryString(params: Record<string, string | number | undefined>): string {
   const q = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {

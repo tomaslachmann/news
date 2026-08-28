@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { adminQueryString, cursorQueryParam } from './pagination'
+import { adminQueryString, cursorQueryParam, inclusiveEndOfDay } from './pagination'
 
 describe('adminQueryString', () => {
   it('is empty for a pristine (all-undefined) filter', () => {
@@ -19,6 +19,16 @@ describe('adminQueryString', () => {
 
   it('url-encodes filter values', () => {
     expect(adminQueryString({ outlet: 'Seznam Zprávy' })).toBe('?outlet=Seznam+Zpr%C3%A1vy')
+  })
+})
+
+describe('inclusiveEndOfDay', () => {
+  it('is undefined for an empty date', () => {
+    expect(inclusiveEndOfDay('')).toBeUndefined()
+  })
+
+  it("widens a bare day to that day's last millisecond", () => {
+    expect(inclusiveEndOfDay('2026-01-15')).toBe('2026-01-15T23:59:59.999')
   })
 })
 

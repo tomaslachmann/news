@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type {
   AnalysisListItem,
@@ -22,6 +22,7 @@ import {
 import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
 import { analysisPath } from '@/lib/analysisRoutes'
+import { inclusiveEndOfDay } from '@/services/pagination'
 import { AdminPagination } from '@/components/AdminPagination'
 import { AdminQueueControls, type SortOption } from '@/components/AdminQueueControls'
 import './IngestionReviewPage.css'
@@ -66,7 +67,9 @@ function useQueueFilterState() {
   const [createdAfter, setCreatedAfterRaw] = useState('')
   const [createdBefore, setCreatedBeforeRaw] = useState('')
 
-  const resetting =
+  /** Wrap a setter so it also resets to page 1 — used for every filter control (the sort select
+   *  included, which each section passes its own setter to). */
+  const withPageReset =
     <T,>(setter: (value: T) => void) =>
     (value: T) => {
       setter(value)
@@ -77,20 +80,35 @@ function useQueueFilterState() {
     page,
     setPage,
     outlet,
-    setOutlet: resetting(setOutletRaw),
+    setOutlet: withPageReset(setOutletRaw),
     createdAfter,
-    setCreatedAfter: resetting(setCreatedAfterRaw),
+    setCreatedAfter: withPageReset(setCreatedAfterRaw),
     createdBefore,
-    setCreatedBefore: resetting(setCreatedBeforeRaw),
-    /** Wrap a section-specific setter (e.g. the sort select) so it also resets the page. */
-    withPageReset: resetting,
+    setCreatedBefore: withPageReset(setCreatedBeforeRaw),
+    withPageReset,
+    hasFilter: outlet.trim() !== '' || createdAfter !== '' || createdBefore !== '',
   }
 }
 
-function dateRangeParams(createdAfter: string, createdBefore: string) {
+/** Keeps `page` in range after the result set shrinks under it — e.g. an Admin approves the last
+ *  item on the last page, the query refetches with a smaller `pageCount`, and this snaps them
+ *  back to the new final page instead of stranding them on an empty one. */
+function useClampPage(page: number, pageCount: number | undefined, setPage: (page: number) => void) {
+  useEffect(() => {
+    if (pageCount !== undefined && page > pageCount) setPage(pageCount)
+  }, [page, pageCount, setPage])
+}
+
+function queueParams(
+  page: number,
+  createdAfter: string,
+  createdBefore: string
+): { page?: number; createdAfter?: string; createdBefore?: string } {
   return {
+    // Omitted at page 1 so a pristine queue requests a bare, cache-friendly URL.
+    page: page === 1 ? undefined : page,
     createdAfter: createdAfter || undefined,
-    createdBefore: createdBefore || undefined,
+    createdBefore: inclusiveEndOfDay(createdBefore),
   }
 }
 
@@ -179,18 +197,16 @@ function DraftsSection() {
 
   const params: DraftQueueParams = useMemo(
     () => ({
-      page: filters.page,
       ...DRAFT_SORT_PARAMS[sortKey],
       outlet: filters.outlet.trim() || undefined,
-      ...dateRangeParams(filters.createdAfter, filters.createdBefore),
+      ...queueParams(filters.page, filters.createdAfter, filters.createdBefore),
     }),
     [filters.page, sortKey, filters.outlet, filters.createdAfter, filters.createdBefore]
   )
 
   const { data, isLoading, isError, isPlaceholderData } = useVisibleDrafts(params)
-  const drafts = data?.items
-  const hasFilter =
-    filters.outlet.trim() !== '' || filters.createdAfter !== '' || filters.createdBefore !== ''
+  useClampPage(filters.page, data?.pageCount, filters.setPage)
+  const drafts = data?.items ?? []
 
   return (
     <section className="qsec">
@@ -223,9 +239,9 @@ function DraftsSection() {
         </div>
       )}
 
-      {drafts && drafts.length === 0 && (
+      {data && data.total === 0 && (
         <QueueEmptyState
-          filtered={hasFilter}
+          filtered={filters.hasFilter}
           emptyText={
             <>
               Momentálně žádné koncepty. Sběr článků běží jen když je spuštěný jeho cron — v lokálním vývoji
@@ -235,27 +251,29 @@ function DraftsSection() {
         />
       )}
 
-      {drafts && drafts.length > 0 && (
+      {data && data.total > 0 && (
         <>
-          <div className="qsec__l">
-            {drafts.map((draft) => (
-              <DraftItem
-                key={draft.id}
-                draft={draft}
-                isApproving={approveMutation.isPending}
-                isRejecting={rejectMutation.isPending}
-                onApprove={() =>
-                  approveMutation.mutate(draft.id, {
-                    onSuccess: (result) =>
-                      void navigate(`/review/${draft.id}`, {
-                        state: { draftExclusions: result.excluded },
-                      }),
-                  })
-                }
-                onReject={() => rejectMutation.mutate(draft.id)}
-              />
-            ))}
-          </div>
+          {drafts.length > 0 && (
+            <div className="qsec__l">
+              {drafts.map((draft) => (
+                <DraftItem
+                  key={draft.id}
+                  draft={draft}
+                  isApproving={approveMutation.isPending}
+                  isRejecting={rejectMutation.isPending}
+                  onApprove={() =>
+                    approveMutation.mutate(draft.id, {
+                      onSuccess: (result) =>
+                        void navigate(`/review/${draft.id}`, {
+                          state: { draftExclusions: result.excluded },
+                        }),
+                    })
+                  }
+                  onReject={() => rejectMutation.mutate(draft.id)}
+                />
+              ))}
+            </div>
+          )}
           <AdminPagination
             page={data.page}
             pageSize={data.pageSize}
@@ -326,18 +344,16 @@ function PendingAdditionsSection() {
 
   const params: PendingAdditionQueueParams = useMemo(
     () => ({
-      page: filters.page,
       dir: DATE_SORT_DIR[sortKey],
       outlet: filters.outlet.trim() || undefined,
-      ...dateRangeParams(filters.createdAfter, filters.createdBefore),
+      ...queueParams(filters.page, filters.createdAfter, filters.createdBefore),
     }),
     [filters.page, sortKey, filters.outlet, filters.createdAfter, filters.createdBefore]
   )
 
   const { data, isLoading, isError, isPlaceholderData } = usePendingAdditions(params)
-  const additions = data?.items
-  const hasFilter =
-    filters.outlet.trim() !== '' || filters.createdAfter !== '' || filters.createdBefore !== ''
+  useClampPage(filters.page, data?.pageCount, filters.setPage)
+  const additions = data?.items ?? []
 
   return (
     <section className="qsec">
@@ -370,31 +386,33 @@ function PendingAdditionsSection() {
         </div>
       )}
 
-      {additions && additions.length === 0 && (
+      {data && data.total === 0 && (
         <QueueEmptyState
-          filtered={hasFilter}
+          filtered={filters.hasFilter}
           emptyText="Momentálně žádná. (Vyžaduje běžící sběr článků — viz vysvětlení výše.)"
         />
       )}
 
-      {additions && additions.length > 0 && (
+      {data && data.total > 0 && (
         <>
-          <div className="qsec__l">
-            {additions.map((addition) => (
-              <AdditionItem
-                key={addition.id}
-                addition={addition}
-                isApproving={approveMutation.isPending}
-                isRejecting={rejectMutation.isPending}
-                onApprove={() =>
-                  approveMutation.mutate(addition.id, {
-                    onSuccess: () => void navigate(analysisPath(addition.analysisId)),
-                  })
-                }
-                onReject={() => rejectMutation.mutate(addition.id)}
-              />
-            ))}
-          </div>
+          {additions.length > 0 && (
+            <div className="qsec__l">
+              {additions.map((addition) => (
+                <AdditionItem
+                  key={addition.id}
+                  addition={addition}
+                  isApproving={approveMutation.isPending}
+                  isRejecting={rejectMutation.isPending}
+                  onApprove={() =>
+                    approveMutation.mutate(addition.id, {
+                      onSuccess: () => void navigate(analysisPath(addition.analysisId)),
+                    })
+                  }
+                  onReject={() => rejectMutation.mutate(addition.id)}
+                />
+              ))}
+            </div>
+          )}
           <AdminPagination
             page={data.page}
             pageSize={data.pageSize}
@@ -464,16 +482,15 @@ function StoryRelationsSection() {
 
   const params: StoryRelationQueueParams = useMemo(
     () => ({
-      page: filters.page,
       dir: DATE_SORT_DIR[sortKey],
-      ...dateRangeParams(filters.createdAfter, filters.createdBefore),
+      ...queueParams(filters.page, filters.createdAfter, filters.createdBefore),
     }),
     [filters.page, sortKey, filters.createdAfter, filters.createdBefore]
   )
 
   const { data, isLoading, isError, isPlaceholderData } = usePendingStoryRelations(params)
-  const relations = data?.items
-  const hasFilter = filters.createdAfter !== '' || filters.createdBefore !== ''
+  useClampPage(filters.page, data?.pageCount, filters.setPage)
+  const relations = data?.items ?? []
 
   return (
     <section className="qsec">
@@ -504,24 +521,26 @@ function StoryRelationsSection() {
         </div>
       )}
 
-      {relations && relations.length === 0 && (
-        <QueueEmptyState filtered={hasFilter} emptyText="Momentálně žádné čekající vztahy." />
+      {data && data.total === 0 && (
+        <QueueEmptyState filtered={filters.hasFilter} emptyText="Momentálně žádné čekající vztahy." />
       )}
 
-      {relations && relations.length > 0 && (
+      {data && data.total > 0 && (
         <>
-          <div className="qsec__l">
-            {relations.map((relation) => (
-              <RelationItem
-                key={relation.id}
-                relation={relation}
-                isApproving={approveMutation.isPending}
-                isRejecting={rejectMutation.isPending}
-                onApprove={() => approveMutation.mutate(relation.id)}
-                onReject={() => rejectMutation.mutate(relation.id)}
-              />
-            ))}
-          </div>
+          {relations.length > 0 && (
+            <div className="qsec__l">
+              {relations.map((relation) => (
+                <RelationItem
+                  key={relation.id}
+                  relation={relation}
+                  isApproving={approveMutation.isPending}
+                  isRejecting={rejectMutation.isPending}
+                  onApprove={() => approveMutation.mutate(relation.id)}
+                  onReject={() => rejectMutation.mutate(relation.id)}
+                />
+              ))}
+            </div>
+          )}
           <AdminPagination
             page={data.page}
             pageSize={data.pageSize}

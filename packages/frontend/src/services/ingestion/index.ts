@@ -19,8 +19,9 @@ export type {
   DraftExclusion,
 }
 
-/** Shared page/direction/date-range an admin queue filter carries. Dates are `yyyy-mm-dd`
- *  straight off `<input type="date">`; the backend coerces them. */
+/** Frontend-side twin of shared's `DraftQuery`/`PendingAdditionQuery`/`StoryRelationQuery`.
+ *  Kept separate because the shared schemas coerce `createdAfter`/`createdBefore` to `Date`,
+ *  whereas here they're the raw strings a `<input type="date">` (and the querystring) carry. */
 export interface AdminQueueParams {
   page?: number
   dir?: 'asc' | 'desc'

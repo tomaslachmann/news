@@ -409,6 +409,10 @@ export async function findDraftsPage(q: DraftsPageQuery): Promise<{ rows: DraftL
   const where = Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`
   const having = Prisma.sql`HAVING count(c.id) FILTER (WHERE c.excluded = false) >= ${q.minVisibleSourceCount}`
 
+  // `dirSql` is a fixed keyword literal chosen here, never interpolated input. When sorting by
+  // coverageCount the tiebreaker stays newest-first regardless of `dir` (equal-count Drafts read
+  // best most-recent-first either way); the createdAt sort's tiebreaker follows `dir` so a full
+  // page reversal is a clean mirror.
   const dirSql = q.dir === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`
   const orderBy =
     q.sort === 'coverageCount'

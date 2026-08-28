@@ -1,11 +1,14 @@
-/** The page tokens to render in `AdminPagination` (ticket 88): a window of page numbers around
- *  the current page, first/last always shown, gaps collapsed to an `'…'` ellipsis. Pure so it's
- *  unit-tested without rendering. `current`/`pageCount` are 1-based; `pageCount` is always ≥ 1. */
-export function buildPageList(current: number, pageCount: number, window = 1): (number | '…')[] {
+/** ±1 page around the current one is always shown alongside first/last. */
+const WINDOW = 1
+
+/** The page tokens to render in `AdminPagination` (ticket 88): the current page ±`WINDOW`, first
+ *  and last always shown, gaps collapsed to an `'…'` ellipsis. Pure so it's unit-tested without
+ *  rendering. `current`/`pageCount` are 1-based; `pageCount` is always ≥ 1. */
+export function buildPageList(current: number, pageCount: number): (number | '…')[] {
   if (pageCount <= 1) return [1]
 
   const pages = new Set<number>([1, pageCount])
-  for (let p = current - window; p <= current + window; p++) {
+  for (let p = current - WINDOW; p <= current + WINDOW; p++) {
     if (p >= 1 && p <= pageCount) pages.add(p)
   }
 
