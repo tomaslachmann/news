@@ -21,7 +21,7 @@ controls anywhere in the UI.
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 - [x] Scope decision needed before implementation: which admin queue(s) get this first (Ingestion
       Drafts is the one the user hit, but Pending Additions and Story Relations share the same
