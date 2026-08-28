@@ -36,7 +36,7 @@ guessed):
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 - [x] `articleFetchClient.ts`: fetch article bodies with a browser-shaped header set (realistic
       `User-Agent`, `Accept`, `Accept-Language`, `Sec-Fetch-*`, `Upgrade-Insecure-Requests`) instead
