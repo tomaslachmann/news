@@ -24,6 +24,13 @@ export async function findEntityImageForEntity(entityId: string): Promise<{ id: 
   return prisma.entityImage.findFirst({ where: { entityId }, select: { id: true } })
 }
 
+/** This Entity's photo URL for the entity wiki page (ticket 90) — v1 has at most one image per
+ *  Entity (Wikimedia only, ADR 0034), so `findFirst` is the whole story. Null when none fetched. */
+export async function findEntityImageUrl(entityId: string): Promise<string | null> {
+  const row = await prisma.entityImage.findFirst({ where: { entityId }, select: { imageUrl: true } })
+  return row?.imageUrl ?? null
+}
+
 /** The existence check in `entityImageEnrichJob.ts` and this insert aren't atomic, so two
  *  concurrently-run enrich jobs for the same Entity (a double-link, or a retry overlapping a
  *  fresh enqueue) can both pass that check and race here — the loser hits this same

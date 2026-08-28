@@ -518,3 +518,103 @@ export async function findRelationsForEntity(entityKey: string): Promise<EntityR
       headline: r.story.analysis.synthesisResult?.headline ?? null,
     }))
 }
+
+// ── Entity wiki page: stats, co-mentions, mention timeline (ticket 90) ────────
+// All three scope to COMPLETE Analyses only, same public-read rule as
+// `findEventsForEntity`/`findRelationsForEntity`, and all are plain indexed reads — no LLM, no
+// billed cost (spec User Story 9).
+
+export interface EntityStats {
+  /** COMPLETE Events mentioning this entity — can be below the cross-status `Entity.storyCount`. */
+  eventCount: number
+  firstMentionAt: Date | null
+  lastMentionAt: Date | null
+  /** Total asserted entity-relations (either side), COMPLETE-Analysis-scoped — the real count,
+   *  even when `findRelationsForEntity`'s list is truncated to its cap. */
+  relationCount: number
+}
+
+export async function findEntityStats(entityKey: string): Promise<EntityStats> {
+  const [mentionAgg, relationCount] = await Promise.all([
+    prisma.$queryRaw<{ eventCount: bigint; firstMentionAt: Date | null; lastMentionAt: Date | null }[]>`
+      SELECT count(*)::bigint AS "eventCount",
+             min(a."createdAt") AS "firstMentionAt",
+             max(a."createdAt") AS "lastMentionAt"
+      FROM "StoryEntity" se
+      JOIN "Entity" e ON e.id = se."entityId"
+      JOIN "Story" s ON s.id = se."storyId"
+      JOIN "Analysis" a ON a."storyId" = s.id
+      WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
+    `,
+    prisma.storyEntityRelation.count({
+      where: {
+        OR: [{ fromEntity: { key: entityKey } }, { toEntity: { key: entityKey } }],
+        story: { analysis: { status: 'COMPLETE' } },
+      },
+    }),
+  ])
+  const agg = mentionAgg[0]
+  return {
+    eventCount: Number(agg?.eventCount ?? 0),
+    firstMentionAt: agg?.firstMentionAt ?? null,
+    lastMentionAt: agg?.lastMentionAt ?? null,
+    relationCount,
+  }
+}
+
+export interface CoMentionedEntityRow {
+  key: string
+  canonicalName: string
+  type: EntityType
+  sharedStoryCount: number
+}
+
+/** The entities that appear in the most COMPLETE Stories alongside `entityKey` — a corpus-level
+ *  "shows up with" signal, distinct from the asserted `StoryEntityRelation` graph
+ *  (`findRelationsForEntity`), which is claim-level. Bounded by `limit` (spec User Story 10). */
+export async function findCoMentionedEntities(
+  entityKey: string,
+  limit: number
+): Promise<CoMentionedEntityRow[]> {
+  const rows = await prisma.$queryRaw<
+    { key: string; canonicalName: string; type: EntityType; sharedStoryCount: bigint }[]
+  >`
+    SELECT other.key, other."canonicalName", other.type,
+           count(DISTINCT se_self."storyId")::bigint AS "sharedStoryCount"
+    FROM "StoryEntity" se_self
+    JOIN "Entity" self ON self.id = se_self."entityId"
+    JOIN "StoryEntity" se_other
+      ON se_other."storyId" = se_self."storyId" AND se_other."entityId" <> se_self."entityId"
+    JOIN "Entity" other ON other.id = se_other."entityId"
+    JOIN "Story" s ON s.id = se_self."storyId"
+    JOIN "Analysis" a ON a."storyId" = s.id
+    WHERE self.key = ${entityKey} AND a.status = 'COMPLETE'
+    GROUP BY other.key, other."canonicalName", other.type
+    ORDER BY "sharedStoryCount" DESC, other."canonicalName" ASC
+    LIMIT ${limit}
+  `
+  return rows.map((r) => ({ ...r, sharedStoryCount: Number(r.sharedStoryCount) }))
+}
+
+export interface MentionMonthRow {
+  month: string
+  count: number
+}
+
+/** COMPLETE-Event mentions of `entityKey` bucketed by `Analysis.createdAt` month (`YYYY-MM`),
+ *  oldest first. Sparse — a month with no mentions is simply absent. Naturally bounded (one row
+ *  per active month). */
+export async function findMentionTimeline(entityKey: string): Promise<MentionMonthRow[]> {
+  const rows = await prisma.$queryRaw<{ month: string; count: bigint }[]>`
+    SELECT to_char(date_trunc('month', a."createdAt"), 'YYYY-MM') AS month,
+           count(*)::bigint AS count
+    FROM "StoryEntity" se
+    JOIN "Entity" e ON e.id = se."entityId"
+    JOIN "Story" s ON s.id = se."storyId"
+    JOIN "Analysis" a ON a."storyId" = s.id
+    WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `
+  return rows.map((r) => ({ month: r.month, count: Number(r.count) }))
+}

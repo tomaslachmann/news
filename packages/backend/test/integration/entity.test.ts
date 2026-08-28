@@ -16,6 +16,9 @@ import {
   findEntityMentionsForStory,
   findEntityRelationsForStory,
   findEntityByKey,
+  findEntityStats,
+  findCoMentionedEntities,
+  findMentionTimeline,
 } from '../../src/repositories/entity.js'
 import { createEntityImage } from '../../src/repositories/entityImage.js'
 
@@ -686,6 +689,96 @@ describe('Entity repository against a real Postgres instance', () => {
       )
 
       expect(await findEntityRelationsForStory(storyId)).toEqual([])
+    })
+  })
+
+  describe('entity wiki reads (ticket 90)', () => {
+    const person = (key: string) => ({
+      key,
+      name: `Person ${key}`,
+      type: 'PERSON' as const,
+      confidence: 0.9,
+      salience: 1,
+    })
+
+    async function completeStoryMentioning(seed: string, entities: ReturnType<typeof person>[], at: Date) {
+      const a = await createAnalysis({ seedUrl: `https://example.cz/${seed}`, seedHeadline: 'x' })
+      await replaceStoryEntities(a.storyId, entities, [])
+      await updateAnalysisStatus(a.id, 'COMPLETE')
+      await setAnalysisCreatedAtForTesting(a.id, at)
+      return a
+    }
+
+    it('findEntityStats: COMPLETE-only event count + first/last mention dates + relation count', async () => {
+      const subject = person('person:stats-subject')
+      const other = person('person:stats-other')
+      await completeStoryMentioning('stats-a', [subject, other], new Date(Date.UTC(2026, 2, 1)))
+      await completeStoryMentioning('stats-b', [subject], new Date(Date.UTC(2026, 5, 1)))
+      // A PENDING story mentioning the subject must not count.
+      const pending = await createAnalysis({ seedUrl: 'https://example.cz/stats-pending', seedHeadline: 'x' })
+      await replaceStoryEntities(pending.storyId, [subject], [])
+
+      const withRelation = await createAnalysis({
+        seedUrl: 'https://example.cz/stats-rel',
+        seedHeadline: 'x',
+      })
+      await replaceStoryEntities(
+        withRelation.storyId,
+        [subject, other],
+        [{ from: subject.key, to: other.key, type: 'REPRESENTS', confidence: 0.9 }]
+      )
+      await updateAnalysisStatus(withRelation.id, 'COMPLETE')
+      await setAnalysisCreatedAtForTesting(withRelation.id, new Date(Date.UTC(2026, 3, 1)))
+
+      const stats = await findEntityStats(subject.key)
+
+      expect(stats.eventCount).toBe(3)
+      expect(stats.firstMentionAt?.getUTCFullYear()).toBe(2026)
+      expect(stats.firstMentionAt?.getUTCMonth()).toBe(2)
+      expect(stats.lastMentionAt?.getUTCMonth()).toBe(5)
+      expect(stats.relationCount).toBe(1)
+    })
+
+    it('findEntityStats: all-zero / null for an entity no COMPLETE Event mentions', async () => {
+      const lonely = person('person:stats-lonely')
+      const pending = await createAnalysis({ seedUrl: 'https://example.cz/stats-lonely', seedHeadline: 'x' })
+      await replaceStoryEntities(pending.storyId, [lonely], [])
+
+      const stats = await findEntityStats(lonely.key)
+
+      expect(stats).toEqual({ eventCount: 0, firstMentionAt: null, lastMentionAt: null, relationCount: 0 })
+    })
+
+    it('findCoMentionedEntities: ranks by shared COMPLETE-Story count, respects the limit', async () => {
+      const subject = person('person:co-subject')
+      const often = person('person:co-often')
+      const once = person('person:co-once')
+      await completeStoryMentioning('co-a', [subject, often, once], new Date(2026, 0, 1))
+      await completeStoryMentioning('co-b', [subject, often], new Date(2026, 1, 1))
+
+      const all = await findCoMentionedEntities(subject.key, 10)
+      const byKey = new Map(all.map((r) => [r.key, r.sharedStoryCount]))
+      expect(byKey.get('person:co-often')).toBe(2)
+      expect(byKey.get('person:co-once')).toBe(1)
+      expect(all.map((r) => r.key)).not.toContain(subject.key)
+
+      const limited = await findCoMentionedEntities(subject.key, 1)
+      expect(limited).toHaveLength(1)
+      expect(limited[0].key).toBe('person:co-often')
+    })
+
+    it('findMentionTimeline: COMPLETE-Event mentions bucketed by month, oldest first, sparse', async () => {
+      const subject = person('person:timeline-subject')
+      await completeStoryMentioning('tl-a', [subject], new Date(Date.UTC(2026, 2, 5)))
+      await completeStoryMentioning('tl-b', [subject], new Date(Date.UTC(2026, 2, 20)))
+      await completeStoryMentioning('tl-c', [subject], new Date(Date.UTC(2026, 5, 10)))
+
+      const timeline = await findMentionTimeline(subject.key)
+
+      expect(timeline).toEqual([
+        { month: '2026-03', count: 2 },
+        { month: '2026-06', count: 1 },
+      ])
     })
   })
 })
