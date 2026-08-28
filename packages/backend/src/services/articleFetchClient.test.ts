@@ -16,14 +16,32 @@ describe('fetchArticleHtml', () => {
     vi.unstubAllGlobals()
   })
 
-  it('sends an honest User-Agent with a contact URL', async () => {
+  it('fetches article bodies with a browser-shaped header set, not the honest contact UA', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response('<html>ok</html>', { status: 200 }))
 
     await fetchArticleHtml('https://example.cz/article')
 
     const [, init] = vi.mocked(fetch).mock.calls[0]
     const headers = new Headers(init?.headers)
-    expect(headers.get('User-Agent')).toBe('NewsTriangulator/1.0 (+https://github.com/tomaslachmann/news)')
+    expect(headers.get('User-Agent')).toMatch(/^Mozilla\/5\.0 /)
+    expect(headers.get('User-Agent')).not.toContain('NewsTriangulator')
+    expect(headers.get('Accept-Language')).toContain('cs')
+    expect(headers.get('Sec-Fetch-Mode')).toBe('navigate')
+  })
+
+  it('sends the idnes.cz consent cookie for an idnes URL (any subdomain), and no cookie elsewhere', async () => {
+    // Fresh Response per call — arrayBuffer() consumes the body, so a shared instance can't be reused.
+    vi.mocked(fetch).mockImplementation(() =>
+      Promise.resolve(new Response('<html>ok</html>', { status: 200 }))
+    )
+
+    await fetchArticleHtml('https://www.idnes.cz/zpravy/domaci/nejaky-clanek.A123')
+    await fetchArticleHtml('https://www.novinky.cz/clanek/456')
+
+    const idnesHeaders = new Headers(vi.mocked(fetch).mock.calls[0]?.[1]?.headers)
+    const novinkyHeaders = new Headers(vi.mocked(fetch).mock.calls[1]?.[1]?.headers)
+    expect(idnesHeaders.get('Cookie')).toBe('dCMP=1')
+    expect(novinkyHeaders.get('Cookie')).toBeNull()
   })
 
   it('returns the body text on a 200', async () => {
@@ -32,6 +50,30 @@ describe('fetchArticleHtml', () => {
     const html = await fetchArticleHtml('https://example.cz/article')
 
     expect(html).toBe('<html>hello</html>')
+  })
+
+  it('decodes a windows-1250 body by its declared charset, not as UTF-8', async () => {
+    // 0x8a 0x9a 0xe8 0xf8 0x9e in windows-1250 == Š š č ř ž
+    const win1250 = Uint8Array.from([0x3c, 0x70, 0x3e, 0x8a, 0x9a, 0xe8, 0xf8, 0x9e, 0x3c, 0x2f, 0x70, 0x3e])
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(win1250, { status: 200, headers: { 'content-type': 'text/html; charset=windows-1250' } })
+    )
+
+    const html = await fetchArticleHtml('https://www.idnes.cz/legacy-encoded')
+
+    expect(html).toBe('<p>Šščřž</p>')
+  })
+
+  it('retries a 403 (irozhlas burst rate-limit), then succeeds', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response('nope', { status: 403 }))
+      .mockResolvedValueOnce(new Response('<html>recovered</html>', { status: 200 }))
+
+    const promise = fetchArticleHtml('https://www.irozhlas.cz/zpravy-domov/clanek_123')
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(await promise).toBe('<html>recovered</html>')
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('throws immediately on a non-retryable 404, no retry attempted', async () => {
