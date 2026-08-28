@@ -508,6 +508,9 @@ export interface EntitySearchResultItem {
   canonicalName: string
   type: EntityTypeLabel
   storyCount: number
+  /** Ticket 50 — the `/admin/entities` type-ahead shows a "propojeno" marker for already-linked
+   *  entities; null when unlinked. The reader-facing `/search` page ignores this. */
+  wikidataId: string | null
 }
 
 /** Precomputed homepage "Entity dne" row (ticket 59). Counts are for the latest stored 24h

@@ -1,0 +1,64 @@
+/* ticket 50 — type-ahead entity picker on /admin/entities. A plain positioned dropdown under a
+   `.input`, no popover library; matches the system's zero-radius, low-chrome controls. */
+.eac {
+  position: relative;
+}
+.eac .input {
+  width: 100%;
+}
+.eac__list {
+  position: absolute;
+  z-index: var(--z-sticky);
+  inset-inline: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  max-block-size: 18rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: var(--bw-hair) solid var(--line);
+  box-shadow: 0 6px 20px oklch(0% 0 0 / 0.12);
+}
+.eac__opt {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+}
+.eac__opt:hover,
+.eac__opt.is-active {
+  background: var(--accent-soft);
+}
+.eac__name {
+  color: var(--ink);
+}
+.eac__meta {
+  flex-shrink: 0;
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  letter-spacing: 0.03em;
+}
+.eac__linked {
+  color: var(--accent);
+}
+.eac__empty {
+  padding: 0.5rem 0.6rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.eac__raw {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: var(--accent);
+}
+.eac__raw code {
+  font-family: var(--font-mono);
+}

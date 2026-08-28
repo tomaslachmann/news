@@ -37,11 +37,23 @@ describe('searchEntities', () => {
 
   it('maps repository rows to search result items', async () => {
     vi.mocked(entityRepo.searchEntitiesByName).mockResolvedValue([
-      { key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON', storyCount: 4 },
+      {
+        key: 'person:petr-fiala',
+        canonicalName: 'Petr Fiala',
+        type: 'PERSON',
+        storyCount: 4,
+        wikidataId: 'Q108371',
+      },
     ])
 
     await expect(searchEntities('Fiala')).resolves.toEqual([
-      { key: 'person:petr-fiala', canonicalName: 'Petr Fiala', type: 'PERSON', storyCount: 4 },
+      {
+        key: 'person:petr-fiala',
+        canonicalName: 'Petr Fiala',
+        type: 'PERSON',
+        storyCount: 4,
+        wikidataId: 'Q108371',
+      },
     ])
     expect(entityRepo.searchEntitiesByName).toHaveBeenCalledWith('Fiala', 20)
   })
