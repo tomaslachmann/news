@@ -2,12 +2,8 @@ import type { FastifyBaseLogger } from 'fastify'
 import type { WikidataSuggestionCandidate } from '@news-triangulator/shared'
 import type { NewAdminActionLog } from '../repositories/adminActionLog.js'
 import type { ScanEntity } from '../repositories/entityWikidataSuggestion.js'
-import {
-  evaluateAutoLink,
-  scoreCandidate,
-  TYPE_P31_QIDS,
-  type WikidataItemDetail,
-} from './entityWikidataMatching.js'
+import { evaluateAutoLink, scoreCandidate, TYPE_P31_QIDS } from './entityWikidataMatching.js'
+import type { WikidataItemDetail } from './wikidataSearchClient.js'
 import { ReconcileUnavailableError, type ReconcileTopCandidate } from './wikidataReconcileClient.js'
 import type { EntityType } from '../repositories/entity.js'
 

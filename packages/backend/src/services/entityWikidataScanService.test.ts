@@ -5,7 +5,7 @@ import {
   type EntityWikidataScanDeps,
 } from './entityWikidataScanService.js'
 import { ReconcileUnavailableError } from './wikidataReconcileClient.js'
-import type { WikidataItemDetail } from './entityWikidataMatching.js'
+import type { WikidataItemDetail } from './wikidataSearchClient.js'
 import type { ScanEntity } from '../repositories/entityWikidataSuggestion.js'
 
 const ENTITY: ScanEntity = {

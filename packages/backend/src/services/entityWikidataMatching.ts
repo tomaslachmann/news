@@ -2,8 +2,6 @@ import type { EntityType } from '../repositories/entity.js'
 import { COMBINING_DIACRITICS } from './entityKey.js'
 import type { WikidataItemDetail } from './wikidataSearchClient.js'
 
-export type { WikidataItemDetail }
-
 // Pure matching logic for the semi-automated Wikidata linker (ticket 93 / ADR 0042) — no I/O, no
 // LLM. The scan job (entityWikidataScanService.ts) feeds it Wikidata item details it already
 // fetched and gets back a score (for ordering the admin suggestion queue) and a boolean auto-link

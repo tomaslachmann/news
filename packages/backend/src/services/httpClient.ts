@@ -53,6 +53,9 @@ export async function fetchWithRetry(
   for (let attempt = 0; ; attempt++) {
     const res = await fetchWithTimeout(url, timeoutMs, options.headers ?? DEFAULT_HEADERS, options.init)
     if (!RETRYABLE_STATUS.has(res.status) || attempt >= retries) return res
+    // Drain the discarded error-response body so its socket is released rather than left open
+    // across the backoff sleep (same reasoning as articleFetchClient's own `res.body?.cancel()`).
+    await res.body?.cancel().catch(() => {})
     const waitMs = retryAfterMs(res) ?? Math.min(1000 * 2 ** attempt, MAX_RETRY_WAIT_MS)
     await new Promise((resolve) => setTimeout(resolve, waitMs))
   }

@@ -5,8 +5,8 @@ import {
   normalizeName,
   scoreCandidate,
   TYPE_P31_QIDS,
-  type WikidataItemDetail,
 } from './entityWikidataMatching.js'
+import type { WikidataItemDetail } from './wikidataSearchClient.js'
 
 function item(overrides: Partial<WikidataItemDetail> = {}): WikidataItemDetail {
   return {
