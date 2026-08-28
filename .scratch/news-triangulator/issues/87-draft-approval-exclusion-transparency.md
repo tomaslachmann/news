@@ -34,7 +34,7 @@ guessed):
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 - [x] Decide and implement a way for the Admin to see, at the moment of approval (or immediately
       after landing on `/review/:id`), which sources (if any) were excluded and why — same-story
