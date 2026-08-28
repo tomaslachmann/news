@@ -1,0 +1,94 @@
+/* Ticket 93 — reuses the same .qsec/.qitem review-queue vocabulary as EntityAliasesPage /
+   IngestionReviewPage, duplicated page-scoped per this project's convention (see
+   EntityAliasesPage.css). Only the candidate-table bits below are new. */
+
+.qsec {
+  padding-block: var(--sp-6);
+}
+.qsec__h {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.qsec__t {
+  font-family: var(--font-serif);
+  font-size: var(--text-h3);
+  font-weight: 500;
+  font-variation-settings: 'opsz' var(--opsz-h3);
+  letter-spacing: var(--ls-h2);
+}
+.qsec__n {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.qsec__l {
+  margin-top: var(--sp-5);
+  border-top: var(--bw-hair) solid var(--line-2);
+}
+
+.qitem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2) var(--sp-5);
+  align-items: start;
+  padding: var(--sp-4) 0;
+  border-bottom: var(--bw-hair) solid var(--line-2);
+}
+.qitem__k {
+  grid-column: 1;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.qitem__act {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.swd__n {
+  grid-column: 1;
+  font-family: var(--font-serif);
+  font-size: var(--text-h4);
+  line-height: 1.32;
+  margin: 0;
+}
+.swd__t {
+  grid-column: 1;
+  margin-top: var(--sp-2);
+}
+.swd__q {
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+}
+.swd__score {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .qitem {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .qitem__act {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}

@@ -246,6 +246,11 @@ model Entity {
   mergedInto    EntityAlias?             @relation("EntityAliasMergedFrom")
   rejectionsA   EntityAliasRejection[]   @relation("EntityAliasRejectionA")
   rejectionsB   EntityAliasRejection[]   @relation("EntityAliasRejectionB")
+  /// Ticket 93 — at most one live Wikidata suggestion at a time (the scheduled scan replaces it);
+  /// null once an Admin confirms or dismisses it, or once the entity is linked.
+  wikidataSuggestion         EntityWikidataSuggestion?
+  /// Ticket 93 — Q-ids an Admin has ruled out for this entity; the scan never re-suggests them.
+  wikidataCandidateRejections EntityWikidataCandidateRejection[]
   /// Ticket 41 — zero or one in v1 (Wikimedia is the only provider), fetched automatically by
   /// `entity.image.enrich` once `wikidataId` is linked. No `isPrimary` field yet (ADR 0034): with
   /// one provider there's nothing to prioritize among.
@@ -353,6 +358,37 @@ model EntityAliasRejection {
   createdAt  DateTime @default(now())
 
   @@unique([entityIdA, entityIdB])
+}
+
+/// A ranked set of Wikidata candidates the scheduled scan (ticket 93 / ADR 0042) surfaced for an
+/// unlinked Entity that did NOT clear the deterministic auto-link gate — an Admin confirms one, or
+/// dismisses the lot. One row per Entity (`entityId @unique`): a later scan overwrites `candidates`
+/// rather than stacking rows, and the row is deleted the moment an Admin acts. `candidates` is a
+/// JSON array of `{ qid, label, description, score, reasons[] }` ordered best-first — the same
+/// "computed fresh, no durable per-candidate identity" posture as the EntityAlias candidate pairs.
+model EntityWikidataSuggestion {
+  id         String   @id @default(cuid())
+  entityId   String   @unique
+  entity     Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  candidates Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// A Wikidata Q-id an Admin has decided is NOT this Entity (ticket 93) — permanent, mirrors
+/// `EntityAliasRejection`'s REJECTED-permanence semantics: the scan filters these out of every
+/// future candidate set. Dismissing a whole suggestion writes one row here per candidate it showed,
+/// so an identical candidate set never comes back while a genuinely new candidate still can.
+model EntityWikidataCandidateRejection {
+  id         String   @id @default(cuid())
+  entityId   String
+  entity     Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  qid        String
+  rejectedBy String
+  createdAt  DateTime @default(now())
+
+  @@unique([entityId, qid])
+  @@index([entityId])
 }
 
 /// An Entity's image, fetched automatically from an external provider once an Admin links

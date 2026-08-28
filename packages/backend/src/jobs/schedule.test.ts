@@ -13,6 +13,8 @@ vi.mock('./queueClient.js', () => ({
 import { JobName } from './jobDefinitions.js'
 import {
   ensureScheduledJobs,
+  ENTITY_WIKIDATA_SCAN_CRON,
+  ENTITY_WIKIDATA_SCAN_SCHEDULE_KEY,
   HOMEPAGE_ENTITY_STATS_CRON,
   HOMEPAGE_ENTITY_STATS_SCHEDULE_KEY,
 } from './schedule.js'
@@ -46,6 +48,27 @@ describe('ensureScheduledJobs', () => {
         singletonKey: HOMEPAGE_ENTITY_STATS_SCHEDULE_KEY,
         singletonSeconds: 60 * 60,
       }
+    )
+  })
+
+  it('registers the entity → Wikidata scan cron (no immediate send — it makes external calls)', async () => {
+    await ensureScheduledJobs()
+
+    expect(mockSchedule).toHaveBeenCalledWith(
+      JobName.EntityWikidataScan,
+      ENTITY_WIKIDATA_SCAN_CRON,
+      {},
+      {
+        key: ENTITY_WIKIDATA_SCAN_SCHEDULE_KEY,
+        singletonKey: ENTITY_WIKIDATA_SCAN_SCHEDULE_KEY,
+        singletonSeconds: 60 * 60,
+        tz: 'Europe/Prague',
+      }
+    )
+    expect(mockSend).not.toHaveBeenCalledWith(
+      JobName.EntityWikidataScan,
+      expect.anything(),
+      expect.anything()
     )
   })
 })

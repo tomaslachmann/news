@@ -38,6 +38,7 @@ export function AdminChrome({ children }: { children: React.ReactNode }) {
                 <NavLink to="/new-analysis">Nová analýza</NavLink>
                 <NavLink to={ADMIN_HOME_PATH}>Kontrola sběru</NavLink>
                 <NavLink to="/admin/entities">Entity / Wikidata</NavLink>
+                <NavLink to="/admin/entity-wikidata-suggestions">Návrhy Wikidat</NavLink>
                 <NavLink to="/admin/entity-aliases">Sloučení entit</NavLink>
                 <NavLink to="/admin/users">Uživatelé</NavLink>
               </>

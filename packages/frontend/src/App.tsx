@@ -17,6 +17,7 @@ import HistoryPage from './pages/HistoryPage'
 import LoginPage from './pages/LoginPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminEntityWikidataPage from './pages/AdminEntityWikidataPage'
+import AdminEntityWikidataSuggestionsPage from './pages/AdminEntityWikidataSuggestionsPage'
 import EntityAliasesPage from './pages/EntityAliasesPage'
 import IngestionReviewPage from './pages/IngestionReviewPage'
 import StyleguidePage from './pages/StyleguidePage'
@@ -110,6 +111,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <EntityAliasesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/entity-wikidata-suggestions"
+          element={
+            <ProtectedRoute>
+              <AdminEntityWikidataSuggestionsPage />
             </ProtectedRoute>
           }
         />

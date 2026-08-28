@@ -9,13 +9,19 @@ import { runClaimSeriesJob } from './jobs/claimSeriesJob.js'
 import { runThreadNotifyJob } from './jobs/threadNotifyJob.js'
 import { runEntityImageEnrichJob } from './jobs/entityImageEnrichJob.js'
 import { runHomepageEntityStatsJob } from './jobs/homepageEntityStatsJob.js'
+import { runEntityWikidataScanJob } from './jobs/entityWikidataScanJob.js'
+import { enqueueJob } from './jobs/enqueue.js'
 import { ensureScheduledJobs } from './jobs/schedule.js'
 import { createLogger } from './logger.js'
+import { recordAdminActionSafe } from './repositories/adminActionLog.js'
 import * as analysisRepo from './repositories/analysis.js'
 import * as coverageRepo from './repositories/coverage.js'
 import * as entityRepo from './repositories/entity.js'
 import * as entityAliasRepo from './repositories/entityAlias.js'
+import * as entityWikidataSuggestionRepo from './repositories/entityWikidataSuggestion.js'
 import * as entityImageRepo from './repositories/entityImage.js'
+import * as wikidataSearchClient from './services/wikidataSearchClient.js'
+import { reconcile as reconcileWikidata } from './services/wikidataReconcileClient.js'
 import * as narrativeImageRepo from './repositories/narrativeImage.js'
 import * as storyRelationRepo from './repositories/storyRelation.js'
 import * as synthesisResultRepo from './repositories/synthesisResult.js'
@@ -132,11 +138,32 @@ const start = async () => {
       registerJobWorker(JobName.HomepageEntityStatsRefresh, (payload) =>
         runHomepageEntityStatsJob(payload, createLogger(JobName.HomepageEntityStatsRefresh))
       ),
+      registerJobWorker(JobName.EntityWikidataScan, (payload) =>
+        runEntityWikidataScanJob(
+          payload,
+          {
+            findUnlinkedEntitiesForScan: entityWikidataSuggestionRepo.findUnlinkedEntitiesForScan,
+            countUnlinkedEntitiesForScan: entityWikidataSuggestionRepo.countUnlinkedEntitiesForScan,
+            findRejectedQidsByEntity: entityWikidataSuggestionRepo.findRejectedQidsByEntity,
+            upsertSuggestion: entityWikidataSuggestionRepo.upsertSuggestion,
+            deleteSuggestion: entityWikidataSuggestionRepo.deleteSuggestion,
+            setEntityWikidataId: entityRepo.setEntityWikidataId,
+            recordAdminAction: recordAdminActionSafe,
+            enqueueImageEnrich: (entityId) =>
+              enqueueJob(JobName.EntityImageEnrich, { entityId }).then(() => {}),
+            resolveByCswikiTitle: wikidataSearchClient.resolveByCswikiTitle,
+            searchTypedCandidates: wikidataSearchClient.searchTypedCandidates,
+            fetchItemDetails: wikidataSearchClient.fetchItemDetails,
+            reconcile: reconcileWikidata,
+          },
+          createLogger(JobName.EntityWikidataScan)
+        )
+      ),
     ])
     console.log(
       'Worker started; entity.extract, narrative.generate, thread.recompute, ' +
         'thread.synthesizeOpenQuestions, thread.trackClaimSeries, thread.notifySubscribers, ' +
-        'entity.image.enrich, and homepage.entity-stats.refresh handlers registered.'
+        'entity.image.enrich, homepage.entity-stats.refresh, and entity.wikidata.scan handlers registered.'
     )
   } catch (err) {
     console.error(err)
