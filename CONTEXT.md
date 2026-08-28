@@ -137,6 +137,9 @@ The AI model used for the cross-Coverage Synthesis pass. Configurable via the `S
 ## Entity Model
 The AI model used for the Story-scoped entity/entity-relation extraction pass. Configurable via the `ENTITY_MODEL` environment variable (ticket 11); defaults to the same model as Extraction Model unless set.
 
+## Entity page
+The reader-facing `/entity/:key` wiki surface (tickets 42/43, redesigned in ticket 90). Two clearly separated registers: an **external-context** block (the Wikidata one-line description as the hero dek, the Czech Wikipedia intro extract in a fenced, labelled "Kontext z Wikipedie" box, the Wikimedia photo — all only ever present for an Admin-linked entity, all visibly attributed as *not* this tool's reporting, ADR 0041), and the **tool's own aggregation** over its COMPLETE-Analysis corpus (every mentioning Article, every asserted entity-relation with its source, and stats: article/relation counts, mention span, a by-month mention timeline, the entities most often co-mentioned). Plain indexed Postgres, no LLM. Never adjudicates; the external prose is context, not a claim (ADR 0012).
+
 ## User
 A person with credentials (email + bcrypt-hashed password) and a Role, stored in the database. Users authenticate via username/password and receive a JWT in an httpOnly cookie.
 
