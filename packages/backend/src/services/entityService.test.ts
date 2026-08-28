@@ -14,6 +14,9 @@ const ENTITY = {
   type: 'PERSON' as const,
   storyCount: 4,
   wikidataId: 'Q108371',
+  wikidataDescription: null,
+  wikipediaExtract: null,
+  wikipediaUrl: null,
 }
 
 describe('searchEntities', () => {

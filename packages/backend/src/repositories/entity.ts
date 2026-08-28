@@ -35,6 +35,11 @@ export interface EntityRecord {
   type: EntityType
   storyCount: number
   wikidataId: string | null
+  /** Ticket 90 — external descriptive context, all null until an Admin links `wikidataId` and the
+   *  `entity.image.enrich` job has run. */
+  wikidataDescription: string | null
+  wikipediaExtract: string | null
+  wikipediaUrl: string | null
 }
 
 export interface EntityRelationForScoring {
@@ -250,9 +255,32 @@ export async function setEntityWikidataId(id: string, wikidataId: string): Promi
 
 /** Clears a previously-confirmed Wikidata link (ticket 41) — the Entity's fetched `EntityImage`
  *  rows, if any, are left in place; a wrong or stale image needs direct DB intervention, same
- *  "not scoped in this wave" posture as re-fetch (docs/spec-entity-resolution.md's Out of Scope). */
+ *  "not scoped in this wave" posture as re-fetch (docs/spec-entity-resolution.md's Out of Scope).
+ *  The external descriptive context (ticket 90) is cleared here, though — unlike an image, stale
+ *  encyclopedic prose next to live coverage is actively misleading, and it's cheap to refetch on
+ *  a re-link. */
 export async function clearEntityWikidataId(id: string): Promise<void> {
-  await prisma.entity.update({ where: { id }, data: { wikidataId: null } })
+  await prisma.entity.update({
+    where: { id },
+    data: { wikidataId: null, wikidataDescription: null, wikipediaExtract: null, wikipediaUrl: null },
+  })
+}
+
+/** Persists the external descriptive context the `entity.image.enrich` job fetched (ticket 90).
+ *  A partial write is fine and expected — an entity with a Wikidata description but no Czech
+ *  Wikipedia page gets `{ description, extract: null, url: null }`. */
+export async function updateEntityWikidataContext(
+  id: string,
+  context: { description: string | null; wikipediaExtract: string | null; wikipediaUrl: string | null }
+): Promise<void> {
+  await prisma.entity.update({
+    where: { id },
+    data: {
+      wikidataDescription: context.description,
+      wikipediaExtract: context.wikipediaExtract,
+      wikipediaUrl: context.wikipediaUrl,
+    },
+  })
 }
 
 /** Total Story count — the corpus size storyRelationScoring.ts's IDF weighting needs to know how

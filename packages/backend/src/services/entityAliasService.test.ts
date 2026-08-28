@@ -23,6 +23,9 @@ const ENTITY_A = {
   type: 'COUNTRY' as const,
   storyCount: 5,
   wikidataId: null,
+  wikidataDescription: null,
+  wikipediaExtract: null,
+  wikipediaUrl: null,
 }
 const ENTITY_B = {
   id: 'e-b',
@@ -31,6 +34,9 @@ const ENTITY_B = {
   type: 'COUNTRY' as const,
   storyCount: 3,
   wikidataId: null,
+  wikidataDescription: null,
+  wikipediaExtract: null,
+  wikipediaUrl: null,
 }
 
 describe('getEntityAliasCandidates', () => {

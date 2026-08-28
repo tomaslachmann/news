@@ -124,6 +124,7 @@ const start = async () => {
             findEntityById: entityRepo.findEntityById,
             findEntityImageForEntity: entityImageRepo.findEntityImageForEntity,
             createEntityImage: entityImageRepo.createEntityImage,
+            updateEntityWikidataContext: entityRepo.updateEntityWikidataContext,
           },
           createLogger(JobName.EntityImageEnrich)
         )

@@ -217,6 +217,16 @@ model Entity {
   /// automated/unconfirmed match (ADR 0022's entity-resolution-avoidance reasoning applies here
   /// too — see docs/spec-entity-resolution.md).
   wikidataId    String?
+  /// Ticket 90 — external descriptive context for the entity wiki page, all keyed off
+  /// `wikidataId` and therefore null until an Admin links one. `wikidataDescription` is Wikidata's
+  /// own one-line label (persisted from the search result the Admin picked, ticket 41);
+  /// `wikipediaExtract`/`wikipediaUrl` are the Czech Wikipedia intro paragraph and its page URL,
+  /// fetched best-effort by the `entity.enrich` job (ADR 0040 scope: Wikimedia gets the honest
+  /// UA). Shown on the entity page explicitly attributed as external, never as this tool's own
+  /// reporting (ADR 0012, docs/spec-entity-wiki.md User Story 4). No backfill (ADR 0021).
+  wikidataDescription String?
+  wikipediaExtract    String?
+  wikipediaUrl        String?
   /// Materialized count of Stories this Entity is attached to via StoryEntity — maintained by a
   /// transactional increment/decrement alongside each StoryEntity write, not a periodic
   /// correction job (no code path deletes a Story/StoryEntity today, so there is no drift to
