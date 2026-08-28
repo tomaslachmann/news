@@ -19,6 +19,56 @@
   color: var(--ink);
 }
 
+/* ticket 87 — post-approval "these outlets were dropped by the quality gate" banner. Amber
+   left-rule (--mid), not --bad: nothing failed, the gate worked as designed. Dismissible; only
+   ever shown when navigation carried a non-empty exclusion list. */
+.xnote {
+  position: relative;
+  margin-block: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5) var(--sp-4) var(--sp-4);
+  border: var(--bw-hair) solid var(--line);
+  border-left: var(--bw-rule) solid var(--mid);
+  background: color-mix(in oklab, var(--surface-2) 60%, transparent);
+}
+.xnote__x {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-3);
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--ink-3);
+}
+.xnote__x:hover {
+  color: var(--ink);
+}
+.xnote__h {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--ink);
+}
+.xnote__d {
+  margin-top: var(--sp-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.xnote__l {
+  margin-top: var(--sp-3);
+  display: grid;
+  gap: var(--sp-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+}
+.xnote__r {
+  color: var(--ink-3);
+}
+
 .steps {
   display: flex;
   flex-wrap: wrap;

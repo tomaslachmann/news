@@ -64,7 +64,12 @@ function DraftItem({
     <article className={`qitem${thin ? ' qitem--flag' : ''}`}>
       <div className="qitem__k">
         <span>Koncept</span>
-        <span className="pill">{draft.coverageCount} zdrojů</span>
+        <span
+          className="pill"
+          title="Počet zdrojů před kontrolou kvality. Při schválení se zdroje, které neprošly ověřením shody s událostí, vyřadí — na další obrazovce uvidíte které a proč."
+        >
+          {draft.coverageCount} zdrojů
+        </span>
         {thin && <span className="chip chip--mid">málo zdrojů</span>}
       </div>
       <h3 className="qitem__t">{draft.seedHeadline}</h3>
@@ -124,7 +129,12 @@ function DraftsSection() {
               isApproving={approveMutation.isPending}
               isRejecting={rejectMutation.isPending}
               onApprove={() =>
-                approveMutation.mutate(draft.id, { onSuccess: () => void navigate(`/review/${draft.id}`) })
+                approveMutation.mutate(draft.id, {
+                  onSuccess: (result) =>
+                    void navigate(`/review/${draft.id}`, {
+                      state: { draftExclusions: result.excluded },
+                    }),
+                })
               }
               onReject={() => rejectMutation.mutate(draft.id)}
             />

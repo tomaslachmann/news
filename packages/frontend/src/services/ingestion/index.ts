@@ -3,10 +3,19 @@ import type {
   AnalysisListItem,
   PendingStoryRelationItem,
   Page,
+  DraftApprovalResult,
+  DraftExclusion,
 } from '@news-triangulator/shared'
 import { cursorQueryParam } from '../pagination'
 
-export type { PendingAdditionItem, AnalysisListItem, PendingStoryRelationItem, Page }
+export type {
+  PendingAdditionItem,
+  AnalysisListItem,
+  PendingStoryRelationItem,
+  Page,
+  DraftApprovalResult,
+  DraftExclusion,
+}
 
 async function throwApiError(res: Response, fallback: string): Promise<never> {
   const body = (await res.json().catch(() => ({}))) as { error?: string }
@@ -33,13 +42,15 @@ export async function fetchVisibleDrafts(cursor?: string): Promise<Page<Analysis
   return res.json() as Promise<Page<AnalysisListItem>>
 }
 
-export async function approveDraft(analysisId: string): Promise<void> {
+export async function approveDraft(analysisId: string): Promise<DraftApprovalResult> {
   const res = await fetch(`/api/admin/ingestion/drafts/${analysisId}/approve`, {
     method: 'PATCH',
     credentials: 'include',
   })
 
   if (!res.ok) return throwApiError(res, 'Nepodařilo se schválit koncept')
+
+  return res.json() as Promise<DraftApprovalResult>
 }
 
 export async function rejectDraft(analysisId: string): Promise<void> {
