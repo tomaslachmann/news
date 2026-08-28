@@ -38,7 +38,7 @@ in `confirmedIds` — the gap is purely that the UI never shows them.
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 ### Backend
 
