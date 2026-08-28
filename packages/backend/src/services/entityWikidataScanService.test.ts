@@ -88,6 +88,20 @@ describe('runEntityWikidataScan — routes to the queue instead of auto-linking'
     expect(result).toMatchObject({ autoLinked: 0, queued: 1 })
   })
 
+  it('logs a per-entity line naming why each queued entity did not auto-link', async () => {
+    const deps = makeDeps({
+      resolveByCswikiTitle: vi.fn().mockResolvedValue(detail({ hasCswikiSitelink: false })),
+    })
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+
+    await runEntityWikidataScan(deps, log as never)
+
+    expect(log.info).toHaveBeenCalledWith(
+      { entityKey: 'person:petr-fiala', candidateCount: 1, reason: 'položka nemá článek na cs.wikipedia' },
+      'entity.wikidata.scan: queued for review'
+    )
+  })
+
   it('queues when reconciliation is unavailable (429 / timeout)', async () => {
     const deps = makeDeps({
       reconcile: vi.fn().mockRejectedValue(new ReconcileUnavailableError('HTTP 429')),

@@ -58,7 +58,9 @@ async function main() {
   console.log('Done:', result)
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+main()
+  .then(() => process.exit(0)) // the enqueue path opens a pg-boss pool that would keep the process alive
+  .catch((err) => {
+    console.error(err)
+    process.exit(1)
+  })
