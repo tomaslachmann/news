@@ -5,6 +5,8 @@ describe('looksLikeEntityKey', () => {
   it('accepts a real type:slug key', () => {
     expect(looksLikeEntityKey('person:petr-fiala')).toBe(true)
     expect(looksLikeEntityKey('  country:czechia  ')).toBe(true)
+    // A canonical name in a non-Latin script keeps its script in the slug (deriveEntityKey).
+    expect(looksLikeEntityKey('country:россия')).toBe(true)
   })
 
   it('rejects plain names and malformed keys', () => {

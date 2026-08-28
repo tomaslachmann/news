@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { EntitySearchResultItem } from '@news-triangulator/shared'
 import { useEntitySearch } from '@/services/entities/hooks'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
@@ -12,19 +12,29 @@ const MIN_QUERY_LENGTH = 2
 /** Type-ahead entity picker (ticket 50) — replaces free-text `Entity.key` entry on
  *  `/admin/entities`. Searches by name (`GET /api/entities?q=`, `pg_trgm`, public), keyboard-
  *  navigable, and still lets an Admin who knows the exact `type:slug` key paste and pick it
- *  directly. Calls `onPick` with the chosen entity (or a synthetic item for a pasted raw key). */
+ *  directly.
+ *
+ *  `onPick` gets the resolved key plus the full search result when the pick came from the
+ *  dropdown, or `null` for a pasted raw key (where the type/link status isn't known — the caller
+ *  must not render fabricated detail for that case). */
 export function EntityAutocomplete({
   onPick,
   autoFocus,
 }: {
-  onPick: (entity: EntitySearchResultItem) => void
+  onPick: (key: string, entity: EntitySearchResultItem | null) => void
   autoFocus?: boolean
 }) {
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
-  const listId = useId()
+  const baseId = useId()
+  const listId = `${baseId}-list`
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    return () => {
+      if (blurTimer.current) clearTimeout(blurTimer.current)
+    }
+  }, [])
 
   const debounced = useDebouncedValue(text.trim(), DEBOUNCE_MS)
   const { data, isFetching } = useEntitySearch(debounced.length >= MIN_QUERY_LENGTH ? debounced : '')
@@ -32,15 +42,14 @@ export function EntityAutocomplete({
   const rawKeyEntry = looksLikeEntityKey(text)
 
   const choose = (entity: EntitySearchResultItem) => {
-    onPick(entity)
+    onPick(entity.key, entity)
     setText(entity.canonicalName)
     setOpen(false)
     setActive(-1)
   }
 
   const chooseRawKey = () => {
-    const key = text.trim()
-    onPick({ key, canonicalName: key, type: 'PERSON', storyCount: 0, wikidataId: null })
+    onPick(text.trim(), null)
     setOpen(false)
     setActive(-1)
   }
@@ -65,6 +74,7 @@ export function EntityAutocomplete({
   }
 
   const showDropdown = open && (results.length > 0 || (debounced.length >= MIN_QUERY_LENGTH && !isFetching))
+  const activeOptionId = active >= 0 && results[active] ? `${baseId}-opt-${active}` : undefined
 
   return (
     <div className="eac">
@@ -75,6 +85,7 @@ export function EntityAutocomplete({
         aria-expanded={showDropdown}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-activedescendant={activeOptionId}
         autoComplete="off"
         autoFocus={autoFocus}
         value={text}
@@ -97,6 +108,7 @@ export function EntityAutocomplete({
           {results.map((entity, i) => (
             <li
               key={entity.key}
+              id={`${baseId}-opt-${i}`}
               role="option"
               aria-selected={i === active}
               className={`eac__opt${i === active ? ' is-active' : ''}`}

@@ -36,7 +36,9 @@ function CandidateRow({
  *  entity by name and its key is resolved behind the scenes; pasting a known `type:slug` key still
  *  works. */
 export default function AdminEntityWikidataPage() {
-  const [entity, setEntity] = useState<EntitySearchResultItem | null>(null)
+  // `key` is always set; `entity` is the full search result for a dropdown pick, null for a
+  // pasted raw key (whose type/link status we don't know and must not fabricate).
+  const [pick, setPick] = useState<{ key: string; entity: EntitySearchResultItem | null } | null>(null)
   const [query, setQuery] = useState('')
   const [linkedQid, setLinkedQid] = useState<string | null>(null)
 
@@ -44,11 +46,11 @@ export default function AdminEntityWikidataPage() {
   const linkMutation = useLinkEntityWikidata()
   const unlinkMutation = useUnlinkEntityWikidata()
 
-  const entityKey = entity?.key ?? ''
+  const entityKey = pick?.key ?? ''
 
-  const handlePick = (picked: EntitySearchResultItem) => {
-    setEntity(picked)
-    setQuery((q) => q || picked.canonicalName)
+  const handlePick = (key: string, entity: EntitySearchResultItem | null) => {
+    setPick({ key, entity })
+    setQuery((q) => q || entity?.canonicalName || key)
     setLinkedQid(null)
     searchMutation.reset()
     linkMutation.reset()
@@ -74,7 +76,7 @@ export default function AdminEntityWikidataPage() {
     unlinkMutation.mutate(entityKey.trim(), { onSuccess: () => setLinkedQid(null) })
   }
 
-  const entityName = entity?.canonicalName ?? entityKey
+  const entityName = pick?.entity?.canonicalName ?? entityKey
 
   const candidates = searchMutation.data ?? []
 
@@ -96,11 +98,17 @@ export default function AdminEntityWikidataPage() {
                 Entita
               </label>
               <EntityAutocomplete onPick={handlePick} />
-              {entity && (
+              {pick && (
                 <p className="note" style={{ marginTop: 'var(--sp-2)' }}>
-                  Vybráno: <b>{entity.canonicalName}</b> · {ENTITY_TYPE_LABELS[entity.type]} ·{' '}
-                  <span className="u-mono">{entity.key}</span>
-                  {entity.wikidataId && <> · již propojeno s {entity.wikidataId}</>}
+                  Vybráno: <b>{pick.entity?.canonicalName ?? pick.key}</b>
+                  {pick.entity && (
+                    <>
+                      {' '}
+                      · {ENTITY_TYPE_LABELS[pick.entity.type]}
+                      {pick.entity.wikidataId && <> · již propojeno s {pick.entity.wikidataId}</>}
+                    </>
+                  )}{' '}
+                  · <span className="u-mono">{pick.key}</span>
                 </p>
               )}
             </div>
