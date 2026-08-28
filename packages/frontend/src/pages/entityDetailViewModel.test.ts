@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { EntityDetail } from '@/services/entities'
-import {
-  entityInfoboxRows,
-  formatMentionSpan,
-  hasWikiContext,
-  timelineChartData,
-} from './entityDetailViewModel'
+import { entityInfoboxRows, formatMentionSpan, timelineChartData } from './entityDetailViewModel'
 
 function makeDetail(overrides: Partial<EntityDetail> = {}): EntityDetail {
   return {
@@ -85,13 +80,5 @@ describe('timelineChartData', () => {
     expect(data[0].count).toBe(1)
     expect(data[1].count).toBe(3)
     expect(data[0].label).toMatch(/2026/)
-  })
-})
-
-describe('hasWikiContext', () => {
-  it('is true when either the Wikidata description or the Wikipedia extract is present', () => {
-    expect(hasWikiContext(makeDetail())).toBe(false)
-    expect(hasWikiContext(makeDetail({ wikidataDescription: 'český politik' }))).toBe(true)
-    expect(hasWikiContext(makeDetail({ wikipediaExtract: 'Petr Fiala je…' }))).toBe(true)
   })
 })

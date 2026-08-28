@@ -266,13 +266,19 @@ export async function clearEntityWikidataId(id: string): Promise<void> {
   })
 }
 
+/** What `updateEntityWikidataContext` persists — structurally the `WikidataContext` the
+ *  `wikipediaClient` returns, re-declared here so the repository doesn't import from the service
+ *  layer (ADR 0010's one-directional dependency). */
+export interface EntityWikidataContext {
+  description: string | null
+  wikipediaExtract: string | null
+  wikipediaUrl: string | null
+}
+
 /** Persists the external descriptive context the `entity.image.enrich` job fetched (ticket 90).
  *  A partial write is fine and expected — an entity with a Wikidata description but no Czech
- *  Wikipedia page gets `{ description, extract: null, url: null }`. */
-export async function updateEntityWikidataContext(
-  id: string,
-  context: { description: string | null; wikipediaExtract: string | null; wikipediaUrl: string | null }
-): Promise<void> {
+ *  Wikipedia page gets `{ description, wikipediaExtract: null, wikipediaUrl: null }`. */
+export async function updateEntityWikidataContext(id: string, context: EntityWikidataContext): Promise<void> {
   await prisma.entity.update({
     where: { id },
     data: {
@@ -601,20 +607,30 @@ export interface MentionMonthRow {
   count: number
 }
 
+// A month-bucketed series is inherently small (one row per calendar month the entity was
+// mentioned in), but the chart shouldn't grow without limit either — cap it at the most recent
+// stretch so a decade-old, always-in-the-news entity still gets a readable chart (spec User
+// Story 10). The last N monthly buckets, re-sorted oldest-first for the chart.
+const MENTION_TIMELINE_MONTHS = 36
+
 /** COMPLETE-Event mentions of `entityKey` bucketed by `Analysis.createdAt` month (`YYYY-MM`),
- *  oldest first. Sparse — a month with no mentions is simply absent. Naturally bounded (one row
- *  per active month). */
+ *  oldest first, at most the last `MENTION_TIMELINE_MONTHS` active months. Sparse — a month with
+ *  no mentions is simply absent. */
 export async function findMentionTimeline(entityKey: string): Promise<MentionMonthRow[]> {
   const rows = await prisma.$queryRaw<{ month: string; count: bigint }[]>`
-    SELECT to_char(date_trunc('month', a."createdAt"), 'YYYY-MM') AS month,
-           count(*)::bigint AS count
-    FROM "StoryEntity" se
-    JOIN "Entity" e ON e.id = se."entityId"
-    JOIN "Story" s ON s.id = se."storyId"
-    JOIN "Analysis" a ON a."storyId" = s.id
-    WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
-    GROUP BY 1
-    ORDER BY 1 ASC
+    SELECT month, count FROM (
+      SELECT to_char(date_trunc('month', a."createdAt"), 'YYYY-MM') AS month,
+             count(*)::bigint AS count
+      FROM "StoryEntity" se
+      JOIN "Entity" e ON e.id = se."entityId"
+      JOIN "Story" s ON s.id = se."storyId"
+      JOIN "Analysis" a ON a."storyId" = s.id
+      WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
+      GROUP BY 1
+      ORDER BY 1 DESC
+      LIMIT ${MENTION_TIMELINE_MONTHS}
+    ) recent
+    ORDER BY month ASC
   `
   return rows.map((r) => ({ month: r.month, count: Number(r.count) }))
 }

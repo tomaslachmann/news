@@ -112,5 +112,6 @@ doesn't), no description, no stats. It reads like a debug view, not a wiki entry
 - Route-level parameter-validation tests: the entity routes have no existing test harness and
   take only a path `:key` + optional `?cursor` (already covered) — no new route test added.
 - Visually verified against the live dev app (Haakon VII. entity page): wiki layout renders,
-  degrades gracefully (the deployed backend predates the enrichment, so no photo/Wikipedia text
-  yet — those light up once it ships and the enrich job re-runs).
+  degrades gracefully. The photo/Wikipedia text are absent for entities linked before this ships
+  — the enrich job only runs on `linkEntityWikidata`, and nothing re-enqueues it for the existing
+  corpus (ADR 0021 no-backfill). A re-link, or a one-off re-enqueue, enriches them.

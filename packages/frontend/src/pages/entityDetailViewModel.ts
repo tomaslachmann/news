@@ -70,8 +70,3 @@ export function timelineChartData(mentionTimeline: EntityDetail['mentionTimeline
     return { label, count }
   })
 }
-
-/** Is there any external encyclopedic text to show a lead block for? */
-export function hasWikiContext(detail: EntityDetail): boolean {
-  return Boolean(detail.wikidataDescription || detail.wikipediaExtract)
-}

@@ -631,8 +631,10 @@ export interface EntityDetail {
    *  section either way (docs/spec-entity-wiki.md). */
   wikidataId: string | null
   /** External descriptive context (ticket 90), all keyed off `wikidataId` — null until an Admin
-   *  links Wikidata and the enrich job runs. Shown on the page explicitly attributed as external
-   *  ("Z Wikipedie / Wikidat"), never as this tool's own reporting (ADR 0012, spec User Story 4). */
+   *  links Wikidata and the enrich job runs. `wikidataDescription` renders as the hero dek;
+   *  `wikipediaExtract`/`wikipediaUrl` render in a fenced "Kontext z Wikipedie" block labelled
+   *  "ne zpravodajství tohoto nástroje", never as this tool's own reporting (ADR 0012 / 0041,
+   *  spec User Story 4). */
   wikidataDescription: string | null
   wikipediaExtract: string | null
   wikipediaUrl: string | null

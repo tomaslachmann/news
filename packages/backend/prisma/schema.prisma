@@ -221,9 +221,9 @@ model Entity {
   /// `wikidataId` and therefore null until an Admin links one. `wikidataDescription` is Wikidata's
   /// own one-line label (persisted from the search result the Admin picked, ticket 41);
   /// `wikipediaExtract`/`wikipediaUrl` are the Czech Wikipedia intro paragraph and its page URL,
-  /// fetched best-effort by the `entity.enrich` job (ADR 0040 scope: Wikimedia gets the honest
-  /// UA). Shown on the entity page explicitly attributed as external, never as this tool's own
-  /// reporting (ADR 0012, docs/spec-entity-wiki.md User Story 4). No backfill (ADR 0021).
+  /// fetched best-effort by the `entity.image.enrich` job (ADR 0040 scope: Wikimedia gets the
+  /// honest UA). Shown on the entity page explicitly attributed as external, never as this tool's
+  /// own reporting (ADR 0012, docs/spec-entity-wiki.md User Story 4, ADR 0041). No backfill (ADR 0021).
   wikidataDescription String?
   wikipediaExtract    String?
   wikipediaUrl        String?

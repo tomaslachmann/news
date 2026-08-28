@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify'
-import type { EntityRecord } from '../repositories/entity.js'
+import type { EntityRecord, EntityWikidataContext } from '../repositories/entity.js'
 import type { NewEntityImage } from '../repositories/entityImage.js'
 import { findWikidataEntityImage } from '../services/wikimediaImageClient.js'
 import { findWikidataContext } from '../services/wikipediaClient.js'
@@ -9,10 +9,7 @@ export interface EntityImageEnrichJobDeps {
   findEntityById: (id: string) => Promise<EntityRecord | null>
   findEntityImageForEntity: (entityId: string) => Promise<{ id: string } | null>
   createEntityImage: (input: NewEntityImage) => Promise<void>
-  updateEntityWikidataContext: (
-    entityId: string,
-    context: { description: string | null; wikipediaExtract: string | null; wikipediaUrl: string | null }
-  ) => Promise<void>
+  updateEntityWikidataContext: (entityId: string, context: EntityWikidataContext) => Promise<void>
 }
 
 /** Handler for the `entity.image.enrich` job (ticket 41 / ADR 0034; extended in ticket 90 — the
@@ -88,6 +85,11 @@ async function enrichContext(
   deps: EntityImageEnrichJobDeps,
   log?: FastifyBaseLogger
 ): Promise<void> {
+  // Proxy check, not an artifact check like enrichImage's: if the first run got a description but
+  // Wikipedia was transiently down (the summary call is swallowed, see findWikidataContext), a
+  // redelivery skips here and the extract is never backfilled. Accepted under best-effort framing
+  // + ADR 0021's no-backfill posture — a description is the common case and losing an extract is
+  // low-stakes; not worth an "attempted" marker column.
   if (entity.wikidataDescription || entity.wikipediaExtract) {
     log?.info(
       { entityId: entity.id },

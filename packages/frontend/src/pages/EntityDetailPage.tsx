@@ -6,7 +6,7 @@ import { LoadMoreButton } from '@/components/LoadMoreButton'
 import { formatDate } from '@/lib/formatDate'
 import { ENTITY_TYPE_LABELS, ENTITY_RELATION_TYPE_LABELS } from '@/lib/entityTypeLabels'
 import { articlePath } from '@/lib/analysisRoutes'
-import { entityInfoboxRows, hasWikiContext, timelineChartData } from './entityDetailViewModel'
+import { entityInfoboxRows, timelineChartData } from './entityDetailViewModel'
 import './EntityDetailPage.css'
 
 export default function EntityDetailPage() {
@@ -43,8 +43,6 @@ export default function EntityDetailPage() {
     )
   }
 
-  const leadText = entity.wikipediaExtract ?? entity.wikidataDescription
-
   return (
     <div className="page-shell">
       <nav className="ewcrumb" aria-label="Cesta">
@@ -61,10 +59,10 @@ export default function EntityDetailPage() {
 
       <div className="layout">
         <div className="ewmain">
-          {hasWikiContext(entity) && leadText && (
+          {entity.wikipediaExtract && (
             <aside className="ewlead">
               <p className="ewlead__k">Kontext z Wikipedie</p>
-              <p className="ewlead__p">{leadText}</p>
+              <p className="ewlead__p">{entity.wikipediaExtract}</p>
               <p className="ewlead__n">
                 Externí encyklopedický text — ne zpravodajství tohoto nástroje.
                 {entity.wikipediaUrl && (

@@ -64,14 +64,14 @@ function toEntityMentionMonth(row: MentionMonthRow): EntityMentionMonth {
   return { month: row.month, count: row.count }
 }
 
-/** Options bag rather than positional params — this field set has grown once already (ticket 90
- *  over ticket 42) and an options object keeps the next addition additive at the one call site,
- *  same convention as `completeAnalysisWithSynthesis`. */
 function toEntityWikiImage(row: EntityWikiImageRow | null): EntityWikiImage | null {
   if (!row) return null
   return { url: row.imageUrl, author: row.author, license: row.license, sourceUrl: row.sourceUrl }
 }
 
+/** Options bag rather than positional params — this field set has grown once already (ticket 90
+ *  over ticket 42) and an options object keeps the next addition additive at the one call site,
+ *  same convention as `completeAnalysisWithSynthesis`. */
 export interface EntityDetailParts {
   entity: EntityRecord
   imageRow: EntityWikiImageRow | null
