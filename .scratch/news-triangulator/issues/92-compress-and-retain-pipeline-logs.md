@@ -25,7 +25,7 @@ accepted for now, revisited only if real disk usage becomes a problem in practic
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 - [x] Replace the `pino-roll` file transport in `logger.ts` with an in-process
       `rotating-file-stream` (`rfs`) sink: daily rotation, `compress: 'gzip'` on rotated files,
