@@ -20,17 +20,21 @@ export function AdminPagination({
   onPageChange: (page: number) => void
   busy?: boolean
 }) {
-  const tokens = buildPageList(page, pageCount)
+  // `page` can briefly sit past `pageCount` — the last items on the final page were just
+  // approved/rejected and the refetch returned a smaller count, one frame before `useClampPage`
+  // snaps it back. Clamp for display so the range label never reads "41–40 z 40".
+  const shownPage = Math.min(Math.max(page, 1), pageCount)
+  const tokens = buildPageList(shownPage, pageCount)
   return (
     <nav className={`apager${busy ? ' apager--busy' : ''}`} aria-label="Stránkování">
-      <span className="apager__range">{pageRangeLabel(page, pageSize, total)}</span>
+      <span className="apager__range">{pageRangeLabel(shownPage, pageSize, total)}</span>
       {pageCount > 1 && (
         <div className="apager__pages">
           <button
             className="apager__b"
             type="button"
-            onClick={() => onPageChange(page - 1)}
-            disabled={busy || page <= 1}
+            onClick={() => onPageChange(shownPage - 1)}
+            disabled={busy || shownPage <= 1}
             aria-label="Předchozí stránka"
           >
             ‹
@@ -43,11 +47,11 @@ export function AdminPagination({
             ) : (
               <button
                 key={token}
-                className={`apager__b${token === page ? ' is-current' : ''}`}
+                className={`apager__b${token === shownPage ? ' is-current' : ''}`}
                 type="button"
                 onClick={() => onPageChange(token)}
                 disabled={busy}
-                aria-current={token === page ? 'page' : undefined}
+                aria-current={token === shownPage ? 'page' : undefined}
               >
                 {token}
               </button>
@@ -56,8 +60,8 @@ export function AdminPagination({
           <button
             className="apager__b"
             type="button"
-            onClick={() => onPageChange(page + 1)}
-            disabled={busy || page >= pageCount}
+            onClick={() => onPageChange(shownPage + 1)}
+            disabled={busy || shownPage >= pageCount}
             aria-label="Další stránka"
           >
             ›

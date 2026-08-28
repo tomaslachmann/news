@@ -27,8 +27,8 @@ describe('inclusiveEndOfDay', () => {
     expect(inclusiveEndOfDay('')).toBeUndefined()
   })
 
-  it("widens a bare day to that day's last millisecond", () => {
-    expect(inclusiveEndOfDay('2026-01-15')).toBe('2026-01-15T23:59:59.999')
+  it("widens a bare day to that day's last millisecond in UTC", () => {
+    expect(inclusiveEndOfDay('2026-01-15')).toBe('2026-01-15T23:59:59.999Z')
   })
 })
 
