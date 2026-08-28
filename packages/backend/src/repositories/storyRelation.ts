@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import type {
   StoryRelation,
   StoryRelationType,
@@ -118,21 +119,58 @@ export interface PendingReviewRelationRow {
   createdAt: Date
 }
 
+export interface PendingReviewRelationsPageQuery {
+  offset: number
+  limit: number
+  /** Order direction on `createdAt`. Default `desc`. */
+  dir?: 'asc' | 'desc'
+  createdAfter?: Date
+  createdBefore?: Date
+}
+
+function pendingReviewRelationWhere(q: PendingReviewRelationsPageQuery): Prisma.StoryRelationWhereInput {
+  const createdAt: Prisma.DateTimeFilter = {}
+  if (q.createdAfter) createdAt.gte = q.createdAfter
+  if (q.createdBefore) createdAt.lte = q.createdBefore
+  return {
+    status: 'PENDING_REVIEW',
+    ...(q.createdAfter || q.createdBefore ? { createdAt } : {}),
+  }
+}
+
 /** Every `PENDING_REVIEW` StoryRelation (ticket 36's Admin review queue), flattened with both
  *  sides' Analysis id/seedHeadline/headline — everything `resolveDisplayTitle` needs for each
  *  side, computed by the caller (mappers/analysis.ts) rather than here, keeping this repository
  *  Prisma-only. A row whose either side somehow has no Analysis (structurally shouldn't happen —
  *  every Story is created with one in the same transaction, but the schema doesn't guarantee it)
- *  is skipped rather than shown with a broken title. */
-export async function findPendingReviewRelations(): Promise<PendingReviewRelationRow[]> {
-  const rows = await prisma.storyRelation.findMany({
-    where: { status: 'PENDING_REVIEW' },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      fromStory: { include: { analysis: { include: { synthesisResult: { select: { headline: true } } } } } },
-      toStory: { include: { analysis: { include: { synthesisResult: { select: { headline: true } } } } } },
-    },
-  })
+ *  is skipped rather than shown with a broken title.
+ *
+ *  Offset-paginated with a real `total` (ticket 88) — a bounded admin queue; `dir`/date-range are
+ *  optional Admin triage controls. `total` counts the same `where` the page uses: the
+ *  no-Analysis skip above is a structural impossibility, so it can't drift `total` from the
+ *  page's real length in practice (same assumption the pre-ticket-88 code already made). */
+export async function findPendingReviewRelationsPage(
+  q: PendingReviewRelationsPageQuery
+): Promise<{ rows: PendingReviewRelationRow[]; total: number }> {
+  const where = pendingReviewRelationWhere(q)
+  const dir = q.dir ?? 'desc'
+  const [rows, total] = await Promise.all([
+    prisma.storyRelation.findMany({
+      where,
+      orderBy: [{ createdAt: dir }, { id: dir }],
+      skip: q.offset,
+      take: q.limit,
+      include: {
+        fromStory: {
+          include: { analysis: { include: { synthesisResult: { select: { headline: true } } } } },
+        },
+        toStory: {
+          include: { analysis: { include: { synthesisResult: { select: { headline: true } } } } },
+        },
+      },
+    }),
+    prisma.storyRelation.count({ where }),
+  ])
 
   const result: PendingReviewRelationRow[] = []
   for (const r of rows) {
@@ -150,7 +188,7 @@ export async function findPendingReviewRelations(): Promise<PendingReviewRelatio
       createdAt: r.createdAt,
     })
   }
-  return result
+  return { rows: result, total }
 }
 
 export async function findStoryRelationById(id: string): Promise<StoryRelation | null> {
@@ -172,6 +210,13 @@ export async function updateStoryRelationStatusIfCurrently(
     data: { status: toStatus },
   })
   return result.count > 0
+}
+
+/** Backdates/postdates a StoryRelation's createdAt — exists for integration tests that need
+ *  deterministic offset-pagination windows (ticket 88), same convention as analysis.ts's
+ *  `setAnalysisCreatedAtForTesting`. */
+export async function setStoryRelationCreatedAtForTesting(id: string, createdAt: Date): Promise<void> {
+  await prisma.storyRelation.update({ where: { id }, data: { createdAt } })
 }
 
 export interface RawStoryRelationForEvents {

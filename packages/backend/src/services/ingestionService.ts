@@ -4,12 +4,14 @@ import type {
   PendingAdditionItem,
   AnalysisListItem,
   PendingStoryRelationItem,
-  Page,
+  PagedResult,
+  DraftQuery,
+  PendingAdditionQuery,
+  StoryRelationQuery,
   DraftApprovalResult,
   DraftExclusion,
 } from '@news-triangulator/shared'
-import { DEFAULT_PAGE_SIZE } from '@news-triangulator/shared'
-import { fetchPage } from '../pagination.js'
+import { resolveOffsetPage, toPagedResult } from '../pagination.js'
 import { queryRssFeeds } from './rss.js'
 import { generateEmbedding, type EmbeddingResult } from './embeddingClient.js'
 import {
@@ -387,13 +389,18 @@ export async function rejectDraft(analysisId: string, actorId: string): Promise<
 }
 
 export async function listPendingAdditions(
-  cursor: string | undefined,
-  limit: number = DEFAULT_PAGE_SIZE
-): Promise<Page<PendingAdditionItem>> {
-  const { items, nextCursor } = await fetchPage(cursor, limit, (decoded, boundedLimit) =>
-    pendingAdditionRepo.findPendingAdditionsPage(decoded, boundedLimit)
-  )
-  return { items: items.map(toPendingAdditionItem), nextCursor }
+  query: PendingAdditionQuery = {}
+): Promise<PagedResult<PendingAdditionItem>> {
+  const page = resolveOffsetPage(query.page, query.pageSize)
+  const { rows, total } = await pendingAdditionRepo.findPendingAdditionsPage({
+    offset: page.offset,
+    limit: page.pageSize,
+    dir: query.dir,
+    outlet: query.outlet,
+    createdAfter: query.createdAfter,
+    createdBefore: query.createdBefore,
+  })
+  return toPagedResult(rows.map(toPendingAdditionItem), total, page)
 }
 
 /** Real re-triangulation (ticket 45, grilling session 2026-08-21): attaches the flagged Coverage
@@ -556,21 +563,35 @@ export async function rejectPendingAddition(id: string, actorId: string): Promis
  *  background regardless; this only changes what's visible here. Distinct from the general
  *  `/api/analyses` listing (unfiltered, still shows every Draft for a full Admin History audit)
  *  — see ADR 0018. */
-export async function listVisibleDrafts(
-  cursor: string | undefined,
-  limit: number = DEFAULT_PAGE_SIZE
-): Promise<Page<AnalysisListItem>> {
-  const { items, nextCursor } = await fetchPage(cursor, limit, (decoded, boundedLimit) =>
-    analysisRepo.findDraftsPage(MIN_VISIBLE_SOURCE_COUNT, decoded, boundedLimit)
-  )
-  return { items: items.map(toVisibleDraftListItem), nextCursor }
+export async function listVisibleDrafts(query: DraftQuery = {}): Promise<PagedResult<AnalysisListItem>> {
+  const page = resolveOffsetPage(query.page, query.pageSize)
+  const { rows, total } = await analysisRepo.findDraftsPage({
+    minVisibleSourceCount: MIN_VISIBLE_SOURCE_COUNT,
+    offset: page.offset,
+    limit: page.pageSize,
+    sort: query.sort,
+    dir: query.dir,
+    outlet: query.outlet,
+    createdAfter: query.createdAfter,
+    createdBefore: query.createdBefore,
+  })
+  return toPagedResult(rows.map(toVisibleDraftListItem), total, page)
 }
 
 /** LOW-confidence StoryRelations (ticket 35) awaiting Admin review — the Event Graph's equivalent
  *  of the Draft review queue above, on the same Admin surface (ticket 36). */
-export async function listPendingStoryRelations(): Promise<PendingStoryRelationItem[]> {
-  const rows = await storyRelationRepo.findPendingReviewRelations()
-  return rows.map(toPendingStoryRelationItem)
+export async function listPendingStoryRelations(
+  query: StoryRelationQuery = {}
+): Promise<PagedResult<PendingStoryRelationItem>> {
+  const page = resolveOffsetPage(query.page, query.pageSize)
+  const { rows, total } = await storyRelationRepo.findPendingReviewRelationsPage({
+    offset: page.offset,
+    limit: page.pageSize,
+    dir: query.dir,
+    createdAfter: query.createdAfter,
+    createdBefore: query.createdBefore,
+  })
+  return toPagedResult(rows.map(toPendingStoryRelationItem), total, page)
 }
 
 export async function approveStoryRelation(

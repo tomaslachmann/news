@@ -773,81 +773,90 @@ describe('rejectDraft', () => {
 describe('listPendingAdditions', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('maps repository rows to PendingAdditionItems', async () => {
-    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue([
-      {
-        id: 'p1',
-        analysisId: 'a1',
-        sourceId: 'src-idnes',
-        title: 'T',
-        articleUrl: 'https://idnes.cz/x',
-        publishedAt: '2026-01-01T00:00:00Z',
-        status: 'PENDING_REVIEW',
-        primaryCategory: null,
-        createdAt: new Date('2026-01-02T00:00:00Z'),
-        analysis: { seedHeadline: 'Original story' },
-        source: { name: 'iDnes' },
-      },
-    ])
+  function makePendingAdditionRow(id: string, overrides: Record<string, unknown> = {}) {
+    return {
+      id,
+      analysisId: 'a1',
+      sourceId: 'src-idnes',
+      title: 'T',
+      articleUrl: `https://idnes.cz/${id}`,
+      publishedAt: '2026-01-01T00:00:00Z',
+      status: 'PENDING_REVIEW' as const,
+      primaryCategory: null,
+      createdAt: new Date('2026-01-02T00:00:00Z'),
+      analysis: { seedHeadline: 'Original story' },
+      source: { name: 'iDnes' },
+      ...overrides,
+    }
+  }
 
-    const result = await listPendingAdditions(undefined)
+  it('maps repository rows to PendingAdditionItems and reports the paged-result shape', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue({
+      rows: [makePendingAdditionRow('p1')],
+      total: 1,
+    })
 
-    expect(pendingAdditionRepo.findPendingAdditionsPage).toHaveBeenCalledWith(undefined, 20)
-    expect(result.items).toEqual([
-      {
-        id: 'p1',
-        analysisId: 'a1',
-        analysisSeedHeadline: 'Original story',
-        outlet: 'iDnes',
-        title: 'T',
-        articleUrl: 'https://idnes.cz/x',
-        publishedAt: '2026-01-01T00:00:00Z',
-        createdAt: '2026-01-02T00:00:00.000Z',
-      },
-    ])
-    expect(result.nextCursor).toBeNull()
+    const result = await listPendingAdditions()
+
+    expect(pendingAdditionRepo.findPendingAdditionsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 0, limit: 20 })
+    )
+    expect(result).toEqual({
+      items: [
+        {
+          id: 'p1',
+          analysisId: 'a1',
+          analysisSeedHeadline: 'Original story',
+          outlet: 'iDnes',
+          title: 'T',
+          articleUrl: 'https://idnes.cz/p1',
+          publishedAt: '2026-01-01T00:00:00Z',
+          createdAt: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    })
   })
 
-  it('returns a nextCursor when the repository returns one more row than the page limit', async () => {
-    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue([
-      {
-        id: 'p1',
-        analysisId: 'a1',
-        sourceId: 'src-idnes',
-        title: 'A',
-        articleUrl: 'https://idnes.cz/a',
-        publishedAt: '2026-01-02T00:00:00Z',
-        status: 'PENDING_REVIEW',
-        primaryCategory: null,
-        createdAt: new Date('2026-01-02T00:00:00Z'),
-        analysis: { seedHeadline: 'Story A' },
-        source: { name: 'iDnes' },
-      },
-      {
-        id: 'p2',
-        analysisId: 'a2',
-        sourceId: 'src-novinky',
-        title: 'B',
-        articleUrl: 'https://novinky.cz/b',
-        publishedAt: '2026-01-01T00:00:00Z',
-        status: 'PENDING_REVIEW',
-        primaryCategory: null,
-        createdAt: new Date('2026-01-01T00:00:00Z'),
-        analysis: { seedHeadline: 'Story B' },
-        source: { name: 'Novinky' },
-      },
-    ])
+  it('translates page/pageSize into the repo offset and computes pageCount from the total', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue({
+      rows: [makePendingAdditionRow('p3')],
+      total: 12,
+    })
 
-    const result = await listPendingAdditions(undefined, 1)
+    const result = await listPendingAdditions({ page: 3, pageSize: 5 })
 
-    expect(result.items).toHaveLength(1)
-    expect(result.nextCursor).not.toBeNull()
+    expect(pendingAdditionRepo.findPendingAdditionsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 10, limit: 5 })
+    )
+    expect(result).toMatchObject({ page: 3, pageSize: 5, total: 12, pageCount: 3 })
   })
 
-  it('returns an empty page when nothing is pending', async () => {
-    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue([])
+  it('forwards the dir/outlet/date-range filters to the repository', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue({ rows: [], total: 0 })
+    const after = new Date('2026-01-01T00:00:00Z')
+    const before = new Date('2026-02-01T00:00:00Z')
 
-    expect(await listPendingAdditions(undefined)).toEqual({ items: [], nextCursor: null })
+    await listPendingAdditions({ dir: 'asc', outlet: 'Novinky', createdAfter: after, createdBefore: before })
+
+    expect(pendingAdditionRepo.findPendingAdditionsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ dir: 'asc', outlet: 'Novinky', createdAfter: after, createdBefore: before })
+    )
+  })
+
+  it('returns an empty first page (pageCount 1) when nothing is pending', async () => {
+    vi.mocked(pendingAdditionRepo.findPendingAdditionsPage).mockResolvedValue({ rows: [], total: 0 })
+
+    expect(await listPendingAdditions()).toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    })
   })
 })
 
@@ -1134,61 +1143,75 @@ describe('listVisibleDrafts', () => {
   // rows, so these tests exercise the mapping/pagination logic, not the threshold itself
   // (that's covered by the integration test against real Postgres).
 
-  it('maps each repository row to an AnalysisListItem with status "draft"', async () => {
-    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue([
-      {
-        id: 'd1',
-        seedHeadline: 'Corroborated draft',
-        headline: null,
-        createdAt: new Date('2026-01-01T00:00:00Z'),
-        coverageCount: 2,
-      },
-    ])
+  function makeDraftRow(id: string, overrides: Record<string, unknown> = {}) {
+    return {
+      id,
+      seedHeadline: 'Corroborated draft',
+      headline: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      coverageCount: 2,
+      ...overrides,
+    }
+  }
 
-    const result = await listVisibleDrafts(undefined)
+  it('maps each repository row to an AnalysisListItem with status "draft" and reports the paged shape', async () => {
+    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue({ rows: [makeDraftRow('d1')], total: 1 })
 
-    expect(analysisRepo.findDraftsPage).toHaveBeenCalledWith(2, undefined, 20)
-    expect(result.items).toEqual([
-      {
-        id: 'd1',
-        seedHeadline: 'Corroborated draft',
-        title: 'Corroborated draft',
-        createdAt: '2026-01-01T00:00:00.000Z',
-        coverageCount: 2,
-        status: 'draft',
-      },
-    ])
-    expect(result.nextCursor).toBeNull()
+    const result = await listVisibleDrafts()
+
+    expect(analysisRepo.findDraftsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ minVisibleSourceCount: 2, offset: 0, limit: 20 })
+    )
+    expect(result).toEqual({
+      items: [
+        {
+          id: 'd1',
+          seedHeadline: 'Corroborated draft',
+          title: 'Corroborated draft',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          coverageCount: 2,
+          status: 'draft',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    })
   })
 
-  it('returns a nextCursor when the repository returns one more row than the page limit', async () => {
-    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue([
-      {
-        id: 'd1',
-        seedHeadline: 'A',
-        headline: null,
-        createdAt: new Date('2026-01-02T00:00:00Z'),
-        coverageCount: 2,
-      },
-      {
-        id: 'd2',
-        seedHeadline: 'B',
-        headline: null,
-        createdAt: new Date('2026-01-01T00:00:00Z'),
-        coverageCount: 3,
-      },
-    ])
+  it('translates page/pageSize into the repo offset and computes pageCount from the total', async () => {
+    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue({ rows: [makeDraftRow('d2')], total: 21 })
 
-    const result = await listVisibleDrafts(undefined, 1)
+    const result = await listVisibleDrafts({ page: 2, pageSize: 10 })
 
-    expect(result.items).toHaveLength(1)
-    expect(result.nextCursor).not.toBeNull()
+    expect(analysisRepo.findDraftsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 10, limit: 10 })
+    )
+    expect(result).toMatchObject({ page: 2, pageSize: 10, total: 21, pageCount: 3 })
   })
 
-  it('returns an empty page when nothing is visible', async () => {
-    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue([])
+  it('forwards the sort/dir/outlet/date-range filters to the repository', async () => {
+    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue({ rows: [], total: 0 })
+    const after = new Date('2026-01-01T00:00:00Z')
 
-    expect(await listVisibleDrafts(undefined)).toEqual({ items: [], nextCursor: null })
+    await listVisibleDrafts({ sort: 'coverageCount', dir: 'asc', outlet: 'ČT24', createdAfter: after })
+
+    expect(analysisRepo.findDraftsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: 'coverageCount', dir: 'asc', outlet: 'ČT24', createdAfter: after })
+    )
+  })
+
+  it('returns an empty first page (pageCount 1) when nothing is visible', async () => {
+    vi.mocked(analysisRepo.findDraftsPage).mockResolvedValue({ rows: [], total: 0 })
+
+    expect(await listVisibleDrafts()).toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    })
   })
 })
 
@@ -1196,35 +1219,56 @@ describe('listPendingStoryRelations', () => {
   beforeEach(() => vi.resetAllMocks())
 
   it('maps repository rows to PendingStoryRelationItems, using the generated headline when present and falling back to the working title otherwise', async () => {
-    vi.mocked(storyRelationRepo.findPendingReviewRelations).mockResolvedValue([
-      {
-        id: 'r1',
-        fromAnalysisId: 'a-from',
-        fromSeedHeadline: 'From working title',
-        fromHeadline: 'From generated headline',
-        toAnalysisId: 'a-to',
-        toSeedHeadline: 'To working title',
-        toHeadline: null,
-        type: 'FOLLOW_UP',
-        reasoning: 'A continues B.',
-        createdAt: new Date('2026-01-02T00:00:00Z'),
-      },
-    ])
+    vi.mocked(storyRelationRepo.findPendingReviewRelationsPage).mockResolvedValue({
+      rows: [
+        {
+          id: 'r1',
+          fromAnalysisId: 'a-from',
+          fromSeedHeadline: 'From working title',
+          fromHeadline: 'From generated headline',
+          toAnalysisId: 'a-to',
+          toSeedHeadline: 'To working title',
+          toHeadline: null,
+          type: 'FOLLOW_UP',
+          reasoning: 'A continues B.',
+          createdAt: new Date('2026-01-02T00:00:00Z'),
+        },
+      ],
+      total: 1,
+    })
 
     const result = await listPendingStoryRelations()
 
-    expect(result).toEqual([
-      {
-        id: 'r1',
-        fromAnalysisId: 'a-from',
-        fromTitle: 'From generated headline',
-        toAnalysisId: 'a-to',
-        toTitle: 'To working title',
-        type: 'FOLLOW_UP',
-        reasoning: 'A continues B.',
-        createdAt: '2026-01-02T00:00:00.000Z',
-      },
-    ])
+    expect(result).toEqual({
+      items: [
+        {
+          id: 'r1',
+          fromAnalysisId: 'a-from',
+          fromTitle: 'From generated headline',
+          toAnalysisId: 'a-to',
+          toTitle: 'To working title',
+          type: 'FOLLOW_UP',
+          reasoning: 'A continues B.',
+          createdAt: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    })
+  })
+
+  it('translates page/pageSize into the repo offset and forwards the dir/date-range filters', async () => {
+    vi.mocked(storyRelationRepo.findPendingReviewRelationsPage).mockResolvedValue({ rows: [], total: 7 })
+    const after = new Date('2026-01-01T00:00:00Z')
+
+    const result = await listPendingStoryRelations({ page: 2, pageSize: 3, dir: 'asc', createdAfter: after })
+
+    expect(storyRelationRepo.findPendingReviewRelationsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 3, limit: 3, dir: 'asc', createdAfter: after })
+    )
+    expect(result).toMatchObject({ page: 2, pageSize: 3, total: 7, pageCount: 3 })
   })
 })
 

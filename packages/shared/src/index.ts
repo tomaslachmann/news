@@ -214,6 +214,56 @@ export interface Page<T> {
   nextCursor: string | null
 }
 
+// ── Admin queue pagination (ticket 88) ───────────────────────────────────────
+// Offset-based with a real total, deliberately separate from the public keyset `Page<T>` above.
+// The admin Ingestion queues are bounded (a human works them down) and need jump-to-page + a
+// total count, which keyset pagination can't give; OFFSET's cost is irrelevant at this scale.
+export const ADMIN_PAGE_SIZE = 20
+export const ADMIN_MAX_PAGE_SIZE = 50
+
+export interface PagedResult<T> {
+  items: T[]
+  /** Total rows matching the active filter, across every page. */
+  total: number
+  /** 1-based. */
+  page: number
+  pageSize: number
+  /** `max(1, ceil(total / pageSize))` — always ≥ 1 so the UI can render "1 / 1" for an empty queue. */
+  pageCount: number
+}
+
+export const SortDirectionSchema = z.enum(['asc', 'desc'])
+export type SortDirection = z.infer<typeof SortDirectionSchema>
+
+// Page/size/direction/created-at-range params every admin queue query accepts. Spread into each
+// queue's own schema, which adds its `sort` enum (only where more than one column is orderable)
+// and any queue-specific filters. `z.coerce` because these arrive as querystring strings.
+const adminQueryBase = {
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(ADMIN_MAX_PAGE_SIZE).optional(),
+  dir: SortDirectionSchema.optional(),
+  createdAfter: z.coerce.date().optional(),
+  createdBefore: z.coerce.date().optional(),
+}
+
+const OUTLET_FILTER_MAX = 120
+
+export const DraftQuerySchema = z.object({
+  ...adminQueryBase,
+  sort: z.enum(['createdAt', 'coverageCount']).optional(),
+  outlet: z.string().trim().min(1).max(OUTLET_FILTER_MAX).optional(),
+})
+export type DraftQuery = z.infer<typeof DraftQuerySchema>
+
+export const PendingAdditionQuerySchema = z.object({
+  ...adminQueryBase,
+  outlet: z.string().trim().min(1).max(OUTLET_FILTER_MAX).optional(),
+})
+export type PendingAdditionQuery = z.infer<typeof PendingAdditionQuerySchema>
+
+export const StoryRelationQuerySchema = z.object({ ...adminQueryBase })
+export type StoryRelationQuery = z.infer<typeof StoryRelationQuerySchema>
+
 export const LoginBodySchema = z.object({
   email: z.string().min(1),
   password: z.string().min(1),
