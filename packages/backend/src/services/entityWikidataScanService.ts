@@ -82,6 +82,10 @@ async function processEntity(
     // Nothing left to offer (all candidates rejected, or no candidates at all) — clear any stale
     // suggestion so the queue doesn't keep showing a dead entry.
     await deps.deleteSuggestion(entity.id)
+    log?.info(
+      { entityKey: entity.key, cswikiHit: cswikiItem !== null, typedCandidates: typedQids.length },
+      'entity.wikidata.scan: skipped — no linkable candidate'
+    )
     return 'skipped'
   }
 
@@ -92,6 +96,7 @@ async function processEntity(
   // The gate's "primary candidate" is the cswiki-resolved item, or the top-scored hit when there
   // was no cswiki page at that exact title (research §8.1).
   const primaryForGate = primary ?? assessed[0]?.detail
+  let queueReason = 'žádný kandidát ke zvážení'
   if (primaryForGate) {
     const verdict = evaluateAutoLink({
       primary: primaryForGate,
@@ -99,6 +104,9 @@ async function processEntity(
       entityType: entity.type,
       canonicalName: entity.canonicalName,
     })
+    queueReason = verdict.pass
+      ? 'brána prošla, ale reconciliation služba nesouhlasí'
+      : verdict.failures.join('; ')
     if (verdict.pass && (await reconciliationAgrees(entity, primaryForGate.qid, deps, log))) {
       await deps.setEntityWikidataId(entity.id, primaryForGate.qid)
       await deps.recordAdminAction({
@@ -136,10 +144,18 @@ async function processEntity(
 
   if (candidates.length === 0) {
     await deps.deleteSuggestion(entity.id)
+    log?.info(
+      { entityKey: entity.key },
+      'entity.wikidata.scan: skipped — every candidate was a Wikimedia-internal page'
+    )
     return 'skipped'
   }
 
   await deps.upsertSuggestion(entity.id, candidates)
+  log?.info(
+    { entityKey: entity.key, candidateCount: candidates.length, reason: queueReason },
+    'entity.wikidata.scan: queued for review'
+  )
   return 'queued'
 }
 

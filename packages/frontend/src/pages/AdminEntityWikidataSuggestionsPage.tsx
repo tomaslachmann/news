@@ -140,7 +140,8 @@ export default function AdminEntityWikidataSuggestionsPage() {
 
         {suggestions && suggestions.length === 0 && (
           <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
-            Žádné návrhy — vše jednoznačné bylo propojeno automaticky.
+            Fronta je prázdná — žádné entity nečekají na rozhodnutí. Jednoznačné shody se propojují
+            automaticky při denní kontrole.
           </p>
         )}
 
