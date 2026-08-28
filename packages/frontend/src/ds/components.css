@@ -2,7 +2,8 @@
    class as pages start needing them (not the whole 57 KB file at once — see the ticket's own
    mechanics checklist). Extracted here once a class was about to be duplicated a third time
    (.byline/.chip/.gauge/.kicker/.hl/.layout, first built in HomePage.css, needed again by
-   AnalysisPage.css) rather than staying page-scoped like page-only classes (.qbox, .legend, …)
+   AnalysisPage.css; .ents/.erow* pulled up from both once drift produced a real bug, ticket 91)
+   rather than staying page-scoped like page-only classes (.qbox, .legend, …)
    still do. Tokens only, imported globally from main.tsx alongside ds/base.css/ds/controls.css. */
 
 .layout {
