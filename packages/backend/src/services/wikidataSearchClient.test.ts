@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { searchWikidataEntities } from './wikidataSearchClient.js'
+import {
+  fetchItemDetails,
+  resolveByCswikiTitle,
+  searchTypedCandidates,
+  searchWikidataEntities,
+} from './wikidataSearchClient.js'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
@@ -62,5 +67,116 @@ describe('searchWikidataEntities', () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse({}, 503))
 
     await expect(searchWikidataEntities('test')).rejects.toThrow('HTTP 503')
+  })
+})
+
+const CSWIKI_ENTITY = {
+  labels: { cs: { value: 'Petr Fiala' }, en: { value: 'Petr Fiala' } },
+  aliases: { cs: [{ value: 'Fiala' }] },
+  descriptions: { cs: { value: 'český politik' } },
+  claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }] },
+  sitelinks: { cswiki: { title: 'Petr Fiala' }, enwiki: { title: 'Petr Fiala' } },
+}
+
+describe('resolveByCswikiTitle', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('resolves a cswiki title to one typed item detail, with maxlag and the sites/titles params', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ entities: { Q3377548: CSWIKI_ENTITY } }))
+
+    const item = await resolveByCswikiTitle('Petr Fiala')
+
+    const parsed = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(parsed.searchParams.get('action')).toBe('wbgetentities')
+    expect(parsed.searchParams.get('sites')).toBe('cswiki')
+    expect(parsed.searchParams.get('titles')).toBe('Petr Fiala')
+    expect(parsed.searchParams.get('maxlag')).toBe('5')
+    expect(item).toEqual({
+      qid: 'Q3377548',
+      label: 'Petr Fiala',
+      names: ['Petr Fiala', 'Fiala'],
+      description: 'český politik',
+      p31: ['Q5'],
+      sitelinkCount: 2,
+      hasCswikiSitelink: true,
+    })
+  })
+
+  it('returns null when no cswiki page has that title (the "-1" missing marker)', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ entities: { '-1': { missing: '' } } }))
+
+    await expect(resolveByCswikiTitle('Nонexistent')).resolves.toBeNull()
+  })
+})
+
+describe('searchTypedCandidates', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('builds a haswbstatement P31 OR-clause for the entity type and returns only Q-id titles', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse({
+        query: { search: [{ title: 'Q3377548' }, { title: 'Q12044841' }, { title: 'not-a-qid' }] },
+      })
+    )
+
+    const qids = await searchTypedCandidates('Petr Fiala', 'PERSON')
+
+    const parsed = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(parsed.searchParams.get('list')).toBe('search')
+    expect(parsed.searchParams.get('srsearch')).toBe('"Petr Fiala" haswbstatement:P31=Q5')
+    expect(qids).toEqual(['Q3377548', 'Q12044841'])
+  })
+
+  it('throws when the API returns an error body (e.g. maxlag)', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: { code: 'maxlag' } }))
+
+    await expect(searchTypedCandidates('X', 'PERSON')).rejects.toThrow('maxlag')
+  })
+})
+
+describe('fetchItemDetails', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('batches ids into one wbgetentities call and maps each entity', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse({
+        entities: {
+          Q1: {
+            labels: { en: { value: 'One' } },
+            claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q43229' } } } }] },
+          },
+          Q2: { labels: {}, sitelinks: {} },
+        },
+      })
+    )
+
+    const details = await fetchItemDetails(['Q1', 'Q2', 'Q1'])
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+    const parsed = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(parsed.searchParams.get('ids')).toBe('Q1|Q2')
+    expect(details).toEqual([
+      {
+        qid: 'Q1',
+        label: 'One',
+        names: ['One'],
+        description: null,
+        p31: ['Q43229'],
+        sitelinkCount: 0,
+        hasCswikiSitelink: false,
+      },
+      {
+        qid: 'Q2',
+        label: 'Q2',
+        names: [],
+        description: null,
+        p31: [],
+        sitelinkCount: 0,
+        hasCswikiSitelink: false,
+      },
+    ])
   })
 })
