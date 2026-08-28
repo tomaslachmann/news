@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as entityRepo from '../repositories/entity.js'
 import * as entityAliasRepo from '../repositories/entityAlias.js'
+import * as entityImageRepo from '../repositories/entityImage.js'
 import { searchEntities, getEntityDetail } from './entityService.js'
 import { NotFoundError, ValidationError } from '../errors.js'
 
 vi.mock('../repositories/entity.js')
 vi.mock('../repositories/entityAlias.js')
+vi.mock('../repositories/entityImage.js')
 
 const ENTITY = {
   id: 'e-1',
@@ -14,6 +16,20 @@ const ENTITY = {
   type: 'PERSON' as const,
   storyCount: 4,
   wikidataId: 'Q108371',
+  wikidataDescription: null,
+  wikipediaExtract: null,
+  wikipediaUrl: null,
+}
+
+const EMPTY_STATS = { eventCount: 0, firstMentionAt: null, lastMentionAt: null, relationCount: 0 }
+
+/** The reads getEntityDetail fans out that these tests don't each assert on — defaulted so a test
+ *  only overrides what it cares about. */
+function stubEntityDetailReads() {
+  vi.mocked(entityImageRepo.findEntityWikiImage).mockResolvedValue(null)
+  vi.mocked(entityRepo.findEntityStats).mockResolvedValue(EMPTY_STATS)
+  vi.mocked(entityRepo.findCoMentionedEntities).mockResolvedValue([])
+  vi.mocked(entityRepo.findMentionTimeline).mockResolvedValue([])
 }
 
 describe('searchEntities', () => {
@@ -48,8 +64,33 @@ describe('getEntityDetail', () => {
     expect(entityAliasRepo.findAliasesForEntity).not.toHaveBeenCalled()
   })
 
-  it('assembles entity fields, paginated events, attributed relations, and known aliases', async () => {
-    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue(ENTITY)
+  it('assembles entity fields, external context, stats, co-mentions, timeline, events, relations, aliases', async () => {
+    stubEntityDetailReads()
+    vi.mocked(entityRepo.findEntityByKey).mockResolvedValue({
+      ...ENTITY,
+      wikidataDescription: 'český politik',
+      wikipediaExtract: 'Petr Fiala je český politik…',
+      wikipediaUrl: 'https://cs.wikipedia.org/wiki/Petr_Fiala',
+    })
+    vi.mocked(entityImageRepo.findEntityWikiImage).mockResolvedValue({
+      imageUrl: 'https://img/fiala.jpg',
+      author: 'Jane Doe',
+      license: 'CC BY-SA 4.0',
+      sourceUrl: 'https://commons.wikimedia.org/wiki/File:Fiala.jpg',
+    })
+    vi.mocked(entityRepo.findEntityStats).mockResolvedValue({
+      eventCount: 3,
+      firstMentionAt: new Date('2026-06-01T00:00:00Z'),
+      lastMentionAt: new Date('2026-08-01T00:00:00Z'),
+      relationCount: 5,
+    })
+    vi.mocked(entityRepo.findCoMentionedEntities).mockResolvedValue([
+      { key: 'country:czechia', canonicalName: 'Czechia', type: 'COUNTRY', sharedStoryCount: 2 },
+    ])
+    vi.mocked(entityRepo.findMentionTimeline).mockResolvedValue([
+      { month: '2026-06', count: 1 },
+      { month: '2026-08', count: 2 },
+    ])
     vi.mocked(entityRepo.findEventsForEntity).mockResolvedValue([
       {
         id: 'a-1',
@@ -73,13 +114,33 @@ describe('getEntityDetail', () => {
 
     const detail = await getEntityDetail('person:petr-fiala', undefined, 20)
 
-    expect(entityAliasRepo.findAliasesForEntity).toHaveBeenCalledWith(ENTITY.id)
+    expect(entityRepo.findCoMentionedEntities).toHaveBeenCalledWith('person:petr-fiala', 12)
     expect(detail).toEqual({
       key: 'person:petr-fiala',
       canonicalName: 'Petr Fiala',
       type: 'PERSON',
       wikidataId: 'Q108371',
+      wikidataDescription: 'český politik',
+      wikipediaExtract: 'Petr Fiala je český politik…',
+      wikipediaUrl: 'https://cs.wikipedia.org/wiki/Petr_Fiala',
+      image: {
+        url: 'https://img/fiala.jpg',
+        author: 'Jane Doe',
+        license: 'CC BY-SA 4.0',
+        sourceUrl: 'https://commons.wikimedia.org/wiki/File:Fiala.jpg',
+      },
       aliases: ['P. Fiala'],
+      eventCount: 3,
+      firstMentionAt: '2026-06-01T00:00:00.000Z',
+      lastMentionAt: '2026-08-01T00:00:00.000Z',
+      relationCount: 5,
+      coMentions: [
+        { key: 'country:czechia', canonicalName: 'Czechia', type: 'COUNTRY', sharedStoryCount: 2 },
+      ],
+      mentionTimeline: [
+        { month: '2026-06', count: 1 },
+        { month: '2026-08', count: 2 },
+      ],
       events: {
         items: [{ analysisId: 'a-1', title: 'Headline 1', createdAt: '2026-08-01T00:00:00.000Z' }],
         nextCursor: null,
@@ -96,7 +157,8 @@ describe('getEntityDetail', () => {
     })
   })
 
-  it('degrades gracefully to a null wikidataId, empty relations, and empty aliases when none exist', async () => {
+  it('degrades gracefully — unlinked entity, no image/context/stats/co-mentions/timeline', async () => {
+    stubEntityDetailReads()
     vi.mocked(entityRepo.findEntityByKey).mockResolvedValue({ ...ENTITY, wikidataId: null })
     vi.mocked(entityRepo.findEventsForEntity).mockResolvedValue([])
     vi.mocked(entityRepo.findRelationsForEntity).mockResolvedValue([])
@@ -104,9 +166,20 @@ describe('getEntityDetail', () => {
 
     const detail = await getEntityDetail('person:petr-fiala', undefined, 20)
 
-    expect(detail.wikidataId).toBeNull()
-    expect(detail.relations).toEqual([])
-    expect(detail.aliases).toEqual([])
-    expect(detail.events).toEqual({ items: [], nextCursor: null })
+    expect(detail).toMatchObject({
+      wikidataId: null,
+      wikidataDescription: null,
+      wikipediaExtract: null,
+      image: null,
+      relations: [],
+      aliases: [],
+      eventCount: 0,
+      firstMentionAt: null,
+      lastMentionAt: null,
+      relationCount: 0,
+      coMentions: [],
+      mentionTimeline: [],
+      events: { items: [], nextCursor: null },
+    })
   })
 })

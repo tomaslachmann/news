@@ -1,8 +1,11 @@
 import type {
+  EntityCoMentionItem,
   EntityDetail,
   EntityEventItem,
+  EntityMentionMonth,
   EntityRelationItem,
   EntitySearchResultItem,
+  EntityWikiImage,
   Page,
 } from '@news-triangulator/shared'
 import type {
@@ -10,7 +13,11 @@ import type {
   EntitySearchRow,
   EntityEventRow,
   EntityRelationForEntityRow,
+  EntityStats,
+  CoMentionedEntityRow,
+  MentionMonthRow,
 } from '../repositories/entity.js'
+import type { EntityWikiImageRow } from '../repositories/entityImage.js'
 import { resolveDisplayTitle } from './analysis.js'
 
 export function toEntitySearchResultItem(row: EntitySearchRow): EntitySearchResultItem {
@@ -44,18 +51,64 @@ export function toEntityRelationItem(row: EntityRelationForEntityRow, entityKey:
   }
 }
 
-export function toEntityDetail(
-  entity: EntityRecord,
-  events: Page<EntityEventItem>,
-  relationRows: EntityRelationForEntityRow[],
+function toEntityCoMentionItem(row: CoMentionedEntityRow): EntityCoMentionItem {
+  return {
+    key: row.key,
+    canonicalName: row.canonicalName,
+    type: row.type,
+    sharedStoryCount: row.sharedStoryCount,
+  }
+}
+
+function toEntityMentionMonth(row: MentionMonthRow): EntityMentionMonth {
+  return { month: row.month, count: row.count }
+}
+
+function toEntityWikiImage(row: EntityWikiImageRow | null): EntityWikiImage | null {
+  if (!row) return null
+  return { url: row.imageUrl, author: row.author, license: row.license, sourceUrl: row.sourceUrl }
+}
+
+/** Options bag rather than positional params — this field set has grown once already (ticket 90
+ *  over ticket 42) and an options object keeps the next addition additive at the one call site,
+ *  same convention as `completeAnalysisWithSynthesis`. */
+export interface EntityDetailParts {
+  entity: EntityRecord
+  imageRow: EntityWikiImageRow | null
+  stats: EntityStats
+  events: Page<EntityEventItem>
+  relationRows: EntityRelationForEntityRow[]
+  coMentionRows: CoMentionedEntityRow[]
+  mentionMonthRows: MentionMonthRow[]
   aliases: string[]
-): EntityDetail {
+}
+
+export function toEntityDetail({
+  entity,
+  imageRow,
+  stats,
+  events,
+  relationRows,
+  coMentionRows,
+  mentionMonthRows,
+  aliases,
+}: EntityDetailParts): EntityDetail {
   return {
     key: entity.key,
     canonicalName: entity.canonicalName,
     type: entity.type,
     wikidataId: entity.wikidataId,
+    wikidataDescription: entity.wikidataDescription,
+    wikipediaExtract: entity.wikipediaExtract,
+    wikipediaUrl: entity.wikipediaUrl,
+    image: toEntityWikiImage(imageRow),
     aliases,
+    eventCount: stats.eventCount,
+    firstMentionAt: stats.firstMentionAt?.toISOString() ?? null,
+    lastMentionAt: stats.lastMentionAt?.toISOString() ?? null,
+    relationCount: stats.relationCount,
+    coMentions: coMentionRows.map(toEntityCoMentionItem),
+    mentionTimeline: mentionMonthRows.map(toEntityMentionMonth),
     events,
     relations: relationRows.map((r) => toEntityRelationItem(r, entity.key)),
   }

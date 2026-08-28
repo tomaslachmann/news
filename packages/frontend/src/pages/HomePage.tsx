@@ -15,13 +15,8 @@ import { articlePath } from '@/lib/analysisRoutes'
 import { threadPath } from '@/lib/threadRoutes'
 import { formatDate } from '@/lib/formatDate'
 import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
-import {
-  entityTrendClass,
-  formatCzechCount,
-  formatEntityTrend,
-  getEntityDotSize,
-  getStorySignal,
-} from './homePageViewModel'
+import { formatCzechCount } from '@/lib/formatCount'
+import { entityTrendClass, formatEntityTrend, getEntityDotSize, getStorySignal } from './homePageViewModel'
 import './HomePage.css'
 
 const SOURCE_OVERLAP_BAD_THRESHOLD = 65

@@ -36,39 +36,39 @@ doesn't), no description, no stats. It reads like a debug view, not a wiki entry
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 ### Backend — enrichment
 
-- [ ] `Entity` gains `wikidataDescription String?`, `wikipediaExtract String?`, `wikipediaUrl
+- [x] `Entity` gains `wikidataDescription String?`, `wikipediaExtract String?`, `wikipediaUrl
       String?`. Hand-written migration (no `prisma migrate dev`), additive nullable columns, no
       backfill (ADR 0021).
-- [ ] Persist the Wikidata `description` at link-confirm time (`linkEntityWikidata` /
+- [x] Persist the Wikidata `description` at link-confirm time (`linkEntityWikidata` /
       `setEntityWikidataId`) — it's already in the `searchWikidataEntities` result the Admin picked
       from; thread it through rather than re-fetching.
-- [ ] New `wikipediaClient.ts`: given a `wikidataId`, resolve the `cswiki` sitelink title (Wikidata
+- [x] New `wikipediaClient.ts`: given a `wikidataId`, resolve the `cswiki` sitelink title (Wikidata
       `wbgetentities?props=sitelinks&sitefilter=cswiki`) and fetch `cs.wikipedia.org`'s REST
       `page/summary` — return `{ extract, url }` or null. Uses the shared `fetchWithTimeout` with
       the honest contact UA (Wikimedia asks for it, doesn't bot-block — ADR 0040 scope note).
-- [ ] `entity.image.enrich` job (rename to `entity.enrich` — it's no longer only about the image)
+- [x] `entity.image.enrich` job (rename to `entity.enrich` — it's no longer only about the image)
       also fetches + persists `wikipediaExtract`/`wikipediaUrl`. Best-effort, same as the image: a
       failed lookup completes the job with no description, never blocks or rolls back. Redelivery-safe.
 
 ### Backend — read model
 
-- [ ] `EntityDetail` gains: `imageUrl`, `wikidataDescription`, `wikipediaExtract`, `wikipediaUrl`,
+- [x] `EntityDetail` gains: `imageUrl`, `wikidataDescription`, `wikipediaExtract`, `wikipediaUrl`,
       `storyCount`, `firstEventAt`/`lastEventAt` (null when no COMPLETE Event mentions it),
       `relationCount`, and `coMentions: { key, canonicalName, type, sharedStoryCount }[]` (top N
       entities sharing the most Stories with this one), and `mentionTimeline: { month, count }[]`
       (COMPLETE-Event mentions bucketed by month).
-- [ ] New `repositories/entity.ts` reads: `findEntityStats(entityKey)` (first/last event date, event
+- [x] New `repositories/entity.ts` reads: `findEntityStats(entityKey)` (first/last event date, event
       count), `findCoMentionedEntities(entityKey, limit)`, `findMentionTimeline(entityKey)`. All
       plain indexed Postgres, no LLM (spec User Story 9). Bounded (spec User Story 10).
-- [ ] `getEntityDetail` / `toEntityDetail` assemble the above; all reads run concurrently.
+- [x] `getEntityDetail` / `toEntityDetail` assemble the above; all reads run concurrently.
 
 ### Frontend — wiki redesign
 
-- [ ] `EntityDetailPage.tsx` → two-column `.layout` wiki layout:
+- [x] `EntityDetailPage.tsx` → two-column `.layout` wiki layout:
       - Hero: type kicker, name (serif display), Wikidata one-liner as dek.
       - Rail infobox: `EntityImage` photo (with attribution), key-facts list (type, aliases,
         first/last seen, event count, relation count), external links (Wikidata, Wikipedia).
@@ -80,17 +80,38 @@ doesn't), no description, no stats. It reads like a debug view, not a wiki entry
       - Redesigned "Zprávy zmiňující tuto entitu" + "Vztahy" sections (keep the attributed-relation
         framing — ADR 0022).
       - Graceful when unlinked: no image / description / Wikipedia box, everything else still renders.
-- [ ] `EntityDetailPage.css`: new wiki vocabulary (`.ewiki*` / infobox / lead box / timeline),
+- [x] `EntityDetailPage.css`: new wiki vocabulary (`.ewiki*` / infobox / lead box / timeline),
       page-scoped per convention. Mobile: rail collapses under the main column.
-- [ ] Extract the page's derived display logic into `entityDetailViewModel.ts` + unit tests
+- [x] Extract the page's derived display logic into `entityDetailViewModel.ts` + unit tests
       (the repo's pure-helper + `.test.ts` pattern).
 
 ### Cross-cutting
 
-- [ ] ADR: document the entity-page-as-external-context stance concretely (which external text is
+- [x] ADR: document the entity-page-as-external-context stance concretely (which external text is
       shown, how it's attributed, why no LLM summary) — the spec flagged "New ADR expected at
       implementation time" and this is the wave that surfaces external prose.
-- [ ] Tests: repo integration (stats, co-mentions, timeline against real Postgres); `wikipediaClient`
+- [x] Tests: repo integration (stats, co-mentions, timeline against real Postgres); `wikipediaClient`
       unit (sitelink resolve + summary fetch + null paths); enrich job unit (description persisted,
       Wikipedia failure tolerated); service-layer `getEntityDetail` shape; frontend view-model.
-- [ ] Typecheck + full test suites pass. `/code-review` clean.
+- [x] Typecheck + full test suites pass. `/code-review` clean.
+
+
+**Implementation notes (2026-08-28):**
+- Job kept its name `entity.image.enrich` (not renamed to `entity.enrich`) — a rename orphans its
+  pg-boss queue; the handler now runs two independent best-effort steps (image, external context).
+- The Wikidata description is fetched by the job (`findWikidataContext`), not threaded through
+  link-confirm — one source of truth, and it re-enriches an already-linked entity on job re-run.
+- `EntityDetail.imageUrl` became `image: EntityWikiImage | null` (url + author/license/sourceUrl)
+  so the infobox can credit the photo (Wikimedia licensing), same as the Narrative lead image.
+- Stats field names landed as `firstMentionAt`/`lastMentionAt`/`eventCount` (not `firstEventAt`
+  etc.); `storyCount` was *not* added to `EntityDetail` — `eventCount` (COMPLETE-only) is the
+  reader-facing number, and the cross-status `Entity.storyCount` is an internal scoring signal.
+- CSS vocabulary is `.ew*` (not `.ewiki*`).
+- `formatCzechCount` moved from `homePageViewModel` to `lib/formatCount.ts` (4th consumer).
+- ADR 0041 records the external-context stance; CONTEXT.md gains an "Entity page" entry.
+- Route-level parameter-validation tests: the entity routes have no existing test harness and
+  take only a path `:key` + optional `?cursor` (already covered) — no new route test added.
+- Visually verified against the live dev app (Haakon VII. entity page): wiki layout renders,
+  degrades gracefully. The photo/Wikipedia text are absent for entities linked before this ships
+  — the enrich job only runs on `linkEntityWikidata`, and nothing re-enqueues it for the existing
+  corpus (ADR 0021 no-backfill). A re-link, or a one-off re-enqueue, enriches them.

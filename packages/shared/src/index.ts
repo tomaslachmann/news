@@ -596,6 +596,32 @@ export interface EntityRelationItem {
   assertedBy: { analysisId: string; title: string }
 }
 
+/** The entity's Wikimedia photo for the infobox (ticket 90) — same attribution shape as
+ *  `NarrativeLeadImage`, always credited, since Wikimedia licensing requires it. */
+export interface EntityWikiImage {
+  url: string
+  author: string | null
+  license: string | null
+  sourceUrl: string
+}
+
+/** One entity that co-occurs with the subject across the corpus (ticket 90) — how many COMPLETE
+ *  Stories mention both. Powers the "často zmiňováno spolu s" rail. */
+export interface EntityCoMentionItem {
+  key: string
+  canonicalName: string
+  type: EntityTypeLabel
+  sharedStoryCount: number
+}
+
+/** One month of mention activity (ticket 90) — COMPLETE Events mentioning this entity, bucketed
+ *  by `Analysis.createdAt` month. `month` is `YYYY-MM`. Gaps between months are not filled — the
+ *  frontend chart decides how to render a sparse series. */
+export interface EntityMentionMonth {
+  month: string
+  count: number
+}
+
 export interface EntityDetail {
   key: string
   canonicalName: string
@@ -604,11 +630,32 @@ export interface EntityDetail {
    *  hasn't shipped or this particular entity just hasn't been linked yet. Never a broken/missing
    *  section either way (docs/spec-entity-wiki.md). */
   wikidataId: string | null
+  /** External descriptive context (ticket 90), all keyed off `wikidataId` — null until an Admin
+   *  links Wikidata and the enrich job runs. `wikidataDescription` renders as the hero dek;
+   *  `wikipediaExtract`/`wikipediaUrl` render in a fenced "Kontext z Wikipedie" block labelled
+   *  "ne zpravodajství tohoto nástroje", never as this tool's own reporting (ADR 0012 / 0041,
+   *  spec User Story 4). */
+  wikidataDescription: string | null
+  wikipediaExtract: string | null
+  wikipediaUrl: string | null
+  /** The entity's Wikimedia photo (ticket 41), if fetched — null otherwise. Carries the
+   *  attribution the infobox credits, same as `NarrativeLeadImage`. */
+  image: EntityWikiImage | null
   /** Canonical names of every entity confirmed (ticket 40) to be the same real-world entity as
    *  this one, merged away into it — empty, not undefined, when none, whether because ticket 40
    *  hasn't shipped or no merge has touched this entity yet. Never a missing section either way
    *  (docs/spec-entity-wiki.md). */
   aliases: string[]
+  /** COMPLETE-Event mention stats (ticket 90). `firstMentionAt`/`lastMentionAt` are null when no
+   *  COMPLETE Event mentions the entity yet. `eventCount` is COMPLETE-only, so it can be lower
+   *  than the internal cross-status `Entity.storyCount`. `relationCount` is the total asserted
+   *  entity-relations (may exceed `relations.length`, which is capped). */
+  eventCount: number
+  firstMentionAt: string | null
+  lastMentionAt: string | null
+  relationCount: number
+  coMentions: EntityCoMentionItem[]
+  mentionTimeline: EntityMentionMonth[]
   events: Page<EntityEventItem>
   relations: EntityRelationItem[]
 }

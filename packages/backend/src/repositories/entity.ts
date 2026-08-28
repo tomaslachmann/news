@@ -35,6 +35,11 @@ export interface EntityRecord {
   type: EntityType
   storyCount: number
   wikidataId: string | null
+  /** Ticket 90 — external descriptive context, all null until an Admin links `wikidataId` and the
+   *  `entity.image.enrich` job has run. */
+  wikidataDescription: string | null
+  wikipediaExtract: string | null
+  wikipediaUrl: string | null
 }
 
 export interface EntityRelationForScoring {
@@ -250,9 +255,38 @@ export async function setEntityWikidataId(id: string, wikidataId: string): Promi
 
 /** Clears a previously-confirmed Wikidata link (ticket 41) — the Entity's fetched `EntityImage`
  *  rows, if any, are left in place; a wrong or stale image needs direct DB intervention, same
- *  "not scoped in this wave" posture as re-fetch (docs/spec-entity-resolution.md's Out of Scope). */
+ *  "not scoped in this wave" posture as re-fetch (docs/spec-entity-resolution.md's Out of Scope).
+ *  The external descriptive context (ticket 90) is cleared here, though — unlike an image, stale
+ *  encyclopedic prose next to live coverage is actively misleading, and it's cheap to refetch on
+ *  a re-link. */
 export async function clearEntityWikidataId(id: string): Promise<void> {
-  await prisma.entity.update({ where: { id }, data: { wikidataId: null } })
+  await prisma.entity.update({
+    where: { id },
+    data: { wikidataId: null, wikidataDescription: null, wikipediaExtract: null, wikipediaUrl: null },
+  })
+}
+
+/** What `updateEntityWikidataContext` persists — structurally the `WikidataContext` the
+ *  `wikipediaClient` returns, re-declared here so the repository doesn't import from the service
+ *  layer (ADR 0010's one-directional dependency). */
+export interface EntityWikidataContext {
+  description: string | null
+  wikipediaExtract: string | null
+  wikipediaUrl: string | null
+}
+
+/** Persists the external descriptive context the `entity.image.enrich` job fetched (ticket 90).
+ *  A partial write is fine and expected — an entity with a Wikidata description but no Czech
+ *  Wikipedia page gets `{ description, wikipediaExtract: null, wikipediaUrl: null }`. */
+export async function updateEntityWikidataContext(id: string, context: EntityWikidataContext): Promise<void> {
+  await prisma.entity.update({
+    where: { id },
+    data: {
+      wikidataDescription: context.description,
+      wikipediaExtract: context.wikipediaExtract,
+      wikipediaUrl: context.wikipediaUrl,
+    },
+  })
 }
 
 /** Total Story count — the corpus size storyRelationScoring.ts's IDF weighting needs to know how
@@ -489,4 +523,114 @@ export async function findRelationsForEntity(entityKey: string): Promise<EntityR
       seedHeadline: r.story.analysis.seedHeadline,
       headline: r.story.analysis.synthesisResult?.headline ?? null,
     }))
+}
+
+// ── Entity wiki page: stats, co-mentions, mention timeline (ticket 90) ────────
+// All three scope to COMPLETE Analyses only, same public-read rule as
+// `findEventsForEntity`/`findRelationsForEntity`, and all are plain indexed reads — no LLM, no
+// billed cost (spec User Story 9).
+
+export interface EntityStats {
+  /** COMPLETE Events mentioning this entity — can be below the cross-status `Entity.storyCount`. */
+  eventCount: number
+  firstMentionAt: Date | null
+  lastMentionAt: Date | null
+  /** Total asserted entity-relations (either side), COMPLETE-Analysis-scoped — the real count,
+   *  even when `findRelationsForEntity`'s list is truncated to its cap. */
+  relationCount: number
+}
+
+export async function findEntityStats(entityKey: string): Promise<EntityStats> {
+  const [mentionAgg, relationCount] = await Promise.all([
+    prisma.$queryRaw<{ eventCount: bigint; firstMentionAt: Date | null; lastMentionAt: Date | null }[]>`
+      SELECT count(*)::bigint AS "eventCount",
+             min(a."createdAt") AS "firstMentionAt",
+             max(a."createdAt") AS "lastMentionAt"
+      FROM "StoryEntity" se
+      JOIN "Entity" e ON e.id = se."entityId"
+      JOIN "Story" s ON s.id = se."storyId"
+      JOIN "Analysis" a ON a."storyId" = s.id
+      WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
+    `,
+    prisma.storyEntityRelation.count({
+      where: {
+        OR: [{ fromEntity: { key: entityKey } }, { toEntity: { key: entityKey } }],
+        story: { analysis: { status: 'COMPLETE' } },
+      },
+    }),
+  ])
+  const agg = mentionAgg[0]
+  return {
+    eventCount: Number(agg?.eventCount ?? 0),
+    firstMentionAt: agg?.firstMentionAt ?? null,
+    lastMentionAt: agg?.lastMentionAt ?? null,
+    relationCount,
+  }
+}
+
+export interface CoMentionedEntityRow {
+  key: string
+  canonicalName: string
+  type: EntityType
+  sharedStoryCount: number
+}
+
+/** The entities that appear in the most COMPLETE Stories alongside `entityKey` — a corpus-level
+ *  "shows up with" signal, distinct from the asserted `StoryEntityRelation` graph
+ *  (`findRelationsForEntity`), which is claim-level. Bounded by `limit` (spec User Story 10). */
+export async function findCoMentionedEntities(
+  entityKey: string,
+  limit: number
+): Promise<CoMentionedEntityRow[]> {
+  const rows = await prisma.$queryRaw<
+    { key: string; canonicalName: string; type: EntityType; sharedStoryCount: bigint }[]
+  >`
+    SELECT other.key, other."canonicalName", other.type,
+           count(DISTINCT se_self."storyId")::bigint AS "sharedStoryCount"
+    FROM "StoryEntity" se_self
+    JOIN "Entity" self ON self.id = se_self."entityId"
+    JOIN "StoryEntity" se_other
+      ON se_other."storyId" = se_self."storyId" AND se_other."entityId" <> se_self."entityId"
+    JOIN "Entity" other ON other.id = se_other."entityId"
+    JOIN "Story" s ON s.id = se_self."storyId"
+    JOIN "Analysis" a ON a."storyId" = s.id
+    WHERE self.key = ${entityKey} AND a.status = 'COMPLETE'
+    GROUP BY other.key, other."canonicalName", other.type
+    ORDER BY "sharedStoryCount" DESC, other."canonicalName" ASC
+    LIMIT ${limit}
+  `
+  return rows.map((r) => ({ ...r, sharedStoryCount: Number(r.sharedStoryCount) }))
+}
+
+export interface MentionMonthRow {
+  month: string
+  count: number
+}
+
+// A month-bucketed series is inherently small (one row per calendar month the entity was
+// mentioned in), but the chart shouldn't grow without limit either — cap it at the most recent
+// stretch so a decade-old, always-in-the-news entity still gets a readable chart (spec User
+// Story 10). The last N monthly buckets, re-sorted oldest-first for the chart.
+const MENTION_TIMELINE_MONTHS = 36
+
+/** COMPLETE-Event mentions of `entityKey` bucketed by `Analysis.createdAt` month (`YYYY-MM`),
+ *  oldest first, at most the last `MENTION_TIMELINE_MONTHS` active months. Sparse — a month with
+ *  no mentions is simply absent. */
+export async function findMentionTimeline(entityKey: string): Promise<MentionMonthRow[]> {
+  const rows = await prisma.$queryRaw<{ month: string; count: bigint }[]>`
+    SELECT month, count FROM (
+      SELECT to_char(date_trunc('month', a."createdAt"), 'YYYY-MM') AS month,
+             count(*)::bigint AS count
+      FROM "StoryEntity" se
+      JOIN "Entity" e ON e.id = se."entityId"
+      JOIN "Story" s ON s.id = se."storyId"
+      JOIN "Analysis" a ON a."storyId" = s.id
+      WHERE e.key = ${entityKey} AND a.status = 'COMPLETE'
+      GROUP BY 1
+      ORDER BY 1 DESC
+      LIMIT ${MENTION_TIMELINE_MONTHS}
+    ) recent
+    ORDER BY month ASC
+  `
+  return rows.map((r) => ({ month: r.month, count: Number(r.count) }))
 }
