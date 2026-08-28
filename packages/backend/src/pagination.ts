@@ -1,4 +1,4 @@
-import { MAX_PAGE_SIZE } from '@news-triangulator/shared'
+import { MAX_PAGE_SIZE, ADMIN_PAGE_SIZE, type PagedResult } from '@news-triangulator/shared'
 import { ValidationError } from './errors.js'
 
 export interface Cursor {
@@ -47,4 +47,26 @@ export async function fetchPage<T extends Cursor>(
   const boundedLimit = Math.min(limit, MAX_PAGE_SIZE)
   const rows = await fetchRows(decoded, boundedLimit)
   return splitPage(rows, boundedLimit)
+}
+
+// ── Offset pagination for the admin Ingestion queues (ticket 88) ─────────────
+
+export interface OffsetPage {
+  /** 1-based, defaulted and clamped to ≥ 1. */
+  page: number
+  pageSize: number
+  /** `(page - 1) * pageSize` — the SQL/Prisma OFFSET. */
+  offset: number
+}
+
+/** Normalises a raw `?page`/`?pageSize` (both already zod-validated as optional positive ints)
+ *  into a concrete page/pageSize/offset. */
+export function resolveOffsetPage(page: number | undefined, pageSize: number | undefined): OffsetPage {
+  const resolvedPage = page ?? 1
+  const resolvedSize = pageSize ?? ADMIN_PAGE_SIZE
+  return { page: resolvedPage, pageSize: resolvedSize, offset: (resolvedPage - 1) * resolvedSize }
+}
+
+export function toPagedResult<T>(items: T[], total: number, { page, pageSize }: OffsetPage): PagedResult<T> {
+  return { items, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)) }
 }

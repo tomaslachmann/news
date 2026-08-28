@@ -367,19 +367,58 @@ export interface DraftListRow {
   coverageCount: number
 }
 
+export interface DraftsPageQuery {
+  minVisibleSourceCount: number
+  offset: number
+  limit: number
+  /** Column to order by. Default `createdAt`. */
+  sort?: 'createdAt' | 'coverageCount'
+  /** Order direction. Default `desc`. */
+  dir?: 'asc' | 'desc'
+  /** Case-insensitive substring match against an attached (non-excluded) Coverage's Source name. */
+  outlet?: string
+  createdAfter?: Date
+  createdBefore?: Date
+}
+
 /** DRAFT Analyses with at least `minVisibleSourceCount` attached (non-excluded) Coverage —
  *  raw SQL because the visibility threshold has to be a `HAVING` clause (filtering on the
  *  aggregated count), which Prisma's query builder can't express; pushing it into the query
- *  itself (rather than fetching everything and filtering in JS, as before) is what makes cursor
- *  pagination here return a consistent page size (ticket 03). Deliberately every Coverage
- *  status, not just OK, like `findAnalysesPage`'s `okCoverageCount`: a Draft's Coverage is
- *  always PENDING (nothing is scraped until Review Step confirmation after approval), so an
- *  OK-only count would always read zero here. */
-export async function findDraftsPage(
-  minVisibleSourceCount: number,
-  cursor: Cursor | undefined,
-  limit: number
-): Promise<DraftListRow[]> {
+ *  itself (rather than fetching everything and filtering in JS, as before) is what keeps a
+ *  page's size consistent (ticket 03). Deliberately every Coverage status, not just OK, like
+ *  `findAnalysesPage`'s `okCoverageCount`: a Draft's Coverage is always PENDING (nothing is
+ *  scraped until Review Step confirmation after approval), so an OK-only count would always read
+ *  zero here.
+ *
+ *  Offset-paginated with a real `total` (ticket 88): unlike the public feeds, this is a bounded
+ *  admin queue that needs jump-to-page and a count. `sort`/`dir`/`outlet`/date-range are all
+ *  optional server-side controls for an Admin triaging the queue; every dynamic fragment is a
+ *  `Prisma.sql` value (parameterised or a fixed keyword literal), never interpolated input. */
+export async function findDraftsPage(q: DraftsPageQuery): Promise<{ rows: DraftListRow[]; total: number }> {
+  const filters: Prisma.Sql[] = [Prisma.sql`a.status = 'DRAFT'`]
+  if (q.createdAfter) filters.push(Prisma.sql`a."createdAt" >= ${q.createdAfter}`)
+  if (q.createdBefore) filters.push(Prisma.sql`a."createdAt" <= ${q.createdBefore}`)
+  if (q.outlet) {
+    filters.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM "Coverage" oc
+      JOIN "Source" os ON os.id = oc."sourceId"
+      WHERE oc."analysisId" = a.id AND oc.excluded = false
+        AND os.name ILIKE '%' || ${q.outlet} || '%'
+    )`)
+  }
+  const where = Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`
+  const having = Prisma.sql`HAVING count(c.id) FILTER (WHERE c.excluded = false) >= ${q.minVisibleSourceCount}`
+
+  // `dirSql` is a fixed keyword literal chosen here, never interpolated input. When sorting by
+  // coverageCount the tiebreaker stays newest-first regardless of `dir` (equal-count Drafts read
+  // best most-recent-first either way); the createdAt sort's tiebreaker follows `dir` so a full
+  // page reversal is a clean mirror.
+  const dirSql = q.dir === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`
+  const orderBy =
+    q.sort === 'coverageCount'
+      ? Prisma.sql`ORDER BY "coverageCount" ${dirSql}, a."createdAt" DESC, a.id DESC`
+      : Prisma.sql`ORDER BY a."createdAt" ${dirSql}, a.id ${dirSql}`
+
   const rows = await prisma.$queryRaw<
     { id: string; seedHeadline: string; headline: string | null; createdAt: Date; coverageCount: bigint }[]
   >`
@@ -388,15 +427,28 @@ export async function findDraftsPage(
     FROM "Analysis" a
     LEFT JOIN "SynthesisResult" sr ON sr."analysisId" = a.id
     LEFT JOIN "Coverage" c ON c."analysisId" = a.id
-    WHERE a.status = 'DRAFT'
-      ${keysetSqlWhere(cursor)}
+    ${where}
     GROUP BY a.id, sr.headline
-    HAVING count(c.id) FILTER (WHERE c.excluded = false) >= ${minVisibleSourceCount}
-    ORDER BY a."createdAt" DESC, a.id DESC
-    LIMIT ${limit + 1}
+    ${having}
+    ${orderBy}
+    LIMIT ${q.limit} OFFSET ${q.offset}
   `
 
-  return rows.map((r) => ({ ...r, coverageCount: Number(r.coverageCount) }))
+  const totalRows = await prisma.$queryRaw<{ total: number }[]>`
+    SELECT count(*)::int AS total FROM (
+      SELECT a.id
+      FROM "Analysis" a
+      LEFT JOIN "Coverage" c ON c."analysisId" = a.id
+      ${where}
+      GROUP BY a.id
+      ${having}
+    ) sub
+  `
+
+  return {
+    rows: rows.map((r) => ({ ...r, coverageCount: Number(r.coverageCount) })),
+    total: totalRows[0]?.total ?? 0,
+  }
 }
 
 export async function updateAnalysisStatus(id: string, status: AnalysisStatus): Promise<void> {

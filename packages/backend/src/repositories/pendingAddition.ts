@@ -1,7 +1,6 @@
 import { Prisma } from '@prisma/client'
 import type { ArticleCategory, PendingAddition, PendingAdditionStatus, AnalysisStatus } from '@prisma/client'
 import { prisma } from '../db.js'
-import type { Cursor } from '../pagination.js'
 
 export type { PendingAddition }
 
@@ -27,31 +26,48 @@ export type PendingAdditionWithAnalysis = PendingAddition & {
   source: { name: string }
 }
 
-/** Row-tuple comparison, not a plain `createdAt <` — stable across inserts that land exactly on
- *  the boundary timestamp (keyset pagination, docs/audit.md P0-7, ticket 03), same as
- *  analysis.ts's own `cursorWhere`. */
-function cursorWhere(cursor: Cursor | undefined): Prisma.PendingAdditionWhereInput {
-  if (!cursor) return {}
+export interface PendingAdditionsPageQuery {
+  offset: number
+  limit: number
+  /** Order direction on `createdAt`. Default `desc`. */
+  dir?: 'asc' | 'desc'
+  /** Case-insensitive substring match against the flagged Coverage's Source name. */
+  outlet?: string
+  createdAfter?: Date
+  createdBefore?: Date
+}
+
+function pendingAdditionWhere(q: PendingAdditionsPageQuery): Prisma.PendingAdditionWhereInput {
+  const createdAt: Prisma.DateTimeFilter = {}
+  if (q.createdAfter) createdAt.gte = q.createdAfter
+  if (q.createdBefore) createdAt.lte = q.createdBefore
   return {
-    OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+    status: 'PENDING_REVIEW',
+    ...(q.outlet ? { source: { name: { contains: q.outlet, mode: 'insensitive' } } } : {}),
+    ...(q.createdAfter || q.createdBefore ? { createdAt } : {}),
   }
 }
 
 /** Only `PENDING_REVIEW` rows — a resolved (approved/rejected) one stops appearing here without
- *  being deleted (ticket 45), same convention as StoryRelation's `findPendingReviewRelations`.
- *  Keyset (createdAt, id) pagination, same pattern as `findDraftsPage` (ticket 49) — no HAVING
- *  clause is needed here, so a plain Prisma `findMany` suffices, unlike `findDraftsPage`'s raw
- *  SQL. */
+ *  being deleted (ticket 45), same convention as StoryRelation's `findPendingReviewRelationsPage`.
+ *  Offset-paginated with a real `total` (ticket 88) — a bounded admin queue, not a public feed;
+ *  `dir`/`outlet`/date-range are optional Admin triage controls. */
 export async function findPendingAdditionsPage(
-  cursor: Cursor | undefined,
-  limit: number
-): Promise<PendingAdditionWithAnalysis[]> {
-  return prisma.pendingAddition.findMany({
-    where: { status: 'PENDING_REVIEW', ...cursorWhere(cursor) },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: limit + 1,
-    include: { analysis: { select: { seedHeadline: true } }, source: { select: { name: true } } },
-  })
+  q: PendingAdditionsPageQuery
+): Promise<{ rows: PendingAdditionWithAnalysis[]; total: number }> {
+  const where = pendingAdditionWhere(q)
+  const dir = q.dir ?? 'desc'
+  const [rows, total] = await Promise.all([
+    prisma.pendingAddition.findMany({
+      where,
+      orderBy: [{ createdAt: dir }, { id: dir }],
+      skip: q.offset,
+      take: q.limit,
+      include: { analysis: { select: { seedHeadline: true } }, source: { select: { name: true } } },
+    }),
+    prisma.pendingAddition.count({ where }),
+  ])
+  return { rows, total }
 }
 
 export type PendingAdditionWithAnalysisStatus = PendingAddition & {

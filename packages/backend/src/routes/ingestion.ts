@@ -1,9 +1,24 @@
 import type { FastifyInstance } from 'fastify'
-import { ListQuerySchema } from '@news-triangulator/shared'
+import type { z } from 'zod'
+import {
+  DraftQuerySchema,
+  PendingAdditionQuerySchema,
+  StoryRelationQuerySchema,
+} from '@news-triangulator/shared'
 import { requireAdmin, verifyAuthCookie } from '../plugins/auth.js'
 import { requireIngestionSecret } from '../plugins/ingestionAuth.js'
 import { ValidationError } from '../errors.js'
 import * as ingestionService from '../services/ingestionService.js'
+
+/** Parses an admin-queue querystring against its zod schema, raising the repo's standard
+ *  `ValidationError` (→ 400) on a bad sort column, direction, page number, or date. */
+function parseAdminQuery<S extends z.ZodTypeAny>(schema: S, query: unknown): z.infer<S> {
+  const parsed = schema.safeParse(query)
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné parametry dotazu')
+  }
+  return parsed.data
+}
 
 export function registerIngestionRoutes(fastify: FastifyInstance): void {
   // POST /api/ingestion/run — triggers one Ingestion pass; called by an external scheduler, not a browser
@@ -17,25 +32,15 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
     '/api/admin/ingestion/pending-additions',
     { preHandler: requireAdmin },
     async (request, reply) => {
-      const parsed = ListQuerySchema.safeParse(request.query)
-      if (!parsed.success) {
-        throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné parametry dotazu')
-      }
-
-      const page = await ingestionService.listPendingAdditions(parsed.data.cursor, parsed.data.limit)
-      return reply.code(200).send(page)
+      const query = parseAdminQuery(PendingAdditionQuerySchema, request.query)
+      return reply.code(200).send(await ingestionService.listPendingAdditions(query))
     }
   )
 
   // GET /api/admin/ingestion/drafts — Drafts that have crossed the visibility threshold (ADR 0018)
   fastify.get('/api/admin/ingestion/drafts', { preHandler: requireAdmin }, async (request, reply) => {
-    const parsed = ListQuerySchema.safeParse(request.query)
-    if (!parsed.success) {
-      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Neplatné parametry dotazu')
-    }
-
-    const page = await ingestionService.listVisibleDrafts(parsed.data.cursor, parsed.data.limit)
-    return reply.code(200).send(page)
+    const query = parseAdminQuery(DraftQuerySchema, request.query)
+    return reply.code(200).send(await ingestionService.listVisibleDrafts(query))
   })
 
   // PATCH /api/admin/ingestion/drafts/:id/approve — DRAFT → PENDING, proceeds through the existing Review Step
@@ -91,9 +96,9 @@ export function registerIngestionRoutes(fastify: FastifyInstance): void {
   fastify.get(
     '/api/admin/ingestion/story-relations',
     { preHandler: requireAdmin },
-    async (_request, reply) => {
-      const items = await ingestionService.listPendingStoryRelations()
-      return reply.code(200).send(items)
+    async (request, reply) => {
+      const query = parseAdminQuery(StoryRelationQuerySchema, request.query)
+      return reply.code(200).send(await ingestionService.listPendingStoryRelations(query))
     }
   )
 

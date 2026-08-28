@@ -1,5 +1,13 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { AnalysisListItem, PendingAdditionItem, PendingStoryRelationItem } from '@/services/ingestion'
+import type {
+  AnalysisListItem,
+  PendingAdditionItem,
+  PendingStoryRelationItem,
+  DraftQueueParams,
+  PendingAdditionQueueParams,
+  StoryRelationQueueParams,
+} from '@/services/ingestion'
 import {
   usePendingAdditions,
   useVisibleDrafts,
@@ -14,13 +22,105 @@ import {
 import { formatDate } from '@/lib/formatDate'
 import { RELATION_TYPE_LABELS } from '@/lib/storyRelationTypeLabels'
 import { analysisPath } from '@/lib/analysisRoutes'
-import { LoadMoreButton } from '@/components/LoadMoreButton'
+import { inclusiveEndOfDay } from '@/services/pagination'
+import { AdminPagination } from '@/components/AdminPagination'
+import { AdminQueueControls, type SortOption } from '@/components/AdminQueueControls'
 import './IngestionReviewPage.css'
 
 // Below this many sources a Draft is flagged low-confidence — same threshold ReviewPage already
 // warns on ("Při méně než 5 zdrojích může být triangulace omezená"), computed from the real
 // coverageCount rather than a fabricated confidence score.
 const THIN_DRAFT_THRESHOLD = 5
+
+// ── Shared filter state ─────────────────────────────────────────────────────
+// Every queue offers the same created-at-range + direction; the Drafts queue adds a
+// source-count sort, Drafts + Pending Additions add an outlet filter. Sort is a single select
+// (the HistoryPage convention) whose value maps to the API's separate `sort`/`dir`.
+
+type DateOnlySortKey = 'newest' | 'oldest'
+type DraftSortKey = DateOnlySortKey | 'most-sources' | 'least-sources'
+
+const DATE_SORT_OPTIONS: SortOption<DateOnlySortKey>[] = [
+  { value: 'newest', label: 'Nejnovější' },
+  { value: 'oldest', label: 'Nejstarší' },
+]
+const DRAFT_SORT_OPTIONS: SortOption<DraftSortKey>[] = [
+  ...DATE_SORT_OPTIONS,
+  { value: 'most-sources', label: 'Nejvíce zdrojů' },
+  { value: 'least-sources', label: 'Nejméně zdrojů' },
+]
+
+const DATE_SORT_DIR: Record<DateOnlySortKey, 'asc' | 'desc'> = { newest: 'desc', oldest: 'asc' }
+const DRAFT_SORT_PARAMS: Record<DraftSortKey, Pick<DraftQueueParams, 'sort' | 'dir'>> = {
+  newest: { sort: 'createdAt', dir: 'desc' },
+  oldest: { sort: 'createdAt', dir: 'asc' },
+  'most-sources': { sort: 'coverageCount', dir: 'desc' },
+  'least-sources': { sort: 'coverageCount', dir: 'asc' },
+}
+
+/** Bundles the filter/pagination state every queue section repeats: page + the shared filter
+ *  fields, with every filter setter resetting to page 1 (a filtered result set has fewer pages,
+ *  so keeping the old page number would often land past the end). */
+function useQueueFilterState() {
+  const [page, setPage] = useState(1)
+  const [outlet, setOutletRaw] = useState('')
+  const [createdAfter, setCreatedAfterRaw] = useState('')
+  const [createdBefore, setCreatedBeforeRaw] = useState('')
+
+  /** Wrap a setter so it also resets to page 1 — used for every filter control (the sort select
+   *  included, which each section passes its own setter to). */
+  const withPageReset =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setter(value)
+      setPage(1)
+    }
+
+  return {
+    page,
+    setPage,
+    outlet,
+    setOutlet: withPageReset(setOutletRaw),
+    createdAfter,
+    setCreatedAfter: withPageReset(setCreatedAfterRaw),
+    createdBefore,
+    setCreatedBefore: withPageReset(setCreatedBeforeRaw),
+    withPageReset,
+    hasFilter: outlet.trim() !== '' || createdAfter !== '' || createdBefore !== '',
+  }
+}
+
+/** Keeps `page` in range after the result set shrinks under it — e.g. an Admin approves the last
+ *  item on the last page, the query refetches with a smaller `pageCount`, and this snaps them
+ *  back to the new final page instead of stranding them on an empty one. */
+function useClampPage(page: number, pageCount: number | undefined, setPage: (page: number) => void) {
+  useEffect(() => {
+    if (pageCount !== undefined && page > pageCount) setPage(pageCount)
+  }, [page, pageCount, setPage])
+}
+
+function queueParams(
+  page: number,
+  createdAfter: string,
+  createdBefore: string
+): { page?: number; createdAfter?: string; createdBefore?: string } {
+  return {
+    // Omitted at page 1 so a pristine queue requests a bare, cache-friendly URL.
+    page: page === 1 ? undefined : page,
+    createdAfter: createdAfter || undefined,
+    createdBefore: inclusiveEndOfDay(createdBefore),
+  }
+}
+
+/** Shared empty/loading/error copy for a queue whose fetch returned no rows — distinguishes a
+ *  genuinely empty queue from a filter that matched nothing. */
+function QueueEmptyState({ filtered, emptyText }: { filtered: boolean; emptyText: React.ReactNode }) {
+  return (
+    <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
+      {filtered ? 'Žádná položka neodpovídá zvolenému filtru.' : emptyText}
+    </p>
+  )
+}
 
 /** Shared by DraftItem and RelationItem — both queues resolve the same way (approve/reject). */
 function QitemActions({
@@ -89,22 +189,48 @@ function DraftItem({
 }
 
 function DraftsSection() {
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useVisibleDrafts()
-  const drafts = data?.pages.flatMap((page) => page.items)
+  const filters = useQueueFilterState()
+  const [sortKey, setSortKey] = useState<DraftSortKey>('newest')
   const navigate = useNavigate()
   const approveMutation = useApproveDraft()
   const rejectMutation = useRejectDraft()
+
+  const params: DraftQueueParams = useMemo(
+    () => ({
+      ...DRAFT_SORT_PARAMS[sortKey],
+      outlet: filters.outlet.trim() || undefined,
+      ...queueParams(filters.page, filters.createdAfter, filters.createdBefore),
+    }),
+    [filters.page, sortKey, filters.outlet, filters.createdAfter, filters.createdBefore]
+  )
+
+  const { data, isLoading, isError, isPlaceholderData } = useVisibleDrafts(params)
+  useClampPage(filters.page, data?.pageCount, filters.setPage)
+  const drafts = data?.items ?? []
 
   return (
     <section className="qsec">
       <div className="qsec__h">
         <h2 className="qsec__t">Koncepty čekající na schválení</h2>
-        {drafts && <span className="qsec__n">{drafts.length}</span>}
+        {data && <span className="qsec__n">{data.total}</span>}
       </div>
       <p className="qsec__d">
         Nalezeno automaticky sběrem článků. Zobrazují se až po nashromáždění dostatku zdrojů. Schválení vás
         přesměruje na obvyklý krok výběru zdrojů; nic se neanalyzuje, dokud to tam nepotvrdíte.
       </p>
+
+      <AdminQueueControls
+        idPrefix="drafts"
+        sortValue={sortKey}
+        sortOptions={DRAFT_SORT_OPTIONS}
+        onSortChange={filters.withPageReset(setSortKey)}
+        outlet={filters.outlet}
+        onOutletChange={filters.setOutlet}
+        createdAfter={filters.createdAfter}
+        createdBefore={filters.createdBefore}
+        onCreatedAfterChange={filters.setCreatedAfter}
+        onCreatedBeforeChange={filters.setCreatedBefore}
+      />
 
       {isLoading && <p className="note">Načítání…</p>}
       {isError && (
@@ -113,39 +239,50 @@ function DraftsSection() {
         </div>
       )}
 
-      {drafts && drafts.length === 0 && (
-        <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
-          Momentálně žádné koncepty. Sběr článků běží jen když je spuštěný jeho cron — v lokálním vývoji ho{' '}
-          <code>npm run dev</code> samo o sobě nespouští, viz README, sekce Automated Ingestion.
-        </p>
+      {data && data.total === 0 && (
+        <QueueEmptyState
+          filtered={filters.hasFilter}
+          emptyText={
+            <>
+              Momentálně žádné koncepty. Sběr článků běží jen když je spuštěný jeho cron — v lokálním vývoji
+              ho <code>npm run dev</code> samo o sobě nespouští, viz README, sekce Automated Ingestion.
+            </>
+          }
+        />
       )}
 
-      {drafts && drafts.length > 0 && (
-        <div className="qsec__l">
-          {drafts.map((draft) => (
-            <DraftItem
-              key={draft.id}
-              draft={draft}
-              isApproving={approveMutation.isPending}
-              isRejecting={rejectMutation.isPending}
-              onApprove={() =>
-                approveMutation.mutate(draft.id, {
-                  onSuccess: (result) =>
-                    void navigate(`/review/${draft.id}`, {
-                      state: { draftExclusions: result.excluded },
-                    }),
-                })
-              }
-              onReject={() => rejectMutation.mutate(draft.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {hasNextPage && (
-        <p style={{ marginTop: 'var(--sp-4)' }}>
-          <LoadMoreButton onClick={() => void fetchNextPage()} isFetching={isFetchingNextPage} />
-        </p>
+      {data && data.total > 0 && (
+        <>
+          {drafts.length > 0 && (
+            <div className="qsec__l">
+              {drafts.map((draft) => (
+                <DraftItem
+                  key={draft.id}
+                  draft={draft}
+                  isApproving={approveMutation.isPending}
+                  isRejecting={rejectMutation.isPending}
+                  onApprove={() =>
+                    approveMutation.mutate(draft.id, {
+                      onSuccess: (result) =>
+                        void navigate(`/review/${draft.id}`, {
+                          state: { draftExclusions: result.excluded },
+                        }),
+                    })
+                  }
+                  onReject={() => rejectMutation.mutate(draft.id)}
+                />
+              ))}
+            </div>
+          )}
+          <AdminPagination
+            page={data.page}
+            pageSize={data.pageSize}
+            pageCount={data.pageCount}
+            total={data.total}
+            onPageChange={filters.setPage}
+            busy={isPlaceholderData}
+          />
+        </>
       )}
     </section>
   )
@@ -199,22 +336,48 @@ function AdditionItem({
 }
 
 function PendingAdditionsSection() {
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = usePendingAdditions()
-  const additions = data?.pages.flatMap((page) => page.items)
+  const filters = useQueueFilterState()
+  const [sortKey, setSortKey] = useState<DateOnlySortKey>('newest')
   const navigate = useNavigate()
   const approveMutation = useApprovePendingAddition()
   const rejectMutation = useRejectPendingAddition()
+
+  const params: PendingAdditionQueueParams = useMemo(
+    () => ({
+      dir: DATE_SORT_DIR[sortKey],
+      outlet: filters.outlet.trim() || undefined,
+      ...queueParams(filters.page, filters.createdAfter, filters.createdBefore),
+    }),
+    [filters.page, sortKey, filters.outlet, filters.createdAfter, filters.createdBefore]
+  )
+
+  const { data, isLoading, isError, isPlaceholderData } = usePendingAdditions(params)
+  useClampPage(filters.page, data?.pageCount, filters.setPage)
+  const additions = data?.items ?? []
 
   return (
     <section className="qsec">
       <div className="qsec__h">
         <h2 className="qsec__t">Možná doplnění k dokončeným článkům</h2>
-        {additions && <span className="qsec__n">{additions.length}</span>}
+        {data && <span className="qsec__n">{data.total}</span>}
       </div>
       <p className="qsec__d">
         Sběr článků nalezl nové pokrytí události, která je již dokončená. Schválení připojí zdroj a znovu
         spustí triangulaci od začátku — po dobu zpracování článek dočasně zmizí z výpisu. Zamítnutí je trvalé.
       </p>
+
+      <AdminQueueControls
+        idPrefix="additions"
+        sortValue={sortKey}
+        sortOptions={DATE_SORT_OPTIONS}
+        onSortChange={filters.withPageReset(setSortKey)}
+        outlet={filters.outlet}
+        onOutletChange={filters.setOutlet}
+        createdAfter={filters.createdAfter}
+        createdBefore={filters.createdBefore}
+        onCreatedAfterChange={filters.setCreatedAfter}
+        onCreatedBeforeChange={filters.setCreatedBefore}
+      />
 
       {isLoading && <p className="note">Načítání…</p>}
       {isError && (
@@ -223,35 +386,42 @@ function PendingAdditionsSection() {
         </div>
       )}
 
-      {additions && additions.length === 0 && (
-        <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
-          Momentálně žádná. (Vyžaduje běžící sběr článků — viz vysvětlení výše.)
-        </p>
+      {data && data.total === 0 && (
+        <QueueEmptyState
+          filtered={filters.hasFilter}
+          emptyText="Momentálně žádná. (Vyžaduje běžící sběr článků — viz vysvětlení výše.)"
+        />
       )}
 
-      {additions && additions.length > 0 && (
-        <div className="qsec__l">
-          {additions.map((addition) => (
-            <AdditionItem
-              key={addition.id}
-              addition={addition}
-              isApproving={approveMutation.isPending}
-              isRejecting={rejectMutation.isPending}
-              onApprove={() =>
-                approveMutation.mutate(addition.id, {
-                  onSuccess: () => void navigate(analysisPath(addition.analysisId)),
-                })
-              }
-              onReject={() => rejectMutation.mutate(addition.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {hasNextPage && (
-        <p style={{ marginTop: 'var(--sp-4)' }}>
-          <LoadMoreButton onClick={() => void fetchNextPage()} isFetching={isFetchingNextPage} />
-        </p>
+      {data && data.total > 0 && (
+        <>
+          {additions.length > 0 && (
+            <div className="qsec__l">
+              {additions.map((addition) => (
+                <AdditionItem
+                  key={addition.id}
+                  addition={addition}
+                  isApproving={approveMutation.isPending}
+                  isRejecting={rejectMutation.isPending}
+                  onApprove={() =>
+                    approveMutation.mutate(addition.id, {
+                      onSuccess: () => void navigate(analysisPath(addition.analysisId)),
+                    })
+                  }
+                  onReject={() => rejectMutation.mutate(addition.id)}
+                />
+              ))}
+            </div>
+          )}
+          <AdminPagination
+            page={data.page}
+            pageSize={data.pageSize}
+            pageCount={data.pageCount}
+            total={data.total}
+            onPageChange={filters.setPage}
+            busy={isPlaceholderData}
+          />
+        </>
       )}
     </section>
   )
@@ -305,20 +475,44 @@ function RelationItem({
 }
 
 function StoryRelationsSection() {
-  const { data: relations, isLoading, isError } = usePendingStoryRelations()
+  const filters = useQueueFilterState()
+  const [sortKey, setSortKey] = useState<DateOnlySortKey>('newest')
   const approveMutation = useApproveStoryRelation()
   const rejectMutation = useRejectStoryRelation()
+
+  const params: StoryRelationQueueParams = useMemo(
+    () => ({
+      dir: DATE_SORT_DIR[sortKey],
+      ...queueParams(filters.page, filters.createdAfter, filters.createdBefore),
+    }),
+    [filters.page, sortKey, filters.createdAfter, filters.createdBefore]
+  )
+
+  const { data, isLoading, isError, isPlaceholderData } = usePendingStoryRelations(params)
+  useClampPage(filters.page, data?.pageCount, filters.setPage)
+  const relations = data?.items ?? []
 
   return (
     <section className="qsec">
       <div className="qsec__h">
         <h2 className="qsec__t">Vztahy mezi událostmi čekající na schválení</h2>
-        {relations && <span className="qsec__n">{relations.length}</span>}
+        {data && <span className="qsec__n">{data.total}</span>}
       </div>
       <p className="qsec__d">
         Nástroj s nižší jistotou navrhl souvislost mezi dvěma událostmi. Potvrďte, pokud dává smysl, nebo
         zamítněte — zamítnutí je trvalé a nástroj tuto dvojici znovu nenabídne.
       </p>
+
+      <AdminQueueControls
+        idPrefix="relations"
+        sortValue={sortKey}
+        sortOptions={DATE_SORT_OPTIONS}
+        onSortChange={filters.withPageReset(setSortKey)}
+        createdAfter={filters.createdAfter}
+        createdBefore={filters.createdBefore}
+        onCreatedAfterChange={filters.setCreatedAfter}
+        onCreatedBeforeChange={filters.setCreatedBefore}
+      />
 
       {isLoading && <p className="note">Načítání…</p>}
       {isError && (
@@ -327,25 +521,35 @@ function StoryRelationsSection() {
         </div>
       )}
 
-      {relations && relations.length === 0 && (
-        <p className="note" style={{ marginTop: 'var(--sp-4)' }}>
-          Momentálně žádné čekající vztahy.
-        </p>
+      {data && data.total === 0 && (
+        <QueueEmptyState filtered={filters.hasFilter} emptyText="Momentálně žádné čekající vztahy." />
       )}
 
-      {relations && relations.length > 0 && (
-        <div className="qsec__l">
-          {relations.map((relation) => (
-            <RelationItem
-              key={relation.id}
-              relation={relation}
-              isApproving={approveMutation.isPending}
-              isRejecting={rejectMutation.isPending}
-              onApprove={() => approveMutation.mutate(relation.id)}
-              onReject={() => rejectMutation.mutate(relation.id)}
-            />
-          ))}
-        </div>
+      {data && data.total > 0 && (
+        <>
+          {relations.length > 0 && (
+            <div className="qsec__l">
+              {relations.map((relation) => (
+                <RelationItem
+                  key={relation.id}
+                  relation={relation}
+                  isApproving={approveMutation.isPending}
+                  isRejecting={rejectMutation.isPending}
+                  onApprove={() => approveMutation.mutate(relation.id)}
+                  onReject={() => rejectMutation.mutate(relation.id)}
+                />
+              ))}
+            </div>
+          )}
+          <AdminPagination
+            page={data.page}
+            pageSize={data.pageSize}
+            pageCount={data.pageCount}
+            total={data.total}
+            onPageChange={filters.setPage}
+            busy={isPlaceholderData}
+          />
+        </>
       )}
     </section>
   )

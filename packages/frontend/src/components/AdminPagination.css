@@ -1,0 +1,56 @@
+/* ticket 88 — offset page-number pagination for the admin Ingestion queues. Sans, micro, quiet;
+   the current page is the only filled cell, matching the system's zero-radius, low-chrome
+   controls (ds/controls.css). */
+.apager {
+  margin-top: var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+}
+.apager--busy {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.apager__range {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+.apager__pages {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: auto;
+}
+.apager__b {
+  min-inline-size: 1.75rem;
+  padding: 0.25rem 0.4rem;
+  border: var(--bw-hair) solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.apager__b:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.apager__b.is-current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  cursor: default;
+}
+.apager__b:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.apager__gap {
+  padding: 0 0.2rem;
+  color: var(--ink-4);
+}
