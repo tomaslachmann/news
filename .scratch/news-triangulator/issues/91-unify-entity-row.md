@@ -31,7 +31,7 @@ Thread pages renders as a squashed ellipse instead of a circle.
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 - [x] Promote `.ents` / `.erow` / `.erow__c` / `.erow__dot` / `.erow__n` / `.erow__k` / `.erow__t`
       to `ds/components.css` as one canonical definition. Remove the duplicated blocks from
