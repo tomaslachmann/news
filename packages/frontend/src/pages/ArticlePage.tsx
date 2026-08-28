@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { EntityRow } from '@/components/EntityRow'
+import { entityInitials } from '@/lib/entityInitials'
 import { Gauge } from '@/components/Gauge'
 import { ShareBar } from '@/components/ShareBar'
 import { NarrativeArticle } from '@/components/NarrativeArticle'
@@ -165,7 +166,7 @@ function EntityMentionsSection({ entities }: { entities: EntityMentionItem[] }) 
           <EntityRow
             key={e.key}
             to={`/entity/${e.key}`}
-            badge={ENTITY_TYPE_LABELS[e.type][0]}
+            badge={entityInitials(e.canonicalName)}
             name={e.canonicalName}
             meta={ENTITY_TYPE_LABELS[e.type]}
           />

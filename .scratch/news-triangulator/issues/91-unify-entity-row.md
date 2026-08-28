@@ -50,3 +50,11 @@ Thread pages renders as a squashed ellipse instead of a circle.
       proportional bubbles still scale.
 - [x] Tests: no new component-test infra (none exists) — cover any extracted pure helper; existing
       view-model tests still pass. Typecheck + full suites. `/code-review` clean.
+
+## Follow-up (2026-08-28, user feedback)
+The dot badge showed the *type* initial (O/Z/M) on Article/Thread and the raw 24h mention count
+(mostly "1" on sparse data) on Home — user wanted the entity's own initial everywhere. New
+`lib/entityInitials.ts` (first + last word initial, Czech-locale uppercase, unit-tested); all
+three pages now pass `entityInitials(canonicalName)` as the badge. Home keeps the proportional
+bubble *size* (= mention count, per the "Velikost kruhu…" caption); the number is no longer
+printed inside.

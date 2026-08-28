@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { EntityRow } from '@/components/EntityRow'
+import { entityInitials } from '@/lib/entityInitials'
 import { Gauge } from '@/components/Gauge'
 import type { AnalysisListSummary } from '@/services/analyses'
 import type { HomepageArticleItem } from '@/services/homepageStats'
@@ -257,7 +258,7 @@ function EntsPanel() {
             <EntityRow
               key={e.key}
               to={`/entity/${e.key}`}
-              badge={e.recentEventCount}
+              badge={entityInitials(e.canonicalName)}
               badgeSize={getEntityDotSize(e.recentEventCount, min, max)}
               name={e.canonicalName}
               meta={`${ENTITY_TYPE_LABELS[e.type]} · ${e.recentSourceCount} zdrojů`}

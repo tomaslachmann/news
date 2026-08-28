@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { EntityRow } from '@/components/EntityRow'
+import { entityInitials } from '@/lib/entityInitials'
 import { Gauge } from '@/components/Gauge'
 import { FollowThreadButton } from '@/components/FollowThreadButton'
 import { formatDate } from '@/lib/formatDate'
@@ -293,7 +294,7 @@ function ThreadEntitiesRail({ entities }: { entities: EntityMentionItem[] }) {
           <EntityRow
             key={e.key}
             to={`/entity/${e.key}`}
-            badge={ENTITY_TYPE_LABELS[e.type][0]}
+            badge={entityInitials(e.canonicalName)}
             name={e.canonicalName}
             meta={ENTITY_TYPE_LABELS[e.type]}
           />
