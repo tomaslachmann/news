@@ -1,0 +1,37 @@
+/* ticket 88 — sort/filter toolbar for the admin Ingestion queues. Mirrors HistoryPage.css's
+   `.archive-toolbar` / `.filter` shape (sans micro labels above compact controls) but lives in
+   components/ since three queues share it. */
+.aqc {
+  margin-top: var(--sp-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-4);
+  align-items: flex-end;
+}
+.aqc__f {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.aqc__f label {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.aqc__f select,
+.aqc__f input {
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  padding: 0.3rem 0.45rem;
+  border: var(--bw-hair) solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  min-inline-size: 9rem;
+}
+.aqc__f select:focus,
+.aqc__f input:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
