@@ -2,7 +2,12 @@ import type { FastifyBaseLogger } from 'fastify'
 import type { WikidataSuggestionCandidate } from '@news-triangulator/shared'
 import type { NewAdminActionLog } from '../repositories/adminActionLog.js'
 import type { ScanEntity } from '../repositories/entityWikidataSuggestion.js'
-import { evaluateAutoLink, scoreCandidate, type WikidataItemDetail } from './entityWikidataMatching.js'
+import {
+  evaluateAutoLink,
+  scoreCandidate,
+  TYPE_P31_QIDS,
+  type WikidataItemDetail,
+} from './entityWikidataMatching.js'
 import { ReconcileUnavailableError, type ReconcileTopCandidate } from './wikidataReconcileClient.js'
 import type { EntityType } from '../repositories/entity.js'
 
@@ -46,7 +51,7 @@ export interface EntityWikidataScanDeps {
   recordAdminAction: (data: NewAdminActionLog) => Promise<void>
   enqueueImageEnrich: (entityId: string) => Promise<void>
   resolveByCswikiTitle: (title: string) => Promise<WikidataItemDetail | null>
-  searchTypedCandidates: (name: string, type: EntityType) => Promise<string[]>
+  searchTypedCandidates: (name: string, p31Qids: string[]) => Promise<string[]>
   fetchItemDetails: (qids: string[]) => Promise<WikidataItemDetail[]>
   reconcile: (query: string, entityType: EntityType) => Promise<ReconcileTopCandidate | null>
 }
@@ -70,7 +75,7 @@ async function processEntity(
 
   // Serial, not parallel — polite one-at-a-time Wikidata access (research §5).
   const cswikiItem = await deps.resolveByCswikiTitle(entity.canonicalName)
-  const typedQids = await deps.searchTypedCandidates(entity.canonicalName, entity.type)
+  const typedQids = await deps.searchTypedCandidates(entity.canonicalName, TYPE_P31_QIDS[entity.type])
 
   const primary = cswikiItem && !rejectedQids.has(cswikiItem.qid) ? cswikiItem : null
   const extraQids = typedQids.filter((q) => q !== primary?.qid && !rejectedQids.has(q))
@@ -107,7 +112,16 @@ async function processEntity(
         targetId: entity.id,
       })
       await deps.deleteSuggestion(entity.id)
-      await deps.enqueueImageEnrich(entity.id)
+      // Best-effort, exactly like `applyWikidataLink`'s own enqueue — a queue hiccup must not undo
+      // or hide a link that already committed (the entity would otherwise be miscounted `skipped`).
+      try {
+        await deps.enqueueImageEnrich(entity.id)
+      } catch (err) {
+        log?.warn(
+          { entityKey: entity.key, err },
+          'entity.wikidata.scan: image-enrich enqueue failed after auto-link (link stands)'
+        )
+      }
       log?.info({ entityKey: entity.key, qid: primaryForGate.qid }, 'entity.wikidata.scan: auto-linked')
       return 'auto-linked'
     }

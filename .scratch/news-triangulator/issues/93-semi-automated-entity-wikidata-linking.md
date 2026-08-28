@@ -212,3 +212,31 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
 - Tests: `entityWikidataMatching` (17), `wikidataReconcileClient` (5), new `wikidataSearchClient`
   (5), `entityWikidataScanService` (8), `entityWikidataService` suggestion actions (8), integration
   `entityWikidataSuggestion` (5). Backend 782 unit + 126 integration, frontend 77, all green.
+
+## Code-review fixes (2026-08-28)
+
+Two-axis review (Standards + Spec) — no hard violations. Addressed:
+
+- **429/503 `Retry-After` backoff** (Spec): added `fetchWithRetry` to `httpClient.ts` (bounded
+  retry on 429/503, honours `Retry-After`, exponential-backoff fallback, 15s cap). All three
+  Wikidata Action-API reads and the reconciliation call now use it.
+- **Reconcile transport** (both axes): switched from `GET ?queries=` to the spec-primary
+  `POST` with an `application/x-www-form-urlencoded` `queries=` body.
+- **Layering / Feature Envy** (Standards): `wikidataSearchClient` no longer imports from
+  `entityWikidataMatching` — `searchTypedCandidates(name, p31Qids: string[])` takes the Q-id list
+  as a param (the scan service passes `TYPE_P31_QIDS[type]`), and `WikidataItemDetail` now lives in
+  the client (its own return shape), re-exported by matching for convenience.
+- **Speculative Generality** (Standards): `fetchItemDetails` is one call + a 50-id `slice` guard,
+  not a paging loop (callers never exceed ~11 ids).
+- **Scan-path enqueue now best-effort** (Spec): `enqueueImageEnrich` failure after an auto-link is
+  caught and logged, so the entity isn't miscounted `skipped` when the link actually committed.
+- `srsearch` now strips `"` from the entity name before wrapping it in the phrase query.
+
+Consciously **not** changed:
+- `reconcile(query, entityType)` has no `properties?` param (ticket line 83). Research §8 Step 4
+  says pass a discriminating property "if we have one" — we extract none (no P106/P39 from
+  context), so an unused param would be speculative generality (ADR 0009). The door is open: add
+  it when a property source exists.
+- Repo names the "candidates for this entity" reader `findSuggestionCandidates(entityId)` rather
+  than `findSuggestionByEntityKey` — it returns the candidate array, not a row, and every caller
+  already holds the entity id.

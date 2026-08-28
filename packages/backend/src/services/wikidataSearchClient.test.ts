@@ -114,25 +114,43 @@ describe('searchTypedCandidates', () => {
   beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
   afterEach(() => vi.unstubAllGlobals())
 
-  it('builds a haswbstatement P31 OR-clause for the entity type and returns only Q-id titles', async () => {
+  it('builds a haswbstatement P31 OR-clause from the passed Q-ids and returns only Q-id titles', async () => {
     vi.mocked(fetch).mockResolvedValue(
       jsonResponse({
         query: { search: [{ title: 'Q3377548' }, { title: 'Q12044841' }, { title: 'not-a-qid' }] },
       })
     )
 
-    const qids = await searchTypedCandidates('Petr Fiala', 'PERSON')
+    const qids = await searchTypedCandidates('Petr Fiala', ['Q5', 'Q6256'])
 
     const parsed = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
     expect(parsed.searchParams.get('list')).toBe('search')
-    expect(parsed.searchParams.get('srsearch')).toBe('"Petr Fiala" haswbstatement:P31=Q5')
+    expect(parsed.searchParams.get('srsearch')).toBe('"Petr Fiala" haswbstatement:P31=Q5|P31=Q6256')
     expect(qids).toEqual(['Q3377548', 'Q12044841'])
+  })
+
+  it('strips quotes from the name before wrapping it in the phrase query', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ query: { search: [] } }))
+
+    await searchTypedCandidates('the "big" one', ['Q5'])
+
+    const parsed = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(parsed.searchParams.get('srsearch')).toBe('"the big one" haswbstatement:P31=Q5')
   })
 
   it('throws when the API returns an error body (e.g. maxlag)', async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: { code: 'maxlag' } }))
 
-    await expect(searchTypedCandidates('X', 'PERSON')).rejects.toThrow('maxlag')
+    await expect(searchTypedCandidates('X', ['Q5'])).rejects.toThrow('maxlag')
+  })
+
+  it('retries once on a 429 that carries Retry-After, then succeeds', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response('{}', { status: 429, headers: { 'retry-after': '0' } }))
+      .mockResolvedValueOnce(jsonResponse({ query: { search: [{ title: 'Q1' }] } }))
+
+    await expect(searchTypedCandidates('X', ['Q5'])).resolves.toEqual(['Q1'])
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)
   })
 })
 

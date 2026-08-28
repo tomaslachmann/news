@@ -1,5 +1,5 @@
 import type { EntityType } from '../repositories/entity.js'
-import { fetchWithTimeout } from './httpClient.js'
+import { fetchWithRetry, NEWS_TRIANGULATOR_USER_AGENT } from './httpClient.js'
 
 // Optional cross-check for the semi-automated Wikidata linker (ticket 93 / ADR 0042, research §3):
 // the hosted OpenRefine-Wikibase reconciliation service. Before auto-linking, the scan job asks
@@ -51,11 +51,19 @@ export async function reconcile(
   const batch = {
     q0: { query, type: RECONCILE_TYPE_QID[entityType], limit: CANDIDATE_LIMIT },
   }
-  const url = `${RECONCILE_URL}?queries=${encodeURIComponent(JSON.stringify(batch))}`
+  // POST with a form-encoded `queries` body — the W3C Reconciliation spec's primary transport
+  // (research §3.1); `GET ?queries=` is only a SHOULD-support fallback.
+  const formBody = `queries=${encodeURIComponent(JSON.stringify(batch))}`
 
   let res: Response
   try {
-    res = await fetchWithTimeout(url, TIMEOUT_MS)
+    res = await fetchWithRetry(RECONCILE_URL, TIMEOUT_MS, {
+      headers: {
+        'User-Agent': NEWS_TRIANGULATOR_USER_AGENT,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      init: { method: 'POST', body: formBody },
+    })
   } catch (err) {
     throw new ReconcileUnavailableError(
       `Reconciliation request failed: ${err instanceof Error ? err.message : String(err)}`

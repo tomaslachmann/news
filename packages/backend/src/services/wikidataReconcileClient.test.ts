@@ -9,21 +9,23 @@ describe('reconcile', () => {
   beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
   afterEach(() => vi.unstubAllGlobals())
 
-  it('sends a form-style queries batch constrained to the type root class and honest UA', async () => {
+  it('POSTs a form-encoded queries batch constrained to the type root class, with the honest UA', async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse({ q0: { result: [] } }))
 
     await reconcile('Petr Fiala', 'PERSON')
 
     const [url, init] = vi.mocked(fetch).mock.calls[0]
-    const parsed = new URL(url as string)
-    expect(parsed.origin + parsed.pathname).toBe('https://wikidata-reconciliation.wmcloud.org/cs/api')
-    const batch = JSON.parse(parsed.searchParams.get('queries') as string) as {
+    expect(url).toBe('https://wikidata-reconciliation.wmcloud.org/cs/api')
+    expect(init?.method).toBe('POST')
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Content-Type')).toBe('application/x-www-form-urlencoded')
+    expect(headers.get('User-Agent')).toBe('NewsTriangulator/1.0 (+https://github.com/tomaslachmann/news)')
+    const body = init?.body as string
+    expect(body.startsWith('queries=')).toBe(true)
+    const batch = JSON.parse(decodeURIComponent(body.slice('queries='.length))) as {
       q0: { query: string; type: string }
     }
     expect(batch.q0).toMatchObject({ query: 'Petr Fiala', type: 'Q5' })
-    expect(new Headers(init?.headers).get('User-Agent')).toBe(
-      'NewsTriangulator/1.0 (+https://github.com/tomaslachmann/news)'
-    )
   })
 
   it('returns the highest-scoring candidate with its match flag', async () => {
@@ -51,10 +53,11 @@ describe('reconcile', () => {
     await expect(reconcile('zzz', 'PERSON')).resolves.toBeNull()
   })
 
-  it('throws ReconcileUnavailableError on a 429 (rate limited)', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({}, 429))
+  it('retries then throws ReconcileUnavailableError when 429s persist', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 429, headers: { 'retry-after': '0' } }))
 
     await expect(reconcile('X', 'PERSON')).rejects.toBeInstanceOf(ReconcileUnavailableError)
+    expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(1)
   })
 
   it('throws ReconcileUnavailableError when the request itself fails (timeout / network)', async () => {

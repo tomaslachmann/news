@@ -149,8 +149,9 @@ const start = async () => {
             deleteSuggestion: entityWikidataSuggestionRepo.deleteSuggestion,
             setEntityWikidataId: entityRepo.setEntityWikidataId,
             recordAdminAction: recordAdminActionSafe,
-            enqueueImageEnrich: (entityId) =>
-              enqueueJob(JobName.EntityImageEnrich, { entityId }).then(() => {}),
+            enqueueImageEnrich: async (entityId) => {
+              await enqueueJob(JobName.EntityImageEnrich, { entityId })
+            },
             resolveByCswikiTitle: wikidataSearchClient.resolveByCswikiTitle,
             searchTypedCandidates: wikidataSearchClient.searchTypedCandidates,
             fetchItemDetails: wikidataSearchClient.fetchItemDetails,

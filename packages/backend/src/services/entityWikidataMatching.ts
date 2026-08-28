@@ -1,5 +1,8 @@
 import type { EntityType } from '../repositories/entity.js'
 import { COMBINING_DIACRITICS } from './entityKey.js'
+import type { WikidataItemDetail } from './wikidataSearchClient.js'
+
+export type { WikidataItemDetail }
 
 // Pure matching logic for the semi-automated Wikidata linker (ticket 93 / ADR 0042) — no I/O, no
 // LLM. The scan job (entityWikidataScanService.ts) feeds it Wikidata item details it already
@@ -66,23 +69,6 @@ export const WIKIMEDIA_INTERNAL_QIDS = [
   'Q17442446', // Wikimedia internal item
   'Q4663903', // Wikimedia content assessment
 ]
-
-/** Wikidata item fields the linker needs — the subset `wikidataSearchClient.ts` pulls from
- *  `wbgetentities` (labels/aliases/descriptions/claims/sitelinks). */
-export interface WikidataItemDetail {
-  qid: string
-  /** Display label — cs preferred, en fallback, the qid itself if the item has neither. */
-  label: string
-  /** Every cs + en label and alias, lowercased-comparison candidates for the exact-name test. */
-  names: string[]
-  /** Wikidata's one-line description — cs preferred, en fallback. */
-  description: string | null
-  /** `P31` (instance of) target Q-ids. */
-  p31: string[]
-  /** Number of sitelinks across all wikis — a cheap popularity signal (research §6). */
-  sitelinkCount: number
-  hasCswikiSitelink: boolean
-}
 
 /** Fold a name to its comparison form: NFD + strip diacritics + collapse internal whitespace +
  *  lowercase (cs locale) + trim. "Petr  Fiala" and "petr fiala" and "Petr Fiala" all compare

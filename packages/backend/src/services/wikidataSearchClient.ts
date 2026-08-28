@@ -1,6 +1,4 @@
-import type { EntityType } from '../repositories/entity.js'
-import { fetchWithTimeout } from './httpClient.js'
-import { TYPE_P31_QIDS, type WikidataItemDetail } from './entityWikidataMatching.js'
+import { fetchWithRetry, fetchWithTimeout } from './httpClient.js'
 
 const TIMEOUT_MS = 8_000
 const SEARCH_LIMIT = 10
@@ -15,6 +13,25 @@ export interface WikidataCandidate {
   qid: string
   label: string
   description?: string
+}
+
+/** Wikidata item fields the semi-automated linker needs (ticket 93 / ADR 0042) — the subset
+ *  `wbgetentities` returns (labels/aliases/descriptions/claims/sitelinks), flattened. Lives here
+ *  because this client is the only thing that produces it; `entityWikidataMatching.ts` imports the
+ *  type to score it. */
+export interface WikidataItemDetail {
+  qid: string
+  /** Display label — cs preferred, en fallback, the qid itself if the item has neither. */
+  label: string
+  /** Every cs + en label and alias, comparison candidates for the exact-name test. */
+  names: string[]
+  /** Wikidata's one-line description — cs preferred, en fallback. */
+  description: string | null
+  /** `P31` (instance of) target Q-ids. */
+  p31: string[]
+  /** Number of sitelinks across all wikis — a cheap popularity signal (research §6). */
+  sitelinkCount: number
+  hasCswikiSitelink: boolean
 }
 
 interface WikidataSearchResponse {
@@ -46,9 +63,10 @@ export async function searchWikidataEntities(query: string): Promise<WikidataCan
 }
 
 // --- Ticket 93 / ADR 0042: the semi-automated linker's read calls -----------------------------
-// All three run only from the scheduled scan job, serially, with `maxlag=5` and the honest contact
-// User-Agent (research §5 — NOT the browser-shaped headers from ADR 0040). Unit-tested by mocking
-// the HTTP call; they never hit real Wikidata in tests, same convention as searchWikidataEntities.
+// All three run only from the scheduled scan job, serially, with `maxlag=5`, the honest contact
+// User-Agent (research §5 — NOT the browser-shaped headers from ADR 0040), and a bounded
+// `Retry-After`-honouring retry on 429/503. Unit-tested by mocking the HTTP call; they never hit
+// real Wikidata in tests, same convention as searchWikidataEntities.
 
 interface WbEntity {
   labels?: Record<string, { value?: string }>
@@ -103,7 +121,7 @@ function toItemDetail(qid: string, entity: WbEntity): WikidataItemDetail {
 }
 
 async function wbGetEntities(url: URL): Promise<Record<string, WbEntity>> {
-  const res = await fetchWithTimeout(url.toString(), TIMEOUT_MS)
+  const res = await fetchWithRetry(url.toString(), TIMEOUT_MS)
   if (!res.ok) throw new Error(`Wikidata wbgetentities returned HTTP ${res.status}`)
   const body = (await res.json()) as WbGetEntitiesResponse
   if (body.error) throw new Error(`Wikidata wbgetentities error: ${body.error.code ?? 'unknown'}`)
@@ -131,20 +149,21 @@ export async function resolveByCswikiTitle(title: string): Promise<WikidataItemD
 }
 
 /** Type-constrained candidate search via CirrusSearch (research §1.3): `list=search` in the
- *  Wikidata item namespace with a `haswbstatement:P31=<qid>` OR-clause for the entity type's
- *  Q-ids. Returns candidate Q-ids only — feed them to `fetchItemDetails` for scoring. */
-export async function searchTypedCandidates(name: string, type: EntityType): Promise<string[]> {
-  const p31Clause = TYPE_P31_QIDS[type].map((qid) => `P31=${qid}`).join('|')
+ *  Wikidata item namespace with a `haswbstatement:P31=<qid>` OR-clause built from `p31Qids` (the
+ *  entity type's Q-id set — passed in so this client stays free of entity-domain knowledge).
+ *  Returns candidate Q-ids only — feed them to `fetchItemDetails` for scoring. */
+export async function searchTypedCandidates(name: string, p31Qids: string[]): Promise<string[]> {
+  const p31Clause = p31Qids.map((qid) => `P31=${qid}`).join('|')
   const url = new URL('https://www.wikidata.org/w/api.php')
   url.searchParams.set('action', 'query')
   url.searchParams.set('list', 'search')
-  url.searchParams.set('srsearch', `"${name}" haswbstatement:${p31Clause}`)
+  url.searchParams.set('srsearch', `"${name.replace(/"/g, '')}" haswbstatement:${p31Clause}`)
   url.searchParams.set('srnamespace', '0')
   url.searchParams.set('srlimit', String(SEARCH_LIMIT))
   url.searchParams.set('format', 'json')
   url.searchParams.set('maxlag', String(MAXLAG))
 
-  const res = await fetchWithTimeout(url.toString(), TIMEOUT_MS)
+  const res = await fetchWithRetry(url.toString(), TIMEOUT_MS)
   if (!res.ok) throw new Error(`Wikidata list=search returned HTTP ${res.status}`)
   const body = (await res.json()) as {
     query?: { search?: { title?: string }[] }
@@ -156,20 +175,17 @@ export async function searchTypedCandidates(name: string, type: EntityType): Pro
     .filter((t): t is string => typeof t === 'string' && /^Q[1-9]\d*$/.test(t))
 }
 
-/** Batch `wbgetentities` for the scoring / rival checks (research §1.2) — up to 50 ids per call,
- *  chunked and run serially so a large candidate set stays within the anonymous limit and the
- *  polite-serial posture. */
+/** Batch `wbgetentities` for the scoring / rival checks (research §1.2). One call — callers keep
+ *  the id list well under the 50-id anonymous cap (`searchTypedCandidates` returns ≤ 10 plus the
+ *  one cswiki id); the `slice` is a guard, not a paging loop. */
 export async function fetchItemDetails(qids: string[]): Promise<WikidataItemDetail[]> {
-  const unique = [...new Set(qids)]
-  const details: WikidataItemDetail[] = []
-  for (let i = 0; i < unique.length; i += WBGETENTITIES_MAX_IDS) {
-    const chunk = unique.slice(i, i + WBGETENTITIES_MAX_IDS)
-    const url = wbGetEntitiesUrl()
-    url.searchParams.set('ids', chunk.join('|'))
-    const entities = await wbGetEntities(url)
-    for (const [qid, entity] of Object.entries(entities)) {
-      if (qid.startsWith('Q')) details.push(toItemDetail(qid, entity))
-    }
-  }
-  return details
+  const unique = [...new Set(qids)].slice(0, WBGETENTITIES_MAX_IDS)
+  if (unique.length === 0) return []
+
+  const url = wbGetEntitiesUrl()
+  url.searchParams.set('ids', unique.join('|'))
+  const entities = await wbGetEntities(url)
+  return Object.entries(entities)
+    .filter(([qid]) => qid.startsWith('Q'))
+    .map(([qid, entity]) => toItemDetail(qid, entity))
 }
