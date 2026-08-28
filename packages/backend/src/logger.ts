@@ -72,13 +72,15 @@ function pad2(n: number): string {
  *  once rotated (the content is gzipped, so the name must carry `.gz` — rfs's own built-in
  *  generator does the same). `intervalBoundary` makes `time` the start of the day the lines
  *  belong to, so the date in the name is that day, not the rotation moment (00:00 of the next).
- *  `index` disambiguates a same-day mid-day rotation (the `size` safety cap). rfs passes `null`
- *  for the active file despite the declared `number | Date` type. Exported for `logger.test.ts`. */
+ *  UTC throughout (matches `intervalUTC: true` below) so the filename is deterministic regardless
+ *  of the host timezone. `index` disambiguates a same-day mid-day rotation (the `size` safety
+ *  cap). rfs passes `null` for the active file despite the declared `number | Date` type.
+ *  Exported for `logger.test.ts`. */
 export function logFileNameFor(service: string): RfsGenerator {
   return (time, index) => {
     if (!time) return `${service}.log`
     const d = time instanceof Date ? time : new Date(time)
-    const date = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+    const date = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`
     const seq = index && index > 1 ? `.${index}` : ''
     return `${service}-${date}${seq}.log.gz`
   }
@@ -93,7 +95,11 @@ function buildFileStream(service: string) {
     path: LOG_DIR,
     interval: '1d',
     intervalBoundary: true,
+    intervalUTC: true,
     compress: 'gzip',
+    // Counts rotated files, ~= days at one rotation/day. A runaway day that hits `size` many
+    // times over would prune its own early hours before older days — an acceptable failure mode
+    // for the runaway case (the alternative is a full disk).
     maxFiles: LOG_RETENTION_DAYS,
     size: LOG_MAX_FILE_SIZE,
     // Persist the rotated-file list so `maxFiles` prunes the whole history across restarts (the

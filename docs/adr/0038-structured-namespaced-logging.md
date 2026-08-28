@@ -67,7 +67,10 @@ request); it only affects how long OpenAI's own dashboard keeps it viewable.
 - ~~No retention policy on the log files~~ — **superseded (ticket 92).** A worker left running all
   day writes ~15 MB of plain NDJSON, so "real disk usage becomes a problem in practice" arrived.
   The daily file is now gzipped on rotation and the rotated set is pruned to `LOG_RETENTION_DAYS`
-  (a bare-filename `history` sidecar lets the prune span process restarts). `pino-roll` v4 has no
+  (a bare-filename `history` sidecar lets the prune span process restarts). `maxFiles` counts
+  rotated *files*, which equals days at the normal one-rotation-per-day rate; a day that trips the
+  `LOG_MAX_FILE_SIZE` cap repeatedly can prune its own earlier hours before the window is up —
+  acceptable for that runaway case. `pino-roll` v4 has no
   compression option, so the file sink moved to `rotating-file-stream` — a plain in-process
   `Writable` in `pino.multistream()`, no `pino.transport()` worker thread (the pretty stream was
   already in-process for the same reason: a `messageFormat` function can't be structured-cloned).
