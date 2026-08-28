@@ -26,7 +26,7 @@ const EMPTY_STATS = { eventCount: 0, firstMentionAt: null, lastMentionAt: null, 
 /** The reads getEntityDetail fans out that these tests don't each assert on — defaulted so a test
  *  only overrides what it cares about. */
 function stubEntityDetailReads() {
-  vi.mocked(entityImageRepo.findEntityImageUrl).mockResolvedValue(null)
+  vi.mocked(entityImageRepo.findEntityWikiImage).mockResolvedValue(null)
   vi.mocked(entityRepo.findEntityStats).mockResolvedValue(EMPTY_STATS)
   vi.mocked(entityRepo.findCoMentionedEntities).mockResolvedValue([])
   vi.mocked(entityRepo.findMentionTimeline).mockResolvedValue([])
@@ -72,7 +72,12 @@ describe('getEntityDetail', () => {
       wikipediaExtract: 'Petr Fiala je český politik…',
       wikipediaUrl: 'https://cs.wikipedia.org/wiki/Petr_Fiala',
     })
-    vi.mocked(entityImageRepo.findEntityImageUrl).mockResolvedValue('https://img/fiala.jpg')
+    vi.mocked(entityImageRepo.findEntityWikiImage).mockResolvedValue({
+      imageUrl: 'https://img/fiala.jpg',
+      author: 'Jane Doe',
+      license: 'CC BY-SA 4.0',
+      sourceUrl: 'https://commons.wikimedia.org/wiki/File:Fiala.jpg',
+    })
     vi.mocked(entityRepo.findEntityStats).mockResolvedValue({
       eventCount: 3,
       firstMentionAt: new Date('2026-06-01T00:00:00Z'),
@@ -118,7 +123,12 @@ describe('getEntityDetail', () => {
       wikidataDescription: 'český politik',
       wikipediaExtract: 'Petr Fiala je český politik…',
       wikipediaUrl: 'https://cs.wikipedia.org/wiki/Petr_Fiala',
-      imageUrl: 'https://img/fiala.jpg',
+      image: {
+        url: 'https://img/fiala.jpg',
+        author: 'Jane Doe',
+        license: 'CC BY-SA 4.0',
+        sourceUrl: 'https://commons.wikimedia.org/wiki/File:Fiala.jpg',
+      },
       aliases: ['P. Fiala'],
       eventCount: 3,
       firstMentionAt: '2026-06-01T00:00:00.000Z',
@@ -160,7 +170,7 @@ describe('getEntityDetail', () => {
       wikidataId: null,
       wikidataDescription: null,
       wikipediaExtract: null,
-      imageUrl: null,
+      image: null,
       relations: [],
       aliases: [],
       eventCount: 0,

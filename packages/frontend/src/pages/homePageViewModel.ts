@@ -1,7 +1,5 @@
 import type { AnalysisListSummary } from '@/services/analyses'
 
-const CZECH_NUMBER = new Intl.NumberFormat('cs-CZ')
-
 export function getStorySignal(summary: AnalysisListSummary): {
   bad: boolean
   chipClass: string
@@ -31,9 +29,4 @@ export function entityTrendClass(percent: number): string {
   if (percent > 0) return 'is-up'
   if (percent < 0) return 'is-down'
   return ''
-}
-
-export function formatCzechCount(count: number, one: string, few: string, many: string): string {
-  const form = count === 1 ? one : Number.isInteger(count) && count >= 2 && count <= 4 ? few : many
-  return `${CZECH_NUMBER.format(count)} ${form}`
 }

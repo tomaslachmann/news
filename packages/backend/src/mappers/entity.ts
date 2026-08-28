@@ -5,6 +5,7 @@ import type {
   EntityMentionMonth,
   EntityRelationItem,
   EntitySearchResultItem,
+  EntityWikiImage,
   Page,
 } from '@news-triangulator/shared'
 import type {
@@ -16,6 +17,7 @@ import type {
   CoMentionedEntityRow,
   MentionMonthRow,
 } from '../repositories/entity.js'
+import type { EntityWikiImageRow } from '../repositories/entityImage.js'
 import { resolveDisplayTitle } from './analysis.js'
 
 export function toEntitySearchResultItem(row: EntitySearchRow): EntitySearchResultItem {
@@ -65,9 +67,14 @@ function toEntityMentionMonth(row: MentionMonthRow): EntityMentionMonth {
 /** Options bag rather than positional params — this field set has grown once already (ticket 90
  *  over ticket 42) and an options object keeps the next addition additive at the one call site,
  *  same convention as `completeAnalysisWithSynthesis`. */
+function toEntityWikiImage(row: EntityWikiImageRow | null): EntityWikiImage | null {
+  if (!row) return null
+  return { url: row.imageUrl, author: row.author, license: row.license, sourceUrl: row.sourceUrl }
+}
+
 export interface EntityDetailParts {
   entity: EntityRecord
-  imageUrl: string | null
+  imageRow: EntityWikiImageRow | null
   stats: EntityStats
   events: Page<EntityEventItem>
   relationRows: EntityRelationForEntityRow[]
@@ -78,7 +85,7 @@ export interface EntityDetailParts {
 
 export function toEntityDetail({
   entity,
-  imageUrl,
+  imageRow,
   stats,
   events,
   relationRows,
@@ -94,7 +101,7 @@ export function toEntityDetail({
     wikidataDescription: entity.wikidataDescription,
     wikipediaExtract: entity.wikipediaExtract,
     wikipediaUrl: entity.wikipediaUrl,
-    imageUrl,
+    image: toEntityWikiImage(imageRow),
     aliases,
     eventCount: stats.eventCount,
     firstMentionAt: stats.firstMentionAt?.toISOString() ?? null,

@@ -39,14 +39,14 @@ export async function getEntityDetail(
 
   // Independent reads, run concurrently — same convention as getAnalysisDetail's
   // publishedRelations/thread fetch (analysisService.ts).
-  const [{ items, nextCursor }, relationRows, aliasRows, imageUrl, stats, coMentionRows, mentionMonthRows] =
+  const [{ items, nextCursor }, relationRows, aliasRows, imageRow, stats, coMentionRows, mentionMonthRows] =
     await Promise.all([
       fetchPage(cursor, limit, (decoded, boundedLimit) =>
         entityRepo.findEventsForEntity(entityKey, decoded, boundedLimit)
       ),
       entityRepo.findRelationsForEntity(entityKey),
       entityAliasRepo.findAliasesForEntity(entity.id),
-      entityImageRepo.findEntityImageUrl(entity.id),
+      entityImageRepo.findEntityWikiImage(entity.id),
       entityRepo.findEntityStats(entityKey),
       entityRepo.findCoMentionedEntities(entityKey, ENTITY_CO_MENTION_LIMIT),
       entityRepo.findMentionTimeline(entityKey),
@@ -54,7 +54,7 @@ export async function getEntityDetail(
 
   return toEntityDetail({
     entity,
-    imageUrl,
+    imageRow,
     stats,
     events: { items: items.map(toEntityEventItem), nextCursor },
     relationRows,

@@ -1,7 +1,177 @@
 /* Entity detail (/entity/:key) and search (/search) — ticket 43. `.sechead`/`.pager` are the same
    vocabulary AnalysisPage.css/HistoryPage.css already carry (re-declared here rather than shared,
    matching this codebase's existing per-page-CSS-file convention — see HomePage.css's own header
-   comment); `.evlist`/`.evrow`/`.erels`/`.erel`/`.entsearch` are new to this pair of pages. */
+   comment); `.evlist`/`.evrow`/`.erels`/`.erel`/`.entsearch` are new to this pair of pages.
+   `.ew*` is the ticket-90 wiki layout: hero + `.layout`/`.layout__rail` infobox + lead box +
+   mention-timeline chart + co-mentions rail. */
+
+/* ── ticket 90: wiki layout ─────────────────────────────────────────────────── */
+.ewcrumb {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding-block: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.ewcrumb a:hover {
+  color: var(--accent);
+}
+
+.ewhead {
+  padding-block: var(--sp-4) var(--sp-5);
+  border-bottom: var(--bw-rule) solid var(--line-strong);
+}
+.ewhead__k {
+  font: 600 var(--text-micro) / 1 var(--font-sans);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.ewhead__t {
+  margin-top: var(--sp-2);
+  font: 500 var(--text-h1) / 1.06 var(--font-serif);
+  font-variation-settings: 'opsz' var(--opsz-h1);
+  max-width: var(--measure-head);
+}
+.ewhead__dek {
+  margin-top: var(--sp-3);
+  max-width: var(--measure);
+  font: var(--text-lead) / 1.4 var(--font-serif);
+  color: var(--ink-2);
+}
+
+.ewmain > section:first-child,
+.ewmain > .ewlead:first-child {
+  margin-top: var(--sp-5);
+}
+
+/* External encyclopedic context — bordered and labelled so it can't be mistaken for the tool's
+   own reporting (spec User Story 4 / ADR 0012). Amber left rule, same "external, handle with
+   context" cue as the Draft-exclusion banner (ticket 87). */
+.ewlead {
+  border: var(--bw-hair) solid var(--line);
+  border-left: var(--bw-rule) solid var(--mid);
+  padding: var(--sp-4) var(--sp-5);
+  background: color-mix(in oklab, var(--surface-2) 55%, transparent);
+}
+.ewlead__k {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.ewlead__p {
+  margin-top: var(--sp-2);
+  font: var(--text-body) / var(--lh-relaxed) var(--font-serif);
+  color: var(--ink);
+  max-width: var(--measure);
+}
+.ewlead__n {
+  margin-top: var(--sp-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.ewlead__n a:hover {
+  color: var(--accent);
+}
+
+.ewchart {
+  margin-top: var(--sp-3);
+}
+.ewchart__cap {
+  margin-top: var(--sp-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+}
+.ewchart text {
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  fill: var(--ink-3);
+}
+
+/* Infobox — the rail's first card. */
+.ewbox {
+  font-family: var(--font-sans);
+}
+.ewbox__fig {
+  margin: 0 0 var(--sp-4);
+}
+.ewbox__fig img {
+  display: block;
+  width: 100%;
+  border: var(--bw-hair) solid var(--line);
+}
+.ewbox__fig figcaption {
+  margin-top: var(--sp-2);
+  font-size: var(--text-micro);
+  color: var(--ink-4);
+  line-height: 1.4;
+}
+.ewbox__fig figcaption a:hover {
+  color: var(--accent);
+}
+
+.ewfacts {
+  margin: 0;
+  border-top: var(--bw-hair) solid var(--line);
+}
+.ewfacts__row {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: var(--sp-3);
+  padding-block: var(--sp-2);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  font-size: var(--text-meta);
+}
+.ewfacts__row dt {
+  color: var(--ink-3);
+}
+.ewfacts__row dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.ewbox__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-4);
+  font-size: var(--text-meta);
+}
+.ewbox__links a {
+  color: var(--accent);
+}
+.ewbox__links a:hover {
+  text-decoration: underline;
+}
+
+.ewco__l {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+}
+.ewco__l li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-block: var(--sp-2);
+  border-bottom: var(--bw-hair) solid var(--line-2);
+  font-size: var(--text-meta);
+}
+.ewco__n {
+  flex-shrink: 0;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+}
 
 .sechead {
   display: flex;

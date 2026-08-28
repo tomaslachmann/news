@@ -596,6 +596,15 @@ export interface EntityRelationItem {
   assertedBy: { analysisId: string; title: string }
 }
 
+/** The entity's Wikimedia photo for the infobox (ticket 90) — same attribution shape as
+ *  `NarrativeLeadImage`, always credited, since Wikimedia licensing requires it. */
+export interface EntityWikiImage {
+  url: string
+  author: string | null
+  license: string | null
+  sourceUrl: string
+}
+
 /** One entity that co-occurs with the subject across the corpus (ticket 90) — how many COMPLETE
  *  Stories mention both. Powers the "často zmiňováno spolu s" rail. */
 export interface EntityCoMentionItem {
@@ -627,8 +636,9 @@ export interface EntityDetail {
   wikidataDescription: string | null
   wikipediaExtract: string | null
   wikipediaUrl: string | null
-  /** The entity's Wikimedia photo (ticket 41), if fetched — null otherwise. */
-  imageUrl: string | null
+  /** The entity's Wikimedia photo (ticket 41), if fetched — null otherwise. Carries the
+   *  attribution the infobox credits, same as `NarrativeLeadImage`. */
+  image: EntityWikiImage | null
   /** Canonical names of every entity confirmed (ticket 40) to be the same real-world entity as
    *  this one, merged away into it — empty, not undefined, when none, whether because ticket 40
    *  hasn't shipped or no merge has touched this entity yet. Never a missing section either way

@@ -24,11 +24,22 @@ export async function findEntityImageForEntity(entityId: string): Promise<{ id: 
   return prisma.entityImage.findFirst({ where: { entityId }, select: { id: true } })
 }
 
-/** This Entity's photo URL for the entity wiki page (ticket 90) — v1 has at most one image per
- *  Entity (Wikimedia only, ADR 0034), so `findFirst` is the whole story. Null when none fetched. */
-export async function findEntityImageUrl(entityId: string): Promise<string | null> {
-  const row = await prisma.entityImage.findFirst({ where: { entityId }, select: { imageUrl: true } })
-  return row?.imageUrl ?? null
+export interface EntityWikiImageRow {
+  imageUrl: string
+  author: string | null
+  license: string | null
+  sourceUrl: string
+}
+
+/** This Entity's photo for the entity wiki page (ticket 90) — url plus the attribution the
+ *  infobox credits (Wikimedia licensing, same as the Narrative lead image). v1 has at most one
+ *  image per Entity (Wikimedia only, ADR 0034), so `findFirst` is the whole story. Null when
+ *  none fetched. */
+export async function findEntityWikiImage(entityId: string): Promise<EntityWikiImageRow | null> {
+  return prisma.entityImage.findFirst({
+    where: { entityId },
+    select: { imageUrl: true, author: true, license: true, sourceUrl: true },
+  })
 }
 
 /** The existence check in `entityImageEnrichJob.ts` and this insert aren't atomic, so two
