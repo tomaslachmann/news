@@ -21,7 +21,7 @@ since the deploy. Two real problems fall out of that:
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 - [x] `packages/backend/src/scripts/runWikidataScan.ts` — one-off, same ad hoc convention as the
       other `scripts/*.ts`: builds the real `EntityWikidataScanDeps` (repos + `wikidataSearchClient`
