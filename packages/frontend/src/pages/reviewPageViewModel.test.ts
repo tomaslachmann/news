@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildDraftExclusionNotice } from './reviewPageViewModel'
+import { buildDraftExclusionNotice, coverageExclusionLabel } from './reviewPageViewModel'
 import type { DraftExclusion } from '@/services/ingestion'
 
 const failed = (outlet: string): DraftExclusion => ({
@@ -53,5 +53,23 @@ describe('buildDraftExclusionNotice', () => {
     const notice = buildDraftExclusionNotice([noTitle('ČT24')])
 
     expect(notice?.groups.map((g) => g.reason)).toEqual(['no-title'])
+  })
+})
+
+describe('coverageExclusionLabel', () => {
+  it('shows the specific quality-gate reason when this approval names the coverage', () => {
+    expect(coverageExclusionLabel('c-iDnes', [failed('iDnes')])).toBe(
+      'Neprošly ověřením, že popisují stejnou událost'
+    )
+    expect(coverageExclusionLabel('c-ČT24', [noTitle('ČT24')])).toBe(
+      'Bez staženého názvu článku – ověření neproběhlo'
+    )
+  })
+
+  it('falls back to a neutral label when the coverage is not in the exclusion list (reload, or an Admin-deselected source)', () => {
+    expect(coverageExclusionLabel('c-unknown', [failed('iDnes')])).toBe(
+      'Vyloučeno — zaškrtnutím vrátíte do analýzy'
+    )
+    expect(coverageExclusionLabel('c-x', [])).toBe('Vyloučeno — zaškrtnutím vrátíte do analýzy')
   })
 })

@@ -19,6 +19,10 @@ export type { Analysis, AnalysisStatus }
 export type AnalysisWithDetails = Analysis & {
   coverages: CoverageWithSource[]
   synthesisResult: (SynthesisResult & { narrativeImage: NarrativeImage | null }) | null
+  /** Ticket 95 — the analysis's `excluded: true` coverages, loaded only when
+   *  `findAnalysisWithDetails` is called with `{ includeExcluded: true }` (the Admin `/review/:id`
+   *  path). `undefined` otherwise, so no existing count/mapper that reads `coverages` is affected. */
+  excludedCoverages?: CoverageWithSource[]
 }
 
 export type AnalysisWithStory = Analysis & { story: Story }
@@ -145,8 +149,11 @@ export async function findAnalysisById(id: string): Promise<Analysis | null> {
   return prisma.analysis.findUnique({ where: { id } })
 }
 
-export async function findAnalysisWithDetails(id: string): Promise<AnalysisWithDetails | null> {
-  return prisma.analysis.findUnique({
+export async function findAnalysisWithDetails(
+  id: string,
+  opts: { includeExcluded?: boolean } = {}
+): Promise<AnalysisWithDetails | null> {
+  const analysis = await prisma.analysis.findUnique({
     where: { id },
     include: {
       coverages: {
@@ -157,6 +164,16 @@ export async function findAnalysisWithDetails(id: string): Promise<AnalysisWithD
       synthesisResult: { include: { narrativeImage: true } },
     },
   })
+  if (!analysis || !opts.includeExcluded) return analysis
+
+  // A second query, not a second `coverages` include — Prisma can't include one relation twice
+  // with different `where` filters. Only the Admin `/review/:id` read pays for it.
+  const excludedCoverages = await prisma.coverage.findMany({
+    where: { analysisId: id, excluded: true },
+    orderBy: { id: 'asc' },
+    include: { source: { select: { name: true } } },
+  })
+  return { ...analysis, excludedCoverages }
 }
 
 /** Row-tuple comparison, not a plain `createdAt <` — stable across inserts that land exactly on

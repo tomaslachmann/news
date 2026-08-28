@@ -861,6 +861,44 @@ describe('getAnalysisDetail', () => {
     expect(result.synthesisResult).toBeUndefined()
   })
 
+  it('asks the repository for excluded coverages only for an Admin, and maps them onto excludedCoverages (ticket 95)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'DRAFT',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [OK_COVERAGE],
+      excludedCoverages: [{ ...OK_COVERAGE, id: 'c-excl', excluded: true, source: { name: 'Blesk' } }],
+      synthesisResult: null,
+    })
+
+    const result = await getAnalysisDetail('a1', true)
+
+    expect(analysisRepo.findAnalysisWithDetails).toHaveBeenCalledWith('a1', { includeExcluded: true })
+    expect(result.coverages.map((c) => c.id)).toEqual(['c1'])
+    expect(result.excludedCoverages).toEqual([expect.objectContaining({ id: 'c-excl', outlet: 'Blesk' })])
+  })
+
+  it('does not request excluded coverages for a non-Admin, and excludedCoverages is [] (ticket 95)', async () => {
+    vi.mocked(analysisRepo.findAnalysisWithDetails).mockResolvedValue({
+      id: 'a1',
+      storyId: 's1',
+      seedUrl: 'https://example.cz/x',
+      seedHeadline: 'Headline',
+      status: 'COMPLETE',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      coverages: [],
+      synthesisResult: null,
+    })
+
+    const result = await getAnalysisDetail('a1', false)
+
+    expect(analysisRepo.findAnalysisWithDetails).toHaveBeenCalledWith('a1', { includeExcluded: false })
+    expect(result.excludedCoverages).toEqual([])
+  })
+
   const VALID_EXTRACTION_RESULT = {
     factualClaims: [{ claim: 'x', czechQuote: 'x' }],
     attributedClaims: [],
