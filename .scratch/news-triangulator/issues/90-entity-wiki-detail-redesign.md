@@ -36,7 +36,7 @@ doesn't), no description, no stats. It reads like a debug view, not a wiki entry
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 ### Backend — enrichment
 
