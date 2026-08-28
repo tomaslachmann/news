@@ -1,7 +1,10 @@
 # ADR 0032 — Polite scraping: small scope now, not the audit's full `politeFetch` design
 
 ## Status
-Accepted
+Accepted. The "An honest User-Agent" decision below is superseded in part by
+[ADR 0040](./0040-browser-shaped-article-fetch.md) — article-body fetches now send a
+browser-shaped header set (two outlets bot-block the honest UA); the Wikidata/Wikimedia clients
+keep it.
 
 ## Context
 `docs/audit.md` P1-13 (§9.7) found no politeness layer anywhere in the fetch path: `articleFetchClient.ts` has a 12s timeout and a static User-Agent, nothing else — no robots.txt check, no rate limiting, no retry/backoff. The audit's proposed fix, `politeFetch`, is a per-host token bucket (`Source.maxRps`) plus a 24h-TTL robots.txt LRU cache plus a 3-attempt `Retry-After`-aware backoff, all gated by new `Source.honorRobots`/`Source.maxRps` columns.

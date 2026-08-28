@@ -36,24 +36,33 @@ guessed):
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
-- [ ] `articleFetchClient.ts`: fetch article bodies with a browser-shaped header set (realistic
+- [x] `articleFetchClient.ts`: fetch article bodies with a browser-shaped header set (realistic
       `User-Agent`, `Accept`, `Accept-Language`, `Sec-Fetch-*`, `Upgrade-Insecure-Requests`) instead
       of the honest contact UA. Keep `httpClient.ts`'s `NEWS_TRIANGULATOR_USER_AGENT` and the
       Wikidata/Wikimedia clients on the honest UA — this change is scoped to article scraping.
-- [ ] `articleFetchClient.ts`: a small per-host cookie map (hostname-suffix match) — `idnes.cz` →
+      → `BROWSER_HEADERS` in `articleFetchClient.ts`; `fetchWithTimeout` default headers unchanged.
+- [x] `articleFetchClient.ts`: a small per-host cookie map (hostname-suffix match) — `idnes.cz` →
       `dCMP=1` for now, structured so another outlet's consent cookie is a one-line addition.
-- [ ] `articleFetchClient.ts`: decode the response body by its declared charset (read `Content-Type`,
+      → `CONSENT_COOKIE_BY_HOST` + `headersFor(url)`.
+- [x] `articleFetchClient.ts`: decode the response body by its declared charset (read `Content-Type`,
       `TextDecoder(charset)`, fall back to UTF-8 on an unknown/absent label) instead of the
       always-UTF-8 `res.text()`.
-- [ ] `articleFetchClient.ts`: add `403` to `isRetryableStatus` (keeps the existing 3-attempt fixed
+      → `decodeBody(res)` — reads the charset from `Content-Type`, `TextDecoder`, UTF-8 fallback.
+- [x] `articleFetchClient.ts`: add `403` to `isRetryableStatus` (keeps the existing 3-attempt fixed
       backoff / Retry-After handling) — irozhlas's burst rate-limit is a transient `403`.
-- [ ] `fetchWithTimeout` (`httpClient.ts`) needs to accept a caller-supplied header set rather than
+- [x] `fetchWithTimeout` (`httpClient.ts`) needs to accept a caller-supplied header set rather than
       hardcoding the single UA header; its existing callers (Wikidata/Wikimedia) keep today's
       behaviour by default.
-- [ ] Tests: `fetchArticleHtml` sends the browser header set and the per-host cookie for an
+      → optional `headers` param, defaulting to `{ 'User-Agent': NEWS_TRIANGULATOR_USER_AGENT }`.
+- [x] Tests: `fetchArticleHtml` sends the browser header set and the per-host cookie for an
       idnes.cz URL (and does *not* for an unrelated host); decodes a windows-1250 body correctly;
       retries a `403`. Update the existing "sends an honest User-Agent" test to the new contract.
       `httpClient` tests still show Wikidata/Wikimedia unchanged.
-- [ ] Typecheck + full test suites pass. `/code-review` clean.
+      → done; also verified end-to-end against the two live URLs (both `scrape=OK`, diacritics
+      intact).
+- [x] ADR 0040 records the honest-UA reversal (article-fetch path only) + consent cookie + 403
+      retry + charset decode; ADR 0032's "honest User-Agent" decision gets a superseded-in-part
+      note pointing to it. (Added after the first `/code-review` round flagged the missing ADR.)
+- [x] Typecheck + full test suites pass. `/code-review` clean.
