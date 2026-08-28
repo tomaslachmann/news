@@ -21,7 +21,13 @@ import type { EntityWikiImageRow } from '../repositories/entityImage.js'
 import { resolveDisplayTitle } from './analysis.js'
 
 export function toEntitySearchResultItem(row: EntitySearchRow): EntitySearchResultItem {
-  return { key: row.key, canonicalName: row.canonicalName, type: row.type, storyCount: row.storyCount }
+  return {
+    key: row.key,
+    canonicalName: row.canonicalName,
+    type: row.type,
+    storyCount: row.storyCount,
+    wikidataId: row.wikidataId,
+  }
 }
 
 export function toEntityEventItem(row: EntityEventRow): EntityEventItem {

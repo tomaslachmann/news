@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import type { WikidataCandidateItem } from '@news-triangulator/shared'
+import type { EntitySearchResultItem, WikidataCandidateItem } from '@news-triangulator/shared'
 import {
   useSearchWikidataCandidates,
   useLinkEntityWikidata,
   useUnlinkEntityWikidata,
 } from '@/services/entityWikidata/hooks'
+import { EntityAutocomplete } from '@/components/EntityAutocomplete'
+import { ENTITY_TYPE_LABELS } from '@/lib/entityTypeLabels'
 
 function CandidateRow({
   candidate,
@@ -29,18 +31,29 @@ function CandidateRow({
   )
 }
 
-/** Ticket 41's Admin-only search-and-confirm flow for `Entity.wikidataId` — no entity browse/list
- *  page exists yet (ticket 46 only covers Entity Alias Merge's own admin view), so this takes the
- *  Entity's `key` as a direct input rather than a picker; a future entity-listing surface can link
- *  here with the key pre-filled without changing this page's shape. */
+/** Ticket 41's Admin-only search-and-confirm flow for `Entity.wikidataId`. Ticket 50 replaced the
+ *  free-text `Entity.key` field with a name type-ahead (`EntityAutocomplete`) — an Admin picks the
+ *  entity by name and its key is resolved behind the scenes; pasting a known `type:slug` key still
+ *  works. */
 export default function AdminEntityWikidataPage() {
-  const [entityKey, setEntityKey] = useState('')
+  const [entity, setEntity] = useState<EntitySearchResultItem | null>(null)
   const [query, setQuery] = useState('')
   const [linkedQid, setLinkedQid] = useState<string | null>(null)
 
   const searchMutation = useSearchWikidataCandidates()
   const linkMutation = useLinkEntityWikidata()
   const unlinkMutation = useUnlinkEntityWikidata()
+
+  const entityKey = entity?.key ?? ''
+
+  const handlePick = (picked: EntitySearchResultItem) => {
+    setEntity(picked)
+    setQuery((q) => q || picked.canonicalName)
+    setLinkedQid(null)
+    searchMutation.reset()
+    linkMutation.reset()
+    unlinkMutation.reset()
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,6 +74,8 @@ export default function AdminEntityWikidataPage() {
     unlinkMutation.mutate(entityKey.trim(), { onSuccess: () => setLinkedQid(null) })
   }
 
+  const entityName = entity?.canonicalName ?? entityKey
+
   const candidates = searchMutation.data ?? []
 
   return (
@@ -77,21 +92,21 @@ export default function AdminEntityWikidataPage() {
         <form className="panel panel--wide" onSubmit={handleSearch}>
           <div className="panel__f">
             <div className="field">
-              <label className="field__l" htmlFor="entity-key">
-                Klíč entity
+              <label className="field__l" htmlFor="entity-pick">
+                Entita
               </label>
-              <input
-                className="input"
-                id="entity-key"
-                value={entityKey}
-                onChange={(e) => setEntityKey(e.target.value)}
-                placeholder="např. person:petr-fiala"
-                required
-              />
+              <EntityAutocomplete onPick={handlePick} />
+              {entity && (
+                <p className="note" style={{ marginTop: 'var(--sp-2)' }}>
+                  Vybráno: <b>{entity.canonicalName}</b> · {ENTITY_TYPE_LABELS[entity.type]} ·{' '}
+                  <span className="u-mono">{entity.key}</span>
+                  {entity.wikidataId && <> · již propojeno s {entity.wikidataId}</>}
+                </p>
+              )}
             </div>
             <div className="field">
               <label className="field__l" htmlFor="wikidata-query">
-                Hledaný výraz
+                Hledaný výraz na Wikidatech
               </label>
               <input
                 className="input"
@@ -111,7 +126,11 @@ export default function AdminEntityWikidataPage() {
           )}
 
           <div className="panel__foot">
-            <button className="btn btn--primary" type="submit" disabled={searchMutation.isPending}>
+            <button
+              className="btn btn--primary"
+              type="submit"
+              disabled={!entityKey.trim() || !query.trim() || searchMutation.isPending}
+            >
               {searchMutation.isPending ? 'Vyhledávání…' : 'Hledat na Wikidatech'}
             </button>
             <button
@@ -137,13 +156,13 @@ export default function AdminEntityWikidataPage() {
         )}
         {linkedQid && (
           <p className="note picknote">
-            Entita <b>{entityKey}</b> byla propojena s <b>{linkedQid}</b>. Obrázek entity se nyní na pozadí
-            dohledává.
+            Entita <b>{entityName}</b> byla propojena s <b>{linkedQid}</b>. Obrázek a popis entity se nyní na
+            pozadí dohledávají.
           </p>
         )}
         {unlinkMutation.isSuccess && (
           <p className="note picknote">
-            Propojení entity <b>{entityKey}</b> s Wikidaty bylo zrušeno.
+            Propojení entity <b>{entityName}</b> s Wikidaty bylo zrušeno.
           </p>
         )}
 

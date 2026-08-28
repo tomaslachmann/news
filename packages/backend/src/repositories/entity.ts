@@ -405,6 +405,9 @@ export interface EntitySearchRow {
   canonicalName: string
   type: EntityType
   storyCount: number
+  /** Present so the `/admin/entities` type-ahead (ticket 50) can show which entities are already
+   *  Wikidata-linked; the reader-facing `/search` page ignores it. */
+  wikidataId: string | null
 }
 
 /** Name search for the reader-facing entity browse feature (ticket 42), over
@@ -413,7 +416,7 @@ export interface EntitySearchRow {
  *  orders the (already-small) filtered set by closeness to `query`. */
 export async function searchEntitiesByName(query: string, limit: number): Promise<EntitySearchRow[]> {
   return prisma.$queryRaw<EntitySearchRow[]>`
-    SELECT key, "canonicalName", type, "storyCount"
+    SELECT key, "canonicalName", type, "storyCount", "wikidataId"
     FROM "Entity"
     WHERE "canonicalName" % ${query}
     ORDER BY similarity("canonicalName", ${query}) DESC
