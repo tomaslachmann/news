@@ -66,10 +66,8 @@ describe('coverageExclusionLabel', () => {
     )
   })
 
-  it('falls back to a neutral label when the coverage is not in the exclusion list (reload, or an Admin-deselected source)', () => {
-    expect(coverageExclusionLabel('c-unknown', [failed('iDnes')])).toBe(
-      'Vyloučeno — zaškrtnutím vrátíte do analýzy'
-    )
-    expect(coverageExclusionLabel('c-x', [])).toBe('Vyloučeno — zaškrtnutím vrátíte do analýzy')
+  it('falls back to a terse neutral label when the coverage is not in the exclusion list (reload, or an Admin-deselected source)', () => {
+    expect(coverageExclusionLabel('c-unknown', [failed('iDnes')])).toBe('Vyloučeno')
+    expect(coverageExclusionLabel('c-x', [])).toBe('Vyloučeno')
   })
 })

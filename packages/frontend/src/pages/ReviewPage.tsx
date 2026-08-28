@@ -50,6 +50,32 @@ function StatusText({ status }: { status: CoverageInfo['status'] }) {
   return null
 }
 
+/** One selectable source row in the picker — an active coverage or an auto-excluded one (`note`
+ *  set, muted). The custom-URL rows below stay their own thing: unchecking one deletes it. */
+function PickRow({
+  coverage,
+  checked,
+  onToggle,
+  note,
+}: {
+  coverage: CoverageInfo
+  checked: boolean
+  onToggle: (checked: boolean) => void
+  note?: string
+}) {
+  return (
+    <div className={`pick__i${note ? ' is-off' : ''}`}>
+      <span className="pick__c">
+        <input type="checkbox" checked={checked} onChange={(e) => onToggle(e.target.checked)} />
+      </span>
+      <span className="pick__w">{coverage.outlet}</span>
+      <p className="pick__t">{coverage.title ?? coverage.articleUrl}</p>
+      {note && <span className="pick__x">{note}</span>}
+      {coverage.publishedAt && <span className="pick__u">{formatDate(coverage.publishedAt, 'long')}</span>}
+    </div>
+  )
+}
+
 export default function ReviewPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -288,41 +314,25 @@ export default function ReviewPage() {
       ) : (
         <div className="pick">
           {analysis.coverages.map((coverage) => (
-            <div className="pick__i" key={coverage.id}>
-              <span className="pick__c">
-                <input
-                  type="checkbox"
-                  checked={checkedIds.has(coverage.id)}
-                  onChange={(e) => toggleChecked(coverage.id, e.target.checked)}
-                />
-              </span>
-              <span className="pick__w">{coverage.outlet}</span>
-              <p className="pick__t">{coverage.title ?? coverage.articleUrl}</p>
-              {coverage.publishedAt && (
-                <span className="pick__u">{formatDate(coverage.publishedAt, 'long')}</span>
-              )}
-            </div>
+            <PickRow
+              key={coverage.id}
+              coverage={coverage}
+              checked={checkedIds.has(coverage.id)}
+              onToggle={(checked) => toggleChecked(coverage.id, checked)}
+            />
           ))}
 
           {excludedCoverages.length > 0 && (
             <p className="pick__sub">Automaticky vyloučené zdroje — zaškrtnutím je vrátíte do analýzy</p>
           )}
           {excludedCoverages.map((coverage) => (
-            <div className="pick__i is-off" key={coverage.id}>
-              <span className="pick__c">
-                <input
-                  type="checkbox"
-                  checked={checkedIds.has(coverage.id)}
-                  onChange={(e) => toggleChecked(coverage.id, e.target.checked)}
-                />
-              </span>
-              <span className="pick__w">{coverage.outlet}</span>
-              <p className="pick__t">{coverage.title ?? coverage.articleUrl}</p>
-              <span className="pick__x is-bad">{coverageExclusionLabel(coverage.id, draftExclusions)}</span>
-              {coverage.publishedAt && (
-                <span className="pick__u">{formatDate(coverage.publishedAt, 'long')}</span>
-              )}
-            </div>
+            <PickRow
+              key={coverage.id}
+              coverage={coverage}
+              checked={checkedIds.has(coverage.id)}
+              onToggle={(checked) => toggleChecked(coverage.id, checked)}
+              note={coverageExclusionLabel(coverage.id, draftExclusions)}
+            />
           ))}
 
           {customUrls.map((url) => (

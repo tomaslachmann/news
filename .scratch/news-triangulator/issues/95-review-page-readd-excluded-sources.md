@@ -98,3 +98,20 @@ in `confirmedIds` — the gap is purely that the UI never shows them.
 - `coverageExclusionLabel(coverageId, draftExclusions)` shows the specific quality-gate reason
   when this approval's nav state still names the row, a neutral "zaškrtnutím vrátíte" fallback on
   a reload or for an Admin-deselected source (no stored reason).
+
+## Code-review fixes (2026-08-28)
+
+Two-axis review — no hard violations, nothing "implemented wrong". Addressed:
+
+- **Duplicated row markup** (Standards): extracted `<PickRow>` — the active and excluded coverage
+  rows now share one renderer (`note` prop drives the muted `is-off` + reason label). Custom-URL
+  rows stay separate (unchecking one deletes it — genuinely different).
+- **`is-bad` semantic overload** (both axes): the exclusion label was rendering in the error-red
+  `.pick__x.is-bad` (elsewhere "Nelze extrahovat"). Now plain `.pick__x` (muted `--ink-3`), which
+  is what "vyloučeno" should read as; the row is already muted via `is-off`.
+- **Banner copy scope creep** (Spec): reverted the extra sentence added to ticket 87's
+  `buildDraftExclusionNotice` detail text — the `.pick__sub` subsection heading already carries
+  the "zaškrtnutím je vrátíte" message.
+- **"counts unaffected" half untested** (Spec): added a `getAnalysisDetail` test that an excluded
+  coverage with a valid extraction does not inflate `sourceOverlap.sourceCount`.
+- Fallback exclusion label trimmed to just "Vyloučeno" (the heading already says the rest).

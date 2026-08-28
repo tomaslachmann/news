@@ -40,13 +40,14 @@ export function buildDraftExclusionNotice(exclusions: DraftExclusion[]): DraftEx
     heading: 'Některé zdroje byly při schválení automaticky vyřazeny',
     detail:
       'Kontrola kvality před extrakcí ověřuje, že každý připojený zdroj popisuje stejnou událost. ' +
-      'Nic se nesmazalo — vyřazené zdroje zůstávají u konceptu jen označené jako vyloučené. ' +
-      'Kterýkoli z nich můžete níže zaškrtnutím vrátit do analýzy.',
+      'Nic se nesmazalo — vyřazené zdroje zůstávají u konceptu jen označené jako vyloučené.',
     groups,
   }
 }
 
-const EXCLUSION_FALLBACK_LABEL = 'Vyloučeno — zaškrtnutím vrátíte do analýzy'
+// The subsection heading in ReviewPage already says "zaškrtnutím je vrátíte"; the per-row label
+// only adds the *reason*, so the fallback (reason unknown) stays terse.
+const EXCLUSION_FALLBACK_LABEL = 'Vyloučeno'
 
 /** Ticket 95 — the per-row label for an auto-excluded source in the `/review/:id` picker. Uses the
  *  specific quality-gate reason when *this* approval's `draftExclusions` still names the row (fresh
