@@ -9,7 +9,7 @@ a type-ahead picker.
 
 **Blocked by:** none.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] The "Klíč entity" field becomes a type-ahead: as the admin types, call `useEntitySearch`
       (debounced) and show matching entities (`canonicalName`, `type`, existing `wikidataId` if
