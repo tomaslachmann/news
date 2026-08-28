@@ -48,7 +48,7 @@ reconciliation endpoint as an **optional** cross-check before auto-linking (neve
 
 **Blocked by:** none.
 
-**Status:** todo
+**Status:** done
 
 ### Data model
 
